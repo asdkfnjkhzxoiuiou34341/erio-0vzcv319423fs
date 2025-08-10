@@ -299,6 +299,12 @@ local function startHealthMonitoring()
                                 if newHumanoid and newHumanoid.Health > 0 then
                                     print("🤖 AUTOFARM: Игрок возродился! HP =", newHumanoid.Health)
                                     
+                                    -- Включаем NoClip сразу после возрождения
+                                    task.spawn(function()
+                                        task.wait(1) -- Небольшая задержка для стабилизации персонажа
+                                        enableNoClipAfterRespawn()
+                                    end)
+                                    
                                     -- Перезапускаем внешний автофарм (из файла huyna)
                                     task.spawn(function()
                                         task.wait(2) -- Задержка перед запуском
@@ -474,6 +480,40 @@ local function restartExternalAutofarm()
     
     -- Запускаем автофарм
     return startExternalAutofarm()
+end
+
+-- Функция для включения NoClip после возрождения (как в полете к Shiftplox)
+local function enableNoClipAfterRespawn()
+    print("🚀 AUTOSELL: Включаем NoClip после возрождения...")
+    
+    -- Проверяем доступность системы движения
+    if not _G.MovementConfig then
+        print("⚠️ AUTOSELL: MovementConfig недоступен!")
+        return false
+    end
+    
+    -- Включаем NoClip точно так же как в полете к Shiftplox
+    if not _G.MovementConfig.NoClip then
+        print("⚠️ AUTOSELL: NoClip конфиг недоступен!")
+        return false
+    end
+    
+    if not _G.MovementConfig.NoClip.Enabled then
+        print("🤖 AUTOSELL: Включаем NoClip для безопасного движения...")
+        _G.MovementConfig.NoClip.Enabled = true
+        
+        if _G.startNoClip and type(_G.startNoClip) == "function" then
+            _G.startNoClip()
+            print("✅ AUTOSELL: NoClip включен успешно после возрождения!")
+            return true
+        else
+            print("⚠️ AUTOSELL: Функция startNoClip недоступна!")
+            return false
+        end
+    else
+        print("ℹ️ AUTOSELL: NoClip уже включен")
+        return true
+    end
 end
 
 -- Проверка количества предметов в рюкзаке
@@ -1072,16 +1112,9 @@ local function startAutosell()
     -- Ищем функции внешнего автофарма при запуске
     findExternalAutofarmFunctions()
     
-    -- Включаем NoClip при запуске автосела
-    if _G.MovementConfig and _G.startNoClip and type(_G.startNoClip) == "function" then
-        print("🤖 AUTOSELL: Включаем NoClip...")
-        _G.MovementConfig.NoClip.Enabled = true
-        _G.startNoClip()
-        print("🤖 AUTOSELL: NoClip включен успешно")
-        
-
-    else
-        print("🤖 AUTOSELL: Предупреждение - функция startNoClip или MovementConfig недоступны")
+    -- Включаем NoClip при запуске автосела (используем унифицированную функцию)
+    if not enableNoClipAfterRespawn() then
+        print("🤖 AUTOSELL: Предупреждение - не удалось включить NoClip при запуске автосела")
     end
     
     -- Настраиваем отслеживание смерти игрока
@@ -1115,6 +1148,14 @@ local function startAutosell()
     -- Переустанавливаем отслеживание при респавне И восстанавливаем автосел
     Players.LocalPlayer.CharacterAdded:Connect(function()
         task.wait(1) -- Ждем загрузки персонажа
+        
+        -- Включаем NoClip сразу после респавна (если автосел активен)
+        if isAutosellEnabled then
+            task.spawn(function()
+                task.wait(0.5) -- Небольшая задержка для стабилизации
+                enableNoClipAfterRespawn()
+            end)
+        end
         
         -- Восстанавливаем автосел если он был включен перед смертью
         if wasAutosellEnabledBeforeDeath then
@@ -1270,6 +1311,7 @@ _G.AutosellModule = {
     startHealthMonitoring = startHealthMonitoring,
     stopHealthMonitoring = stopHealthMonitoring,
     isHealthMonitoringEnabled = function() return isHealthMonitoringEnabled end,
+    enableNoClipAfterRespawn = enableNoClipAfterRespawn,
     
     -- Функции для работы с внешним автофармом
     ExternalAutofarm = {
