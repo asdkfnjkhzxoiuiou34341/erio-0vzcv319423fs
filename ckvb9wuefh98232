@@ -152,6 +152,22 @@ local lastHealth = nil
 local healthCheckInterval = 1 -- Проверка каждую секунду
 local isHealthMonitoringEnabled = false
 
+-- Переменные для связи с внешним автофармом (файл huyna)
+local externalAutofarmConfig = {
+    restartOnDeath = true, -- Перезапускать автофарм при смерти
+    restartDelay = 3, -- Задержка перед перезапуском (секунды)
+    
+    -- Функции для взаимодействия с внешним автофармом
+    stopFunction = nil, -- Функция остановки автофарма
+    startFunction = nil, -- Функция запуска автофарма
+    isEnabledFunction = nil, -- Функция проверки состояния автофарма
+    
+    -- Глобальные переменные для поиска функций автофарма
+    globalStopNames = {"stopAutofarm", "stopFarm", "autofarm_stop", "farm_stop", "stop_autofarm"},
+    globalStartNames = {"startAutofarm", "startFarm", "autofarm_start", "farm_start", "start_autofarm"},
+    globalEnabledNames = {"isAutofarmEnabled", "isFarmEnabled", "autofarm_enabled", "farm_enabled"}
+}
+
 -- Функция экстренной остановки всех движений (БЕЗ ЗАМОРОЗКИ)
 local function emergencyStopMovement()
     print("🤖 AUTOSELL: ЭКСТРЕННАЯ ОСТАНОВКА ДВИЖЕНИЯ!")
@@ -256,9 +272,15 @@ local function startHealthMonitoring()
                     if currentHealth <= 0 then
                         print("🤖 AUTOFARM: ОБНАРУЖЕНО 0 HP! Экстренное отключение автофарма...")
                         
-                        -- Останавливаем автофарм немедленно
+                        -- Сохраняем состояние автосела перед смертью
+                        wasAutosellEnabledBeforeDeath = isAutosellEnabled
+                        
+                        -- Останавливаем внешний автофарм (из файла huyna)
+                        stopExternalAutofarm()
+                        
+                        -- Дублируем остановку через старые функции для совместимости
                         if _G.stopAutofarm and type(_G.stopAutofarm) == "function" then
-                            _G.stopAutofarm()
+                            pcall(_G.stopAutofarm)
                         end
                         
                         -- Останавливаем автосел
@@ -277,19 +299,30 @@ local function startHealthMonitoring()
                                 if newHumanoid and newHumanoid.Health > 0 then
                                     print("🤖 AUTOFARM: Игрок возродился! HP =", newHumanoid.Health)
                                     
-                                    -- Возобновляем автофарм если он был включен
+                                    -- Перезапускаем внешний автофарм (из файла huyna)
+                                    task.spawn(function()
+                                        task.wait(2) -- Задержка перед запуском
+                                        print("🔄 AUTOFARM LINK: Перезапускаем внешний автофарм после возрождения...")
+                                        restartExternalAutofarm()
+                                    end)
+                                    
+                                    -- Дублируем запуск через старые функции для совместимости
                                     if _G.startAutofarm and type(_G.startAutofarm) == "function" then
-                                        task.wait(2) -- Небольшая задержка перед запуском
-                                        print("🤖 AUTOFARM: Возобновляем автофарм после возрождения...")
-                                        _G.startAutofarm()
+                                        task.spawn(function()
+                                            task.wait(3) -- Небольшая задержка
+                                            print("🤖 AUTOFARM: Запускаем резервную функцию автофарма...")
+                                            pcall(_G.startAutofarm)
+                                        end)
                                     end
                                     
                                     -- Возобновляем автосел если он был включен
                                     if wasAutosellEnabledBeforeDeath then
-                                        task.wait(3)
-                                        print("🤖 AUTOFARM: Возобновляем автосел после возрождения...")
-                                        startAutosell()
-                                        wasAutosellEnabledBeforeDeath = false
+                                        task.spawn(function()
+                                            task.wait(4) -- Даем время автофарму запуститься
+                                            print("🤖 AUTOFARM: Возобновляем автосел после возрождения...")
+                                            startAutosell()
+                                            wasAutosellEnabledBeforeDeath = false
+                                        end)
                                     end
                                     
                                     break
@@ -318,6 +351,129 @@ local function stopHealthMonitoring()
         task.cancel(healthMonitorConnection)
         healthMonitorConnection = nil
     end
+end
+
+-- Функция для автоматического поиска функций внешнего автофарма
+local function findExternalAutofarmFunctions()
+    print("🔍 AUTOFARM LINK: Поиск функций внешнего автофарма...")
+    
+    -- Ищем функцию остановки
+    for _, name in ipairs(externalAutofarmConfig.globalStopNames) do
+        if _G[name] and type(_G[name]) == "function" then
+            externalAutofarmConfig.stopFunction = _G[name]
+            print("✅ AUTOFARM LINK: Найдена функция остановки:", name)
+            break
+        end
+    end
+    
+    -- Ищем функцию запуска
+    for _, name in ipairs(externalAutofarmConfig.globalStartNames) do
+        if _G[name] and type(_G[name]) == "function" then
+            externalAutofarmConfig.startFunction = _G[name]
+            print("✅ AUTOFARM LINK: Найдена функция запуска:", name)
+            break
+        end
+    end
+    
+    -- Ищем функцию проверки состояния
+    for _, name in ipairs(externalAutofarmConfig.globalEnabledNames) do
+        if _G[name] and type(_G[name]) == "function" then
+            externalAutofarmConfig.isEnabledFunction = _G[name]
+            print("✅ AUTOFARM LINK: Найдена функция проверки состояния:", name)
+            break
+        end
+    end
+    
+    -- Альтернативный поиск в известных глобальных объектах
+    local autofarmObjects = {"AutofarmModule", "FarmModule", "AutoFarm", "Farm"}
+    for _, objName in ipairs(autofarmObjects) do
+        if _G[objName] and type(_G[objName]) == "table" then
+            print("🔍 AUTOFARM LINK: Найден объект автофарма:", objName)
+            
+            -- Ищем методы в объекте
+            local obj = _G[objName]
+            if obj.stop and type(obj.stop) == "function" and not externalAutofarmConfig.stopFunction then
+                externalAutofarmConfig.stopFunction = obj.stop
+                print("✅ AUTOFARM LINK: Найден метод остановки в", objName)
+            end
+            if obj.start and type(obj.start) == "function" and not externalAutofarmConfig.startFunction then
+                externalAutofarmConfig.startFunction = obj.start
+                print("✅ AUTOFARM LINK: Найден метод запуска в", objName)
+            end
+            if obj.isEnabled and type(obj.isEnabled) == "function" and not externalAutofarmConfig.isEnabledFunction then
+                externalAutofarmConfig.isEnabledFunction = obj.isEnabled
+                print("✅ AUTOFARM LINK: Найден метод проверки состояния в", objName)
+            end
+        end
+    end
+    
+    -- Отчет о результатах поиска
+    local foundCount = 0
+    if externalAutofarmConfig.stopFunction then foundCount = foundCount + 1 end
+    if externalAutofarmConfig.startFunction then foundCount = foundCount + 1 end
+    if externalAutofarmConfig.isEnabledFunction then foundCount = foundCount + 1 end
+    
+    if foundCount > 0 then
+        print("🎯 AUTOFARM LINK: Найдено", foundCount, "из 3 функций автофарма")
+        return true
+    else
+        print("❌ AUTOFARM LINK: Функции внешнего автофарма не найдены")
+        return false
+    end
+end
+
+-- Функция для остановки внешнего автофарма
+local function stopExternalAutofarm()
+    if externalAutofarmConfig.stopFunction then
+        print("🛑 AUTOFARM LINK: Останавливаем внешний автофарм...")
+        pcall(externalAutofarmConfig.stopFunction)
+        return true
+    else
+        print("⚠️ AUTOFARM LINK: Функция остановки автофарма не найдена")
+        return false
+    end
+end
+
+-- Функция для запуска внешнего автофарма
+local function startExternalAutofarm()
+    if externalAutofarmConfig.startFunction then
+        print("🚀 AUTOFARM LINK: Запускаем внешний автофарм...")
+        pcall(externalAutofarmConfig.startFunction)
+        return true
+    else
+        print("⚠️ AUTOFARM LINK: Функция запуска автофарма не найдена")
+        return false
+    end
+end
+
+-- Функция для проверки состояния внешнего автофарма
+local function isExternalAutofarmEnabled()
+    if externalAutofarmConfig.isEnabledFunction then
+        local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
+        if success then
+            return result
+        end
+    end
+    return false
+end
+
+-- Функция для перезапуска внешнего автофарма
+local function restartExternalAutofarm()
+    if not externalAutofarmConfig.restartOnDeath then
+        print("🔄 AUTOFARM LINK: Перезапуск автофарма отключен")
+        return false
+    end
+    
+    print("🔄 AUTOFARM LINK: Начинаем перезапуск внешнего автофарма...")
+    
+    -- Останавливаем автофарм
+    stopExternalAutofarm()
+    
+    -- Ждем указанную задержку
+    task.wait(externalAutofarmConfig.restartDelay)
+    
+    -- Запускаем автофарм
+    return startExternalAutofarm()
 end
 
 -- Проверка количества предметов в рюкзаке
@@ -801,10 +957,13 @@ local function sellItemsToNPC(itemsToSell)
     
     print("🤖 AUTOSELL: Начинаем продажу предметов:", table.concat(itemsToSell, ", "))
     
-    -- Останавливаем автофарм
-    if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" and _G.isAutofarmEnabled() then
+    -- Останавливаем автофарм (внешний и резервный)
+    if isExternalAutofarmEnabled() then
+        print("🤖 AUTOSELL: Останавливаем внешний автофарм для продажи...")
+        stopExternalAutofarm()
+    elseif _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" and _G.isAutofarmEnabled() then
         if _G.stopAutofarm and type(_G.stopAutofarm) == "function" then
-            print("🤖 AUTOSELL: Останавливаем автофарм для продажи...")
+            print("🤖 AUTOSELL: Останавливаем резервный автофарм для продажи...")
             _G.stopAutofarm()
         end
     end
@@ -862,8 +1021,11 @@ local function sellItemsToNPC(itemsToSell)
             isSellingToNPC = false
             
             -- Возобновляем автофарм перед перезапуском
-            if _G.startAutofarm and type(_G.startAutofarm) == "function" then
-                print("🤖 AUTOSELL: Возобновляем автофарм перед перезапуском...")
+            if externalAutofarmConfig.startFunction then
+                print("🤖 AUTOSELL: Возобновляем внешний автофарм перед перезапуском...")
+                startExternalAutofarm()
+            elseif _G.startAutofarm and type(_G.startAutofarm) == "function" then
+                print("🤖 AUTOSELL: Возобновляем резервный автофарм перед перезапуском...")
                 _G.startAutofarm()
             end
             
@@ -883,13 +1045,18 @@ local function sellItemsToNPC(itemsToSell)
             isSellingToNPC = false
             
             -- Возобновляем автофарм (независимо от флага Enabled)
-            if _G.startAutofarm and type(_G.startAutofarm) == "function" then
-                print("🤖 AUTOSELL: Запускаем автофарм...")
+            if externalAutofarmConfig.startFunction then
+                print("🤖 AUTOSELL: Запускаем внешний автофарм...")
+                task.wait(1) -- Небольшая задержка перед запуском
+                startExternalAutofarm()
+                print("🤖 AUTOSELL: Внешний автофарм возобновлен!")
+            elseif _G.startAutofarm and type(_G.startAutofarm) == "function" then
+                print("🤖 AUTOSELL: Запускаем резервный автофарм...")
                 task.wait(1) -- Небольшая задержка перед запуском
                 _G.startAutofarm()
-                print("🤖 AUTOSELL: Автофарм возобновлен!")
+                print("🤖 AUTOSELL: Резервный автофарм возобновлен!")
             else
-                print("🤖 AUTOSELL: Функция startAutofarm недоступна!")
+                print("🤖 AUTOSELL: Функции автофарма недоступны!")
             end
         end
     end)
@@ -901,6 +1068,9 @@ local function startAutosell()
     isAutosellEnabled = true
     
     print("🤖 AUTOSELL: Запуск автоселла...")
+    
+    -- Ищем функции внешнего автофарма при запуске
+    findExternalAutofarmFunctions()
     
     -- Включаем NoClip при запуске автосела
     if _G.MovementConfig and _G.startNoClip and type(_G.startNoClip) == "function" then
@@ -1099,11 +1269,41 @@ _G.AutosellModule = {
     emergencyStop = emergencyStopMovement,
     startHealthMonitoring = startHealthMonitoring,
     stopHealthMonitoring = stopHealthMonitoring,
-    isHealthMonitoringEnabled = function() return isHealthMonitoringEnabled end
+    isHealthMonitoringEnabled = function() return isHealthMonitoringEnabled end,
+    
+    -- Функции для работы с внешним автофармом
+    ExternalAutofarm = {
+        config = externalAutofarmConfig,
+        findFunctions = findExternalAutofarmFunctions,
+        start = startExternalAutofarm,
+        stop = stopExternalAutofarm,
+        restart = restartExternalAutofarm,
+        isEnabled = isExternalAutofarmEnabled,
+        
+        -- Функция для ручной настройки функций автофарма
+        setFunctions = function(stopFunc, startFunc, isEnabledFunc)
+            if stopFunc and type(stopFunc) == "function" then
+                externalAutofarmConfig.stopFunction = stopFunc
+                print("✅ AUTOFARM LINK: Ручная настройка функции остановки")
+            end
+            if startFunc and type(startFunc) == "function" then
+                externalAutofarmConfig.startFunction = startFunc
+                print("✅ AUTOFARM LINK: Ручная настройка функции запуска")
+            end
+            if isEnabledFunc and type(isEnabledFunc) == "function" then
+                externalAutofarmConfig.isEnabledFunction = isEnabledFunc
+                print("✅ AUTOFARM LINK: Ручная настройка функции проверки состояния")
+            end
+        end
+    }
 }
 
 
 
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
+print("🔗 AUTOFARM LINK: Система связи с внешним автофармом готова!")
+print("📋 Доступные команды:")
+print("   _G.AutosellModule.ExternalAutofarm.findFunctions() - поиск функций автофарма")
+print("   _G.AutosellModule.ExternalAutofarm.setFunctions(stop, start, isEnabled) - ручная настройка")
 
 return _G.AutosellModule
