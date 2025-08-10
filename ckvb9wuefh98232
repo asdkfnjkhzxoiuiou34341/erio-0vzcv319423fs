@@ -146,6 +146,12 @@ end
 -- Переменные для отслеживания состояния автоселла перед смертью
 local wasAutosellEnabledBeforeDeath = false
 
+-- Переменные для системы мониторинга HP
+local healthMonitorConnection = nil
+local lastHealth = nil
+local healthCheckInterval = 1 -- Проверка каждую секунду
+local isHealthMonitoringEnabled = false
+
 -- Функция экстренной остановки всех движений (БЕЗ ЗАМОРОЗКИ)
 local function emergencyStopMovement()
     print("🤖 AUTOSELL: ЭКСТРЕННАЯ ОСТАНОВКА ДВИЖЕНИЯ!")
@@ -229,6 +235,91 @@ local function checkPlayerDeath()
     return false
 end
 
+-- Функция для запуска мониторинга HP каждую секунду
+local function startHealthMonitoring()
+    if isHealthMonitoringEnabled then return end
+    isHealthMonitoringEnabled = true
+    
+    print("🤖 AUTOFARM: Запуск мониторинга HP каждую секунду...")
+    
+    healthMonitorConnection = task.spawn(function()
+        while isHealthMonitoringEnabled do
+            local player = Players.LocalPlayer
+            
+            if player and player.Character then
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                
+                if humanoid then
+                    local currentHealth = humanoid.Health
+                    
+                    -- Если HP стало 0 или меньше
+                    if currentHealth <= 0 then
+                        print("🤖 AUTOFARM: ОБНАРУЖЕНО 0 HP! Экстренное отключение автофарма...")
+                        
+                        -- Останавливаем автофарм немедленно
+                        if _G.stopAutofarm and type(_G.stopAutofarm) == "function" then
+                            _G.stopAutofarm()
+                        end
+                        
+                        -- Останавливаем автосел
+                        if isAutosellEnabled then
+                            stopAutosell()
+                        end
+                        
+                        -- Ждем пока игрок возродится (HP > 0)
+                        print("🤖 AUTOFARM: Ожидание возрождения игрока...")
+                        while isHealthMonitoringEnabled do
+                            task.wait(1)
+                            
+                            local newPlayer = Players.LocalPlayer
+                            if newPlayer and newPlayer.Character then
+                                local newHumanoid = newPlayer.Character:FindFirstChild("Humanoid")
+                                if newHumanoid and newHumanoid.Health > 0 then
+                                    print("🤖 AUTOFARM: Игрок возродился! HP =", newHumanoid.Health)
+                                    
+                                    -- Возобновляем автофарм если он был включен
+                                    if _G.startAutofarm and type(_G.startAutofarm) == "function" then
+                                        task.wait(2) -- Небольшая задержка перед запуском
+                                        print("🤖 AUTOFARM: Возобновляем автофарм после возрождения...")
+                                        _G.startAutofarm()
+                                    end
+                                    
+                                    -- Возобновляем автосел если он был включен
+                                    if wasAutosellEnabledBeforeDeath then
+                                        task.wait(3)
+                                        print("🤖 AUTOFARM: Возобновляем автосел после возрождения...")
+                                        startAutosell()
+                                        wasAutosellEnabledBeforeDeath = false
+                                    end
+                                    
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    
+                    lastHealth = currentHealth
+                end
+            end
+            
+            task.wait(healthCheckInterval) -- Проверяем каждую секунду
+        end
+    end)
+end
+
+-- Функция для остановки мониторинга HP
+local function stopHealthMonitoring()
+    if not isHealthMonitoringEnabled then return end
+    isHealthMonitoringEnabled = false
+    
+    print("🤖 AUTOFARM: Остановка мониторинга HP...")
+    
+    if healthMonitorConnection then
+        task.cancel(healthMonitorConnection)
+        healthMonitorConnection = nil
+    end
+end
+
 -- Проверка количества предметов в рюкзаке
 local function checkInventoryForMaxItems()
     local player = Players.LocalPlayer
@@ -307,7 +398,7 @@ local function moveToShiftplox(callback)
         task.wait(0.1) -- Даем время для остановки
         
         print("🤖 AUTOSELL: Автопилот к NPC Shiftplox активирован (с NoClip)!")
-        print("🤖 AUTOSELL: Позиция NPC:", AutosellConfig.ShiftploxPosition)
+        -- print("🤖 AUTOSELL: Позиция NPC:", AutosellConfig.ShiftploxPosition) -- Убран спам-лог
         
         -- Создаем BodyVelocity для автопилота (как раньше, но с NoClip)
         local bodyVelocity = Instance.new("BodyVelocity")
@@ -367,7 +458,7 @@ local function moveToShiftplox(callback)
                     local slowSpeed = math.max(20, distance * 15) -- Увеличенная скорость замедления
                     local moveVector = direction * slowSpeed
                     bodyVelocity.Velocity = moveVector
-                    print("🤖 AUTOSELL: Замедляемся, расстояние:", math.floor(distance), "скорость:", math.floor(slowSpeed))
+                    -- print("🤖 AUTOSELL: Замедляемся, расстояние:", math.floor(distance), "скорость:", math.floor(slowSpeed)) -- Убран спам-лог
                 end
             else
                 -- ЕСТЕСТВЕННОЕ ПРИЗЕМЛЕНИЕ: Летим ближе к земле и переходим на ходьбу
@@ -504,7 +595,7 @@ local function moveToShiftplox(callback)
                             if currentTime - lastMoveTime > 0.5 then -- Обновляем путь каждые 0.5 сек
                                 lastMoveTime = currentTime
                                 humanoid:MoveTo(AutosellConfig.ShiftploxPosition)
-                                print("🤖 AUTOSELL: Идем к NPC, осталось:", math.floor(distanceToNPC), "единиц")
+                                -- print("🤖 AUTOSELL: Идем к NPC, осталось:", math.floor(distanceToNPC), "единиц") -- Убран спам-лог
                             end
                         else
                             -- Дошли достаточно близко к NPC
@@ -642,8 +733,7 @@ local function sellSingleItemToNPC(itemName)
     local distanceToNPC = (AutosellConfig.ShiftploxPosition - currentPos).Magnitude
     
     if distanceToNPC > 20 then
-        print("🤖 AUTOSELL: Слишком далеко от NPC! Расстояние:", math.floor(distanceToNPC), "единиц")
-        print("🤖 AUTOSELL: Нужно быть ближе 20 единиц для взаимодействия")
+        print("🤖 AUTOSELL: Слишком далеко от NPC для взаимодействия!")
         return false
     end
     
@@ -651,7 +741,7 @@ local function sellSingleItemToNPC(itemName)
     
     print("🤖 AUTOSELL: Последовательность продажи предмета:", itemName)
     
-    print("🤖 AUTOSELL: Шаг 1/9 - Нажимаем E для взаимодействия (расстояние:", math.floor(distanceToNPC), "единиц)")
+    print("🤖 AUTOSELL: Шаг 1/9 - Нажимаем E для взаимодействия")
     pressKey(Enum.KeyCode.E)
     task.wait(3)
     
@@ -874,7 +964,9 @@ local function startAutosell()
     
     -- Включаем wallhack камеру
     enableCameraWallhack()
-
+    
+    -- Запускаем мониторинг HP
+    startHealthMonitoring()
     
     -- Создаем таймер проверки каждые 5 секунд
     autosellCheckTimer = task.spawn(function()
@@ -925,6 +1017,9 @@ local function stopAutosell()
     
     -- Отключаем wallhack камеру
     disableCameraWallhack()
+    
+    -- Останавливаем мониторинг HP
+    stopHealthMonitoring()
 end
 
 -- Создание GUI для автоселла
@@ -1001,7 +1096,10 @@ _G.AutosellModule = {
     start = startAutosell,
     stop = stopAutosell,
     isEnabled = function() return isAutosellEnabled end,
-    emergencyStop = emergencyStopMovement
+    emergencyStop = emergencyStopMovement,
+    startHealthMonitoring = startHealthMonitoring,
+    stopHealthMonitoring = stopHealthMonitoring,
+    isHealthMonitoringEnabled = function() return isHealthMonitoringEnabled end
 }
 
 
