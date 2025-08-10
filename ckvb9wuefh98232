@@ -9,6 +9,7 @@ local AutosellConfig = {
     Enabled = false,
     ShiftploxPosition = Vector3.new(-709, -25, -332), -- позиция NPC Shiftplox
     CameraWallhack = true, -- Камера смотрит сквозь стены во время автосела
+    MaxItemCount = 10, -- Максимальное количество предметов для слайдера
     ItemLimits = {
         ["Mysterious Arrow"] = 25,
         ["Rokakaka"] = 25,
@@ -482,9 +483,9 @@ local function restartExternalAutofarm()
     return startExternalAutofarm()
 end
 
--- Функция для включения NoClip после возрождения (как в полете к Shiftplox)
+-- Функция для перезапуска NoClip после возрождения (выключение и включение)
 local function enableNoClipAfterRespawn()
-    print("🚀 AUTOSELL: Включаем NoClip после возрождения...")
+    print("🚀 AUTOSELL: Перезапускаем NoClip после возрождения...")
     
     -- Проверяем доступность системы движения
     if not _G.MovementConfig then
@@ -492,27 +493,36 @@ local function enableNoClipAfterRespawn()
         return false
     end
     
-    -- Включаем NoClip точно так же как в полете к Shiftplox
     if not _G.MovementConfig.NoClip then
         print("⚠️ AUTOSELL: NoClip конфиг недоступен!")
         return false
     end
     
-    if not _G.MovementConfig.NoClip.Enabled then
-        print("🤖 AUTOSELL: Включаем NoClip для безопасного движения...")
-        _G.MovementConfig.NoClip.Enabled = true
-        
-        if _G.startNoClip and type(_G.startNoClip) == "function" then
-            _G.startNoClip()
-            print("✅ AUTOSELL: NoClip включен успешно после возрождения!")
-            return true
-        else
-            print("⚠️ AUTOSELL: Функция startNoClip недоступна!")
-            return false
+    -- ВСЕГДА перезапускаем NoClip (выключаем и включаем снова)
+    print("🔄 AUTOSELL: Отключаем NoClip перед перезапуском...")
+    
+    -- Отключаем NoClip если включен
+    if _G.MovementConfig.NoClip.Enabled then
+        _G.MovementConfig.NoClip.Enabled = false
+        if _G.stopNoClip and type(_G.stopNoClip) == "function" then
+            _G.stopNoClip()
         end
-    else
-        print("ℹ️ AUTOSELL: NoClip уже включен")
+    end
+    
+    -- Небольшая задержка перед включением
+    task.wait(0.5)
+    
+    -- Включаем NoClip заново
+    print("🚀 AUTOSELL: Включаем NoClip заново...")
+    _G.MovementConfig.NoClip.Enabled = true
+    
+    if _G.startNoClip and type(_G.startNoClip) == "function" then
+        _G.startNoClip()
+        print("✅ AUTOSELL: NoClip перезапущен успешно после возрождения!")
         return true
+    else
+        print("⚠️ AUTOSELL: Функция startNoClip недоступна!")
+        return false
     end
 end
 
