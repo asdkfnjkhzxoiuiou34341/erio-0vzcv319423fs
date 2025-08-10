@@ -1338,6 +1338,9 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     createAutosellItemToggle("Rib Cage of The Saint's Corpse", AutosellConfig.Items["Rib Cage of The Saint's Corpse"])
     createAutosellItemToggle("Ancient Scroll", AutosellConfig.Items["Ancient Scroll"])
     createAutosellItemToggle("DIO's Diary", AutosellConfig.Items["DIO's Diary"])
+    
+    -- Возвращаем обновленный currentY (функции создания элементов обычно обновляют currentY внутренне)
+    return currentY
 end
 
 -- Экспортируем функции в глобальное пространство
