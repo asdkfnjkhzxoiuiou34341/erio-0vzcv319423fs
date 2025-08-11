@@ -3097,6 +3097,9 @@ end
 
 
 local function createOrUpdateESP(p)
+    -- Проверяем что игрок и его персонаж существуют
+    if not p or not p.Character then return end
+    
     if not ESPs[p] then
         local hl=Instance.new("Highlight"); hl.Adornee=p.Character; hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent=p.Character
         local bg=Instance.new("BillboardGui",p.Character); bg.AlwaysOnTop=true; bg.Size=UDim2.new(0,200,0,50); bg.StudsOffset=Vector3.new(0,2,0)
@@ -3108,7 +3111,19 @@ local function createOrUpdateESP(p)
     d.hl.OutlineColor=getOutlineColor(p); d.hl.OutlineTransparency=Config.ESP.ShowOutline and Config.ESP.OutlineTransparency or 1
     d.tl.TextColor3=Config.ESP.TextColor
     
-    local baseText = string.format("%s | HP:%d | %dm",getName(p),getHealth(p),math.floor((Players.LocalPlayer.Character.HumanoidRootPart.Position-p.Character.HumanoidRootPart.Position).Magnitude))
+    -- Безопасная проверка на существование HumanoidRootPart
+    local localPlayer = Players.LocalPlayer
+    local localChar = localPlayer and localPlayer.Character
+    local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local targetChar = p and p.Character
+    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    
+    local distance = 0
+    if localRoot and targetRoot then
+        distance = math.floor((localRoot.Position - targetRoot.Position).Magnitude)
+    end
+    
+    local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
     
     d.tl.Text = baseText
 end
@@ -6480,51 +6495,41 @@ function showContent(tabName)
         
         -- Проверяем загружен ли модуль автоселла
         if _G.AutosellModule then
-            -- Модуль уже загружен, показываем управление
-            createSectionHeader("🤖 AUTO SELL CONTROLS")
-            
-            -- Главный тумблер автоселла
-            createToggleSlider("Auto Sell Enabled", false, function(v)
-                if _G.AutosellModule then
-                    if v then
-                        _G.AutosellModule.start()
-                    else
-                        _G.AutosellModule.stop()
+            -- Модуль уже загружен, используем его функцию createGUI
+            if _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
+                print("🤖 AUTOSELL: Создаем GUI через модуль...")
+                print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
+                local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
+                print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
+                currentY = newCurrentY or currentY
+            else
+                -- Fallback на старый способ если функция createGUI недоступна
+                createSectionHeader("🤖 AUTO SELL CONTROLS")
+                
+                -- Главный тумблер автоселла
+                createToggleSlider("Auto Sell Enabled", false, function(v)
+                    if _G.AutosellModule then
+                        if v then
+                            _G.AutosellModule.start()
+                        else
+                            _G.AutosellModule.stop()
+                        end
                     end
-                end
-            end)
-            
-            -- Информация о лимитах предметов
-            local infoLabel = Instance.new("TextLabel", functionsContainer)
-            infoLabel.Size = UDim2.new(1, -10, 0, 40)
-            infoLabel.Position = UDim2.new(0, 5, 0, currentY)
-            infoLabel.Text = "Лимиты: Стрелы/Рокака=25, Алмаз=30, Монеты=45, Ребра=20, Остальное=10"
-            infoLabel.Font = Enum.Font.Gotham
-            infoLabel.TextSize = 12
-            infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            infoLabel.BackgroundTransparency = 1
-            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-            infoLabel.TextWrapped = true
-            currentY = currentY + 40 + padding
-            
-            -- Кнопки быстрого управления
-            createButton("Enable All Items for Sale", function()
-                if _G.AutosellModule and _G.AutosellModule.Config then
-                    for itemName, _ in pairs(_G.AutosellModule.Config.Items) do
-                        _G.AutosellModule.Config.Items[itemName] = true
+                end)
+                
+                -- Кнопки быстрого управления
+                createButton("Enable All Items for Sale", function()
+                    if _G.AutosellModule and _G.AutosellModule.enableAllItems then
+                        _G.AutosellModule.enableAllItems()
                     end
-                    print("🤖 AUTOSELL: Все предметы включены для автопродажи")
-                end
-            end)
-            
-            createButton("Disable All Items for Sale", function()
-                if _G.AutosellModule and _G.AutosellModule.Config then
-                    for itemName, _ in pairs(_G.AutosellModule.Config.Items) do
-                        _G.AutosellModule.Config.Items[itemName] = false
+                end)
+                
+                createButton("Disable All Items for Sale", function()
+                    if _G.AutosellModule and _G.AutosellModule.disableAllItems then
+                        _G.AutosellModule.disableAllItems()
                     end
-                    print("🤖 AUTOSELL: Все предметы отключены от автопродажи")
-                end
-            end)
+                end)
+            end
         else
             -- Модуль не загружен, показываем кнопку загрузки
         end
@@ -6558,52 +6563,42 @@ function showContent(tabName)
             if success and result then
                 print("🤖 AUTOSELL: Модуль загружен, создаем GUI...")
                 
-                -- Создаем GUI автоселла прямо здесь
-                createDivider()
-                createSectionHeader("🤖 AUTO SELL CONTROLS")
-                
-                -- Главный тумблер автоселла
-                createToggleSlider("Auto Sell Enabled", false, function(v)
-                    if _G.AutosellModule then
-                        if v then
-                            _G.AutosellModule.start()
-                        else
-                            _G.AutosellModule.stop()
+                -- Используем функцию createGUI из загруженного модуля
+                if _G.AutosellModule and _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
+                    print("🤖 AUTOSELL: Создаем GUI через загруженный модуль...")
+                    print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
+                    local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
+                    print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
+                    currentY = newCurrentY or currentY
+                else
+                    -- Fallback на старый способ если функция createGUI недоступна
+                    createDivider()
+                    createSectionHeader("🤖 AUTO SELL CONTROLS")
+                    
+                    -- Главный тумблер автоселла
+                    createToggleSlider("Auto Sell Enabled", false, function(v)
+                        if _G.AutosellModule then
+                            if v then
+                                _G.AutosellModule.start()
+                            else
+                                _G.AutosellModule.stop()
+                            end
                         end
-                    end
-                end)
-                
-                -- Информация о лимитах предметов
-                local infoLabel = Instance.new("TextLabel", functionsContainer)
-                infoLabel.Size = UDim2.new(1, -10, 0, 40)
-                infoLabel.Position = UDim2.new(0, 5, 0, currentY)
-                infoLabel.Text = "Лимиты: Стрелы/Рокака=25, Алмаз=30, Монеты=45, Ребра=20, Остальное=10"
-                infoLabel.Font = Enum.Font.Gotham
-                infoLabel.TextSize = 12
-                infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-                infoLabel.BackgroundTransparency = 1
-                infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-                infoLabel.TextWrapped = true
-                currentY = currentY + 40 + padding
-                
-                -- Кнопки быстрого управления
-                createButton("Enable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.Config then
-                        for itemName, _ in pairs(_G.AutosellModule.Config.Items) do
-                            _G.AutosellModule.Config.Items[itemName] = true
+                    end)
+                    
+                    -- Кнопки быстрого управления
+                    createButton("Enable All Items for Sale", function()
+                        if _G.AutosellModule and _G.AutosellModule.enableAllItems then
+                            _G.AutosellModule.enableAllItems()
                         end
-                        print("🤖 AUTOSELL: Все предметы включены для автопродажи")
-                    end
-                end)
-                
-                createButton("Disable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.Config then
-                        for itemName, _ in pairs(_G.AutosellModule.Config.Items) do
-                            _G.AutosellModule.Config.Items[itemName] = false
+                    end)
+                    
+                    createButton("Disable All Items for Sale", function()
+                        if _G.AutosellModule and _G.AutosellModule.disableAllItems then
+                            _G.AutosellModule.disableAllItems()
                         end
-                        print("🤖 AUTOSELL: Все предметы отключены от автопродажи")
-                    end
-                end)
+                    end)
+                end
                 
                 print("🤖 AUTOSELL: GUI создан! Управление доступно выше.")
                 
