@@ -7,6 +7,41 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
+-- Anti-AFK (minimal, auto-start)
+local VirtualUser = game:GetService("VirtualUser")
+
+do
+    -- Ensure getgenv exists (fallback to _G if not)
+    if not getgenv then
+        function getgenv()
+            return _G
+        end
+    end
+
+    task.spawn(function()
+        -- Wait for LocalPlayer to exist
+        if not Players.LocalPlayer then
+            repeat task.wait() until Players.LocalPlayer
+        end
+
+        -- Use a global store to prevent duplicate connections on re-execution
+        local afkStore = rawget(getgenv(), "AntiAfkStore") or {}
+        if afkStore.connection and afkStore.connection.Disconnect then
+            pcall(function()
+                afkStore.connection:Disconnect()
+            end)
+        end
+
+        afkStore.connection = Players.LocalPlayer.Idled:Connect(function()
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end)
+
+        getgenv().AntiAfkStore = afkStore
+    end)
+end
 
 local Config = {
     ESP = {
@@ -1790,7 +1825,6 @@ _G.stopFly = stopFly
 _G.MovementConfig = MovementConfig
 _G.isNoClipping = function() return isNoClipping end
 _G.isFlying = function() return isFlying end
-
 local function createStealthTeleport()
     if not TeleportConfig.TargetPlayer then 
         return 
@@ -5408,7 +5442,6 @@ line1.Position = UDim2.new(0, 8, 0, 2)
 line1.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
 line1.BorderSizePixel = 0
 line1.Rotation = 45
-
 local line2 = Instance.new("Frame", resizeHandle)
 line2.Size = UDim2.new(0, 2, 0, 6)
 line2.Position = UDim2.new(0, 5, 0, 6)
