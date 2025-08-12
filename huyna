@@ -5937,810 +5937,135 @@ function showContent(tabName)
     if tabName == "Main" then
         contentTitle.Text = getText("MainFunctions")
         
-        -- Hotkeys
-        createKeyBindButton("ESP", Config.ESP.ToggleKey, function(newKey)
-            Config.ESP.ToggleKey = newKey
+        -- Lazy-load main/settings builder to reduce variable pressure
+        local ok, builder = pcall(function()
+            local src = readfile and readfile("huyna_main_module.lua") or game:HttpGet("https://example.invalid/huyna_main_module.lua")
+            return loadstring(src)()
         end)
-        
-        createKeyBindButton("Aimbot", Config.Aimbot.ToggleKey, function(newKey)
-            Config.Aimbot.ToggleKey = newKey
-        end)
-        
-        createKeyBindButton("Fly", MovementConfig.Fly.ToggleKey, function(newKey)
-            MovementConfig.Fly.ToggleKey = newKey
-        end)
-        
-        createKeyBindButton("NoClip", MovementConfig.NoClip.ToggleKey, function(newKey)
-            MovementConfig.NoClip.ToggleKey = newKey
-        end)
-        
-        createKeyBindButton("SpeedHack", MovementConfig.Speed.ToggleKey, function(newKey)
-            MovementConfig.Speed.ToggleKey = newKey
-        end)
-        
-        createKeyBindButton("Teleport", TeleportConfig.ToggleKey, function(newKey)
-            TeleportConfig.ToggleKey = newKey
-        end)
-        
-        createDivider()
-        
-        createSectionHeader("🔷ESP Settings")
-        createToggleSlider(getText("ESP"), Config.ESP.Enabled, function(v) Config.ESP.Enabled = v end)
-        createToggleSlider(getText("TeamCheck"), Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
-        createToggleSlider(getText("ShowOutline"), Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
-        createToggleSlider(getText("ShowLines"), Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
-        createToggleSlider(getText("RainbowColors"), Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
-        
-        createColorPicker("Fill Color", Config.ESP.FillColor, function(c) Config.ESP.FillColor = c end)
-        createColorPicker("Outline Color", Config.ESP.OutlineColor, function(c) Config.ESP.OutlineColor = c end)
-        createColorPicker("Text Color", Config.ESP.TextColor, function(c) Config.ESP.TextColor = c end)
-        createSlider("Fill Transparency", 0, 1, Config.ESP.FillTransparency, function(v) Config.ESP.FillTransparency = v end)
-        createSlider("Outline Transparency", 0, 1, Config.ESP.OutlineTransparency, function(v) Config.ESP.OutlineTransparency = v end)
-        
-        createDivider()
-        
-        createSectionHeader("🔷Aimbot Settings")
-        createToggleSlider(getText("Aimbot"), Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
-        createToggleSlider(getText("TeamCheck"), Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
-        createToggleSlider(getText("VisibilityCheck"), Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
-        createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
-        createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
-        createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
-        
-        createDivider()
-        
-        createSectionHeader("🟨 Fly Settings")
-        createToggleSlider("Fly", MovementConfig.Fly.Enabled, function(v)
-            MovementConfig.Fly.Enabled = v
-            if v then startFly() else stopFly() end
-        end)
-        
-        createSlider("Fly Speed", 0.1, 10, MovementConfig.Fly.Speed, function(v)
-            MovementConfig.Fly.Speed = v
-        end)
-        
-        createSpeedInput("Custom Fly Speed", MovementConfig.Fly.Speed, function(v)
-            MovementConfig.Fly.Speed = v
-        end)
-        
-        createDivider()
-        
-        createSectionHeader("🟪 NoClip Settings")
-        local noClipStatusLabel = Instance.new("TextLabel", functionsContainer)
-        noClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-        noClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
-        noClipStatusLabel.Text = "NoClip Status: OFF"
-        noClipStatusLabel.Font = Enum.Font.GothamBold
-        noClipStatusLabel.TextSize = 12
-        noClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
-        noClipStatusLabel.BackgroundTransparency = 1
-        noClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 20 + padding
-        
-        local forceNoClipToggle = createToggleSlider("Force NoClip", isNoClipping, function(v)
-            if v then
-                startNoClip()
-                noClipStatusLabel.Text = "NoClip Status: ON"
-                noClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
-            else
-                stopNoClip()
-                noClipStatusLabel.Text = "NoClip Status: OFF"
-                noClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
-            end
-        end)
-        
-        createDivider()
-        
-        createSectionHeader("🟦 SpeedHack Settings")
-        createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
-            MovementConfig.Speed.Enabled = v
-            if v then startSpeedHack() else stopSpeedHack() end
-        end)
-        
-        createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
-            MovementConfig.Speed.UseJumpPower = v
-            if MovementConfig.Speed.Enabled then
-                stopSpeedHack()
-                startSpeedHack()
-            end
-        end)
-        
-        createSlider("SpeedHack Speed", 0.1, 10, MovementConfig.Speed.Speed, function(v)
-            MovementConfig.Speed.Speed = v
-            if MovementConfig.Speed.Enabled then
-                local char = Players.LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                    hum.WalkSpeed = v * 16
-                    if MovementConfig.Speed.UseJumpPower then
-                        hum.JumpPower = v * 50
-                    end
-                end
-            end
-        end)
-        
-        createSpeedInput("Custom SpeedHack Speed", MovementConfig.Speed.Speed, function(v)
-            MovementConfig.Speed.Speed = v
-            if MovementConfig.Speed.Enabled then
-                local char = Players.LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                    hum.WalkSpeed = v * 16
-                    if MovementConfig.Speed.UseJumpPower then
-                        hum.JumpPower = v * 50
-                    end
-                end
-            end
-        end)
-        
-        createDivider()
-        
-        -- Jump Settings
-        createSectionHeader("🦘 Jump Settings")
-        createToggleSlider(getText("LongJump"), MovementConfig.LongJump.Enabled, function(v)
-            MovementConfig.LongJump.Enabled = v
-            if v then startLongJump() else stopLongJump() end
-        end)
-        
-        createSlider("Long Jump Power", 50, 500, MovementConfig.LongJump.JumpPower, function(v)
-            MovementConfig.LongJump.JumpPower = v
-            if MovementConfig.LongJump.Enabled then
-                local char = Players.LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                    hum.JumpPower = v
-                end
-            end
-        end)
-        
-        createToggleSlider(getText("InfiniteJump"), MovementConfig.InfiniteJump.Enabled, function(v)
-            MovementConfig.InfiniteJump.Enabled = v
-            if v then startInfiniteJump() else stopInfiniteJump() end
-        end)
-        
-        createSlider("Infinite Jump Power", 20, 150, MovementConfig.InfiniteJump.JumpPower, function(v)
-            MovementConfig.InfiniteJump.JumpPower = v
-        end)
-        
-        createDivider()
-        
-        -- Teleport Settings
-        createSectionHeader("🟩 Teleport Settings")
-        
-        local selectedPlayerLabel = Instance.new("TextLabel", functionsContainer)
-        selectedPlayerLabel.Size = UDim2.new(1, -10, 0, 24)
-        selectedPlayerLabel.Position = UDim2.new(0, 5, 0, currentY)
-        selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. (TeleportConfig.SelectedPlayerName or "None")
-        selectedPlayerLabel.Font = Enum.Font.GothamBold
-        selectedPlayerLabel.TextSize = 14
-        selectedPlayerLabel.TextColor3 = Color3.new(1,1,1)
-        selectedPlayerLabel.BackgroundTransparency = 1
-        selectedPlayerLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 24 + padding
-        
-        teleportBtn = Instance.new("TextButton", functionsContainer)
-        teleportBtn.Size = UDim2.new(1, -10, 0, 28)
-        teleportBtn.Position = UDim2.new(0, 5, 0, currentY)
-        teleportBtn.Text = getText("StartTeleport")
-        teleportBtn.Font = Enum.Font.GothamBold
-        teleportBtn.TextSize = 14
-        teleportBtn.TextColor3 = Color3.new(1,1,1)
-        teleportBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
-        teleportBtn.AutoButtonColor = false
-        Instance.new("UICorner", teleportBtn).CornerRadius = UDim.new(0,6)
-        currentY = currentY + 28 + padding
-        
-        teleportBtn.MouseButton1Click:Connect(function()
-            if not TeleportConfig.TargetPlayer then
-                teleportBtn.Text = "Select player first!"
-                task.wait(2)
-                teleportBtn.Text = "START TELEPORT"
-                return
-            end
-            
-            if TeleportConfig.Enabled then
-                stopTeleport()
-                TeleportConfig.Enabled = false
-                teleportBtn.Text = getText("StartTeleport")
-                teleportBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
-            else
-                startTeleport()
-                TeleportConfig.Enabled = true
-                teleportBtn.Text = getText("StopTeleport")
-                teleportBtn.BackgroundColor3 = Color3.fromRGB(150,0,0)
-            end
-        end)
-        
-        local playerListLabel = Instance.new("TextLabel", functionsContainer)
-        playerListLabel.Size = UDim2.new(1, -10, 0, 20)
-        playerListLabel.Position = UDim2.new(0, 5, 0, currentY)
-        playerListLabel.Text = getText("SelectPlayerForTeleport") .. ":"
-        playerListLabel.Font = Enum.Font.GothamBold
-        playerListLabel.TextSize = 12
-        playerListLabel.TextColor3 = Color3.new(1,1,1)
-        playerListLabel.BackgroundTransparency = 1
-        playerListLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 20 + padding
-        
-        local playerButtons = {}
-        local playerListStartY = currentY
-        
-        local function createPlayerList()
-            for _, btn in pairs(playerButtons) do
-                if btn and btn.Parent then
-                    btn:Destroy()
-                end
-            end
-            playerButtons = {}
-            
-            currentY = playerListStartY
-            
-            local allPlayers = Players:GetPlayers()
-            local playerList = {}
-            
-            for _, player in ipairs(allPlayers) do
-                if player ~= Players.LocalPlayer then
-                    table.insert(playerList, player)
-                end
-            end
-            
-            table.sort(playerList, function(a, b)
-                return string.lower(a.Name) < string.lower(b.Name)
-            end)
-            
-            for _, player in ipairs(playerList) do
-                local playerBtn = Instance.new("TextButton", functionsContainer)
-                playerBtn.Size = UDim2.new(1, -10, 0, 24)
-                playerBtn.Position = UDim2.new(0, 5, 0, currentY)
-                playerBtn.Text = player.Name
-                playerBtn.Font = Enum.Font.Gotham
-                playerBtn.TextSize = 12
-                playerBtn.TextColor3 = Color3.new(1,1,1)
-                playerBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-                playerBtn.AutoButtonColor = false
-                Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0,4)
-                currentY = currentY + 24 + padding
-                
-                table.insert(playerButtons, playerBtn)
-                
-                playerBtn.MouseButton1Click:Connect(function()
-                    TeleportConfig.TargetPlayer = player
-                    TeleportConfig.SelectedPlayerName = player.Name
-                    selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. player.Name
-                    
-                    for _, child in pairs(functionsContainer:GetChildren()) do
-                        if child:IsA("TextButton") and child.Text == player.Name then
-                            child.BackgroundColor3 = Color3.fromRGB(0,255,0)
-                        elseif child:IsA("TextButton") and child.Text ~= "START TELEPORT" and child.Text ~= "STOP TELEPORT" and child.Text ~= player.Name then
-                            child.BackgroundColor3 = Color3.fromRGB(40,40,40)
-                        end
-                    end
-                end)
-            end
+        if ok and builder and builder.buildMain then
+            local ctx = {
+                functionsContainer = functionsContainer,
+                currentY = currentY,
+                padding = padding,
+                createKeyBindButton = createKeyBindButton,
+                createToggleSlider = createToggleSlider,
+                createSlider = createSlider,
+                createSpeedInput = createSpeedInput,
+                createDivider = createDivider,
+                createSectionHeader = createSectionHeader,
+                createButton = createButton,
+                createDropdown = createDropdown,
+                getText = getText,
+                Players = Players,
+                Config = Config,
+                MovementConfig = MovementConfig,
+                TeleportConfig = TeleportConfig,
+                startFly = startFly, stopFly = stopFly,
+                startNoClip = startNoClip, stopNoClip = stopNoClip,
+                startSpeedHack = startSpeedHack, stopSpeedHack = stopSpeedHack,
+                startLongJump = startLongJump, stopLongJump = stopLongJump,
+                startInfiniteJump = startInfiniteJump, stopInfiniteJump = stopInfiniteJump,
+                startTeleport = startTeleport, stopTeleport = stopTeleport,
+                teleportBtnRef = function(btn) teleportBtn = btn end,
+                getSelectedTab = function() return selectedTab end,
+                MenuSettings = MenuSettings,
+                updateAccentColor = updateAccentColor,
+                updateAllTexts = updateAllTexts,
+            }
+            currentY = builder.buildMain(ctx) or currentY
+        else
+            -- Fallback: показать простое сообщение об ошибке
+            local err = Instance.new("TextLabel", functionsContainer)
+            err.Size = UDim2.new(1, -10, 0, 24)
+            err.Position = UDim2.new(0, 5, 0, currentY)
+            err.Text = "Failed to load Main module"
+            err.Font = Enum.Font.Gotham
+            err.TextSize = 14
+            err.TextColor3 = Color3.fromRGB(255,80,80)
+            err.BackgroundTransparency = 1
+            currentY = currentY + 24 + padding
         end
-        
-        createPlayerList()
-        
-        spawn(function()
-            while true do
-                task.wait(2)
-                if selectedTab == "Main" then
-                    createPlayerList()
-                end
-            end
-        end)
         
     elseif tabName == "YBA Hacks" then
         contentTitle.Text = getText("YBAHacks")
         
-        -- 🎯 STAND RANGE заголовок как в Player ESP
-        createSectionHeader("🎯 STAND RANGE")
-        
-        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
-            YBAConfig.Enabled = v
-            if v then 
-                startYBA() 
-            else 
-                stopYBA() 
-            end
+        local ok, ybaBuilder = pcall(function()
+            local src = readfile and readfile("huyna_yba_module.lua") or game:HttpGet("https://example.invalid/huyna_yba_module.lua")
+            return loadstring(src)()
         end)
-        
-        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), isUndergroundControlEnabled, function(v)
-            if v then
-                if startUndergroundControl then
-                    startUndergroundControl()
-                end
-            else
-                if stopUndergroundControl then
-                    stopUndergroundControl()
-                end
-            end
-        end)
-        
-        local ybaNoClipStatusLabel = Instance.new("TextLabel", functionsContainer)
-        ybaNoClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-        ybaNoClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
-        ybaNoClipStatusLabel.Text = "NoClip Status: " .. (isNoClipping and "ON" or "OFF")
-        ybaNoClipStatusLabel.Font = Enum.Font.GothamBold
-        ybaNoClipStatusLabel.TextSize = 12
-        ybaNoClipStatusLabel.TextColor3 = isNoClipping and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
-        ybaNoClipStatusLabel.BackgroundTransparency = 1
-        ybaNoClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 20 + padding
-        
-        local ybaNoClipToggle = createToggleSlider(getText("ForceNoClip"), isNoClipping, function(v)
-            if v then
-                startNoClip()
-                ybaNoClipStatusLabel.Text = "NoClip Status: ON"
-                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
-            else
-                stopNoClip()
-                ybaNoClipStatusLabel.Text = "NoClip Status: OFF"
-                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
-            end
-        end)
-        
-        createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
-            YBAConfig.UndergroundControl.FlightSpeed = v
-            if isUndergroundControlEnabled and controlledStandForUnderground then
-                print("YBA: Скорость подземного полета изменена на:", v)
-            end
-        end)
-        
-
-        
-        -- ⏰ ANTI TS заголовок как в Player ESP
-        createSectionHeader("⏰ ANTI TS")
-        
-        local         antiTimeStopBtn = Instance.new("TextButton", functionsContainer)
-        antiTimeStopBtn.Size = UDim2.new(1, -10, 0, 28)
-        antiTimeStopBtn.Position = UDim2.new(0, 5, 0, currentY)
-        antiTimeStopBtn.Text = getText("AntiTimeStop")
-        antiTimeStopBtn.Font = Enum.Font.GothamBold
-        antiTimeStopBtn.TextSize = 14
-        antiTimeStopBtn.TextColor3 = Color3.new(1,1,1)
-        antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-        antiTimeStopBtn.AutoButtonColor = false
-        Instance.new("UICorner", antiTimeStopBtn).CornerRadius = UDim.new(0,6)
-        currentY = currentY + 28 + padding
-        
-        antiTimeStopBtn.MouseButton1Click:Connect(function()
-            if not isAntiTimeStopEnabled then
-                AntiTimeStopConfig.Enabled = true
-                startAntiTimeStop()
-                antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
-                antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
-                
-                -- Быстрое отключение после освобождения
-                spawn(function()
-                    task.wait(0.1) -- Минимальное время для освобождения
-                    
-                    AntiTimeStopConfig.Enabled = false
-                    stopAntiTimeStop()
-                    antiTimeStopBtn.Text = "ANTI TIME STOP"
-                    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-                    print("Anti TS: ГОТОВО!")
-                end)
-            end
-        end)
-        
-
-        createDivider()
-        
-        -- 👥 PLAYER ESP заголовок
-        createSectionHeader("👥 PLAYER ESP")
-        
-        local userStandToggleBtn = createToggleSlider("User Stand", false, function(v)
-            if v then
-                startUserStandESP()
-            else
-                stopUserStandESP()
-            end
-        end)
-        
-        local userStyleToggleBtn = createToggleSlider("User Style", false, function(v)
-            if v then
-                startUserStyleESP()
-            else
-                stopUserStyleESP()
-            end
-        end)
-        
-        -- 📦 ITEM ESP заголовок
-        createSectionHeader("📦 ITEM ESP")
-        
-        local itemESPToggleBtn = createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
-            YBAConfig.ItemESP.Enabled = v
-            if v then 
-                startItemESP() 
-            else 
-                stopItemESP() 
-            end
-        end)
-        
-        local itemSelectionHeader = Instance.new("TextLabel", functionsContainer)
-        itemSelectionHeader.Size = UDim2.new(1, -10, 0, 25)
-        itemSelectionHeader.Position = UDim2.new(0, 5, 0, currentY)
-        itemSelectionHeader.Text = "📦 ITEM SELECTION"
-        itemSelectionHeader.Font = Enum.Font.GothamBold
-        itemSelectionHeader.TextSize = 14
-        itemSelectionHeader.TextColor3 = Color3.fromRGB(255, 255, 0)
-        itemSelectionHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-        itemSelectionHeader.BorderSizePixel = 1
-        itemSelectionHeader.BorderColor3 = Color3.fromRGB(100, 100, 120)
-        itemSelectionHeader.TextXAlignment = Enum.TextXAlignment.Left
-        Instance.new("UICorner", itemSelectionHeader).CornerRadius = UDim.new(0,4)
-        currentY = currentY + 25 + padding
-        
-        local function createItemToggle(itemName, defaultState)
-            local btn = createToggleSlider(itemName, defaultState, function(v)
-                YBAConfig.ItemESP.Items[itemName] = v
-                print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- ИСПРАВЛЕНО: Принудительно обновляем ESP независимо от общего состояния
-                if not v then
-                    -- При отключении предмета немедленно убираем все его ESP элементы
-                    print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
-                    for obj, esp in pairs(itemESPElements) do
-                        if esp and esp.itemName == itemName then
-                            print("YBA Item ESP: Удаляем ESP элемент для:", itemName)
-                            pcall(removeItemESP, {Object = obj})
-                        end
-                    end
-                else
-                    -- При включении предмета принудительно обновляем поиск если ESP активен
-                    if YBAConfig.ItemESP.Enabled then
-                        print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
-                    end
-                end
-            end)
-            return btn
-        end
-        
-        createItemToggle(getText("MysteriousArrow"), YBAConfig.ItemESP.Items["Mysterious Arrow"])
-        createItemToggle(getText("Rokakaka"), YBAConfig.ItemESP.Items["Rokakaka"])
-        createItemToggle(getText("PureRokakaka"), YBAConfig.ItemESP.Items["Pure Rokakaka"])
-        createItemToggle(getText("Diamond"), YBAConfig.ItemESP.Items["Diamond"])
-        createItemToggle(getText("GoldCoin"), YBAConfig.ItemESP.Items["Gold Coin"])
-        createItemToggle(getText("SteelBall"), YBAConfig.ItemESP.Items["Steel Ball"])
-        createItemToggle(getText("Clackers"), YBAConfig.ItemESP.Items["Clackers"])
-        createItemToggle(getText("CaesarsHeadband"), YBAConfig.ItemESP.Items["Caesar's Headband"])
-        createItemToggle(getText("ZeppeliHat"), YBAConfig.ItemESP.Items["Zeppeli's Hat"])
-        createItemToggle(getText("ZeppeliScarf"), YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
-        createItemToggle(getText("QuintonsGlove"), YBAConfig.ItemESP.Items["Quinton's Glove"])
-        createItemToggle(getText("StoneMask"), YBAConfig.ItemESP.Items["Stone Mask"])
-        createItemToggle(getText("RibCage"), YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
-        createItemToggle(getText("AncientScroll"), YBAConfig.ItemESP.Items["Ancient Scroll"])
-        createItemToggle(getText("DiosDiary"), YBAConfig.ItemESP.Items["DIO's Diary"])
-        createItemToggle(getText("LuckyStoneMask"), YBAConfig.ItemESP.Items["Lucky Stone Mask"])
-        createItemToggle(getText("LuckyArrow"), YBAConfig.ItemESP.Items["Lucky Arrow"])
-        
-        -- 🤖 AUTOFARM заголовок
-        createSectionHeader("🤖 AUTOFARM")
-        
-        -- Autofarm тумблер
-        createToggleSlider("Autofarm", isAutofarmEnabled, function(v)
-            if v then
-                startAutofarm()
-            else
-                stopAutofarm()
-            end
-        end)
-        
-        -- Заголовок для выбора предметов автофарма
-        createSectionHeader("📦 ITEMS FARM")
-        
-        -- Функция для создания переключателей предметов автофарма
-        local function createAutofarmItemToggle(itemName, defaultState)
-            local btn = createToggleSlider(itemName, defaultState, function(v)
-                AutofarmConfig.Items[itemName] = v
-                
-                -- ФИКС: Синхронизируем ОБА варианта ключей для предметов
-                if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" or itemName == "Таинственная стрела" then
-                    AutofarmConfig.Items["Mysterious Arrow"] = v -- с пробелом (ОСНОВНОЙ ключ для поиска)
-                    AutofarmConfig.Items["MysteriousArrow"] = v -- без пробела
-                elseif itemName == "GoldCoin" or itemName == "Gold Coin" or itemName == "Золотая монета" then
-                    AutofarmConfig.Items["Gold Coin"] = v -- с пробелом
-                    AutofarmConfig.Items["GoldCoin"] = v -- без пробела
-                end
-                
-                print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- Если автофарм активен, сбрасываем попытки для всех предметов этого типа
-                -- чтобы изменения применились немедленно
-                if isAutofarmEnabled then
-                    -- Очищаем счетчики попыток для предмета
-                    for key, _ in pairs(autofarmItemAttempts) do
-                        if string.find(key, itemName) then
-                            autofarmItemAttempts[key] = nil
-                        end
-                    end
-                    
-                    -- Очищаем пропущенные предметы
-                    for key, item in pairs(autofarmSkippedItems) do
-                        if item.Name == itemName then
-                            autofarmSkippedItems[key] = nil
-                        end
-                    end
-                    
-                    -- КРИТИЧНО: Если текущий целевой предмет был отключен, прерываем движение к нему
-                    if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
-                        print("🤖 AUTOFARM: Прерываем движение к предмету", itemName, "- он был отключен в настройках")
-                        autofarmCurrentTarget = nil
-                        autofarmPickingUp = false
-                        
-                        -- ПРИНУДИТЕЛЬНО отпускаем клавишу E если она зажата
-                        pcall(function()
-                            if game:GetService("VirtualInputManager") then
-                                game:GetService("VirtualInputManager"):SendKeyEvent(false, AutofarmConfig.PickupKey, false, game)
-                            end
-                            game:GetService("UserInputService").InputEnded:Fire(
-                                {KeyCode = AutofarmConfig.PickupKey, UserInputType = Enum.UserInputType.Keyboard},
-                                false
-                            )
-                        end)
-                        
-                        -- Отключаем все соединения движения и подбора
-                        for _, connection in ipairs(autofarmConnections) do
-                            if connection then
-                                pcall(function() connection:Disconnect() end)
-                            end
-                        end
-                        autofarmConnections = {}
-                        
-                        -- Немедленно ищем следующий предмет
-                        task.spawn(function()
-                            task.wait(0.1)
-                            if isAutofarmEnabled then
-                                processNextItem()
-                            end
-                        end)
-                    end
-                    
-                    -- Убираем лишний спам
-                end
-            end)
-            return btn
-        end
-        
-        -- Создаем переключатели для всех предметов автофарма
-        createAutofarmItemToggle("Mysterious Arrow", AutofarmConfig.Items["Mysterious Arrow"])
-        createAutofarmItemToggle("Rokakaka", AutofarmConfig.Items["Rokakaka"])
-        createAutofarmItemToggle("Pure Rokakaka", AutofarmConfig.Items["Pure Rokakaka"])
-        createAutofarmItemToggle("Diamond", AutofarmConfig.Items["Diamond"])
-        createAutofarmItemToggle("Gold Coin", AutofarmConfig.Items["Gold Coin"])
-        createAutofarmItemToggle("Steel Ball", AutofarmConfig.Items["Steel Ball"])
-        createAutofarmItemToggle("Clackers", AutofarmConfig.Items["Clackers"])
-        createAutofarmItemToggle("Caesar's Headband", AutofarmConfig.Items["Caesar's Headband"])
-        createAutofarmItemToggle("Zeppeli's Hat", AutofarmConfig.Items["Zeppeli's Hat"])
-        createAutofarmItemToggle("Zeppeli's Scarf", AutofarmConfig.Items["Zeppeli's Scarf"])
-        createAutofarmItemToggle("Quinton's Glove", AutofarmConfig.Items["Quinton's Glove"])
-        createAutofarmItemToggle("Stone Mask", AutofarmConfig.Items["Stone Mask"])
-        createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
-        createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
-        createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
-        createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
-        createAutofarmItemToggle("Lucky Arrow", AutofarmConfig.Items["Lucky Arrow"])
-        
-        -- AUTOSELL секция (загрузка модуля)
-        createDivider()
-        createSectionHeader("🤖 AUTO SELL")
-        
-        -- Проверяем загружен ли модуль автоселла
-        if _G.AutosellModule then
-            -- Модуль уже загружен, используем его функцию createGUI
-            if _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-                print("🤖 AUTOSELL: Создаем GUI через модуль...")
-                print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
-                local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-                print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
-                currentY = newCurrentY or currentY
-            else
-                -- Fallback на старый способ если функция createGUI недоступна
-                createSectionHeader("🤖 AUTO SELL CONTROLS")
-                
-                -- Главный тумблер автоселла
-                createToggleSlider("Auto Sell Enabled", false, function(v)
-                    if _G.AutosellModule then
-                        if v then
-                            _G.AutosellModule.start()
-                        else
-                            _G.AutosellModule.stop()
-                        end
-                    end
-                end)
-                
-                -- Кнопки быстрого управления
-                createButton("Enable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.enableAllItems then
-                        _G.AutosellModule.enableAllItems()
-                    end
-                end)
-                
-                createButton("Disable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.disableAllItems then
-                        _G.AutosellModule.disableAllItems()
-                    end
-                end)
-            end
+        if ok and ybaBuilder and ybaBuilder.buildYBATab then
+            local ctx = {
+                functionsContainer = functionsContainer,
+                currentY = currentY,
+                padding = padding,
+                createToggleSlider = createToggleSlider,
+                createSlider = createSlider,
+                createDivider = createDivider,
+                createSectionHeader = createSectionHeader,
+                createButton = createButton,
+                getText = getText,
+                Players = Players,
+                YBAConfig = YBAConfig,
+                startYBA = startYBA, stopYBA = stopYBA,
+                startNoClip = startNoClip, stopNoClip = stopNoClip,
+                startItemESP = startItemESP, stopItemESP = stopItemESP,
+                startUserStandESP = startUserStandESP, stopUserStandESP = stopUserStandESP,
+                startUserStyleESP = startUserStyleESP, stopUserStyleESP = stopUserStyleESP,
+                startAntiTimeStop = startAntiTimeStop, stopAntiTimeStop = stopAntiTimeStop,
+                isNoClipping = isNoClipping,
+                isUndergroundControlEnabled = isUndergroundControlEnabled,
+                controlledStandForUnderground = controlledStandForUnderground,
+                isAntiTimeStopEnabled = isAntiTimeStopEnabled,
+                AntiTimeStopConfig = AntiTimeStopConfig,
+                itemESPElements = itemESPElements,
+                removeItemESP = removeItemESP,
+                startUndergroundControl = startUndergroundControl,
+                stopUndergroundControl = stopUndergroundControl,
+            }
+            currentY = ybaBuilder.buildYBATab(ctx) or currentY
         else
-            -- Модуль не загружен, показываем кнопку загрузки
+            local err = Instance.new("TextLabel", functionsContainer)
+            err.Size = UDim2.new(1, -10, 0, 24)
+            err.Position = UDim2.new(0, 5, 0, currentY)
+            err.Text = "Failed to load YBA module"
+            err.Font = Enum.Font.Gotham
+            err.TextSize = 14
+            err.TextColor3 = Color3.fromRGB(255,80,80)
+            err.BackgroundTransparency = 1
+            currentY = currentY + 24 + padding
         end
         
-        -- Кнопка загрузки модуля автоселла
-        local loadButton = createButton("Load Autosell Module", function()
-            print("🤖 AUTOSELL: Загружаем модуль автоселла...")
-            
-            if _G.AutosellModule then
-                print("🤖 AUTOSELL: Модуль уже загружен! Обновляем интерфейс...")
-                -- Скрываем кнопку если модуль уже загружен
-                if loadButton then loadButton.Visible = false end
-                showContent("YBA Hacks")
-                return
-            end
-            
-            local success, result = pcall(function()
-                -- Загружаем модуль автоселла через HTTP с GitHub
-                local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh98232")
-                return loadstring(autosellCode)()
-            end)
-            
-            if not success then
-                -- Fallback: загружаем локальный файл
-                success, result = pcall(function()
-                    local autosellCode = readfile("autosell.lua")
-                    return loadstring(autosellCode)()
-                end)
-            end
-            
-            if success and result then
-                print("🤖 AUTOSELL: Модуль загружен, создаем GUI...")
-                
-                -- Используем функцию createGUI из загруженного модуля
-                if _G.AutosellModule and _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-                    print("🤖 AUTOSELL: Создаем GUI через загруженный модуль...")
-                    print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
-                    local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-                    print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
-                    currentY = newCurrentY or currentY
-                else
-                    -- Fallback на старый способ если функция createGUI недоступна
-                    createDivider()
-                    createSectionHeader("🤖 AUTO SELL CONTROLS")
-                    
-                    -- Главный тумблер автоселла
-                    createToggleSlider("Auto Sell Enabled", false, function(v)
-                        if _G.AutosellModule then
-                            if v then
-                                _G.AutosellModule.start()
-                            else
-                                _G.AutosellModule.stop()
-                            end
-                        end
-                    end)
-                    
-                    -- Кнопки быстрого управления
-                    createButton("Enable All Items for Sale", function()
-                        if _G.AutosellModule and _G.AutosellModule.enableAllItems then
-                            _G.AutosellModule.enableAllItems()
-                        end
-                    end)
-                    
-                    createButton("Disable All Items for Sale", function()
-                        if _G.AutosellModule and _G.AutosellModule.disableAllItems then
-                            _G.AutosellModule.disableAllItems()
-                        end
-                    end)
-                end
-                
-                print("🤖 AUTOSELL: GUI создан! Управление доступно выше.")
-                
-                -- Обновляем размер контейнера чтобы новые элементы отобразились
-                functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
-                
-                -- Принудительно обновляем прокрутку
-                if scrollFrame then
-                    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
-                end
-                
-                -- Скрываем кнопку загрузки после успешной загрузки
-                if loadButton then loadButton.Visible = false end
-                
-                -- Делаем задержку и полное обновление интерфейса
-                task.wait(0.5)
-                showContent("YBA Hacks")
-            else
-                print("🤖 AUTOSELL: Ошибка загрузки модуля:", tostring(result))
-                print("🤖 AUTOSELL: Попробуйте:")
-                print("1. Разместить autosell.lua онлайн и обновить URL")
-                print("2. Или поместить autosell.lua в папку workspace")
-            end
-        end)
     elseif tabName == "Settings" then
         contentTitle.Text = getText("MenuSettings")
         
-
-        
-        createDivider()
-        
-        local accentColorLabel = Instance.new("TextLabel", functionsContainer)
-        accentColorLabel.Text = getText("AccentColor")
-        accentColorLabel.TextColor3 = Color3.new(1,1,1)
-        accentColorLabel.BackgroundTransparency = 1
-        accentColorLabel.Size = UDim2.new(1, -10, 0, 20)
-        accentColorLabel.Position = UDim2.new(0, 5, 0, currentY)
-        accentColorLabel.Font = Enum.Font.Gotham
-        accentColorLabel.TextSize = 14
-        accentColorLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 20 + padding
-
-        local accentColors = {
-            Color3.fromRGB(0, 150, 0),
-            Color3.fromRGB(0, 100, 255),
-            Color3.fromRGB(255, 0, 100),
-            Color3.fromRGB(255, 150, 0),
-            Color3.fromRGB(150, 0, 255),
-            Color3.fromRGB(255, 255, 0),
-            Color3.fromRGB(0, 255, 255),
-            Color3.fromRGB(255, 50, 50),
-        }
-
-        local colorRow = Instance.new("Frame", functionsContainer)
-        colorRow.Size = UDim2.new(1, -10, 0, 35)
-        colorRow.Position = UDim2.new(0, 5, 0, currentY)
-        colorRow.BackgroundTransparency = 1
-
-        local colorLayout = Instance.new("UIListLayout", colorRow)
-        colorLayout.FillDirection = Enum.FillDirection.Horizontal
-        colorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-        colorLayout.Padding = UDim.new(0, 8)
-
-        for _, color in pairs(accentColors) do
-            local colorBtn = Instance.new("TextButton", colorRow)
-            colorBtn.Size = UDim2.new(0, 30, 0, 30)
-            colorBtn.BackgroundColor3 = color
-            colorBtn.Text = ""
-            colorBtn.AutoButtonColor = false
-            colorBtn.BorderSizePixel = 0
-            
-            local colorCorner = Instance.new("UICorner", colorBtn)
-            colorCorner.CornerRadius = UDim.new(0, 6)
-            
-            if MenuSettings.AccentColor == color then
-                local highlight = Instance.new("UIStroke", colorBtn)
-                highlight.Color = Color3.new(1, 1, 1)
-                highlight.Thickness = 2
-            end
-            
-            colorBtn.MouseButton1Click:Connect(function()
-                MenuSettings.AccentColor = color
-                updateAccentColor()
-                
-                for _, btn in pairs(colorRow:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        local stroke = btn:FindFirstChild("UIStroke")
-                        if stroke then stroke:Destroy() end
-                        
-                        if btn.BackgroundColor3 == color then
-                            local highlight = Instance.new("UIStroke", btn)
-                            highlight.Color = Color3.new(1, 1, 1)
-                            highlight.Thickness = 2
-                        end
-                    end
-                end
-                
-                showContent(selectedTab)
-            end)
-        end
-        
-        currentY = currentY + 35 + padding
-        
-        createDivider()
-        
-        createDropdown(getText("Language"), {"English", "Russian"}, MenuSettings.Language, function(selectedLanguage)
-            MenuSettings.Language = selectedLanguage
-            updateAllTexts()
+        local ok, builder = pcall(function()
+            local src = readfile and readfile("huyna_main_module.lua") or game:HttpGet("https://example.invalid/huyna_main_module.lua")
+            return loadstring(src)()
         end)
+        if ok and builder and builder.buildSettings then
+            local ctx = {
+                functionsContainer = functionsContainer,
+                currentY = currentY,
+                padding = padding,
+                createDivider = createDivider,
+                createDropdown = createDropdown,
+                getText = getText,
+                MenuSettings = MenuSettings,
+                updateAccentColor = updateAccentColor,
+                updateAllTexts = updateAllTexts,
+            }
+            currentY = builder.buildSettings(ctx) or currentY
+        else
+            local err = Instance.new("TextLabel", functionsContainer)
+            err.Size = UDim2.new(1, -10, 0, 24)
+            err.Position = UDim2.new(0, 5, 0, currentY)
+            err.Text = "Failed to load Settings module"
+            err.Font = Enum.Font.Gotham
+            err.TextSize = 14
+            err.TextColor3 = Color3.fromRGB(255,80,80)
+            err.BackgroundTransparency = 1
+            currentY = currentY + 24 + padding
+        end
     end
     
     functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
