@@ -1,16 +1,4 @@
--- Модуль основных функций (Main + Settings)
--- Загружается динамически через основной загрузчик
-
-local Players = _G.HuynaScript.Players
-local RunService = _G.HuynaScript.RunService
-local UserInputService = _G.HuynaScript.UserInputService
-local TweenService = _G.HuynaScript.TweenService
-local CoreGui = _G.HuynaScript.CoreGui
-
--- Получаем ссылки на GUI элементы
-local GUI = _G.HuynaScript.GUI
-local functionsContainer = GUI.functionsContainer
-local scrollFrame = GUI.scrollFrame
+local MainModule = {}
 
 -- Конфигурации
 local Config = {
@@ -40,7 +28,6 @@ local Config = {
         FOVColor = Color3.fromRGB(255,128,128),
         FOVRainbow = false,
     },
-    MenuCollapsed = false,
 }
 
 local MovementConfig = {
@@ -70,391 +57,130 @@ local TeleportConfig = {
     StabilizationThreshold = 0.9,
 }
 
--- Конфигурация анти-афк
-local AntiAfkConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-}
-
--- Переменные состояния
+-- Состояния
 local isFlying = false
 local flyConnections = {}
-local originalGravity = workspace.Gravity
-
 local isNoClipping = false
 local noClipConnections = {}
-
 local isSpeedHacking = false
 local speedHackConnections = {}
-local originalWalkSpeed = 16
-local originalJumpPower = 50
-
 local isLongJumping = false
 local longJumpConnections = {}
-local originalLongJumpPower = 50
-
 local isInfiniteJumping = false
 local infiniteJumpConnections = {}
-local lastJumpTime = 0
-
 local isTeleporting = false
 local teleportConnections = {}
-local playerSelectionWindow = nil
 
--- Anti-AFK variables
-local isAntiAfkEnabled = false
-local antiAfkConnection = nil
+-- ESP переменные
+local ESPs, Lines = {}, {}
+local FOVCircle
 
--- Сохраняем конфигурации в глобальную область
-_G.HuynaScript.Configs.Main = Config
-_G.HuynaScript.Configs.Movement = MovementConfig
-_G.HuynaScript.Configs.Teleport = TeleportConfig
-_G.HuynaScript.Configs.AntiAfk = AntiAfkConfig
+-- Создание FOV круга
+FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 100
+FOVCircle.Filled = false
+FOVCircle.Visible = false
 
--- Текущая позиция Y для элементов
-local currentY = 0
-local padding = 5
-
--- Функция получения текста
-local function getText(key) return key end
-
--- Вспомогательные функции для создания GUI элементов
-local function createSectionHeader(title)
-    local header = Instance.new("TextLabel")
-    header.Name = "SectionHeader"
-    header.Parent = functionsContainer
-    header.Size = UDim2.new(1, -10, 0, 30)
-    header.BackgroundTransparency = 1
-    header.Text = title
-    header.TextColor3 = Color3.fromRGB(255, 255, 255)
-    header.TextSize = 14
-    header.Font = Enum.Font.GothamBold
-    header.TextXAlignment = Enum.TextXAlignment.Left
-    header.LayoutOrder = currentY
-    currentY = currentY + 1
-    return header
+-- Основные функции ESP
+local function getName(p)
+    return p.Name
 end
 
-local function createDivider()
-    local divider = Instance.new("Frame")
-    divider.Name = "Divider"
-    divider.Parent = functionsContainer
-    divider.Size = UDim2.new(1, -20, 0, 2)
-    divider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    divider.BorderSizePixel = 0
-    divider.LayoutOrder = currentY
-    currentY = currentY + 1
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 1)
-    corner.Parent = divider
-    
-    return divider
+local function getHealth(p)
+    local h = p.Character and p.Character:FindFirstChild("Humanoid")
+    return (h and h.Health>0) and math.floor(h.Health) or 0
 end
 
-local function createToggleSlider(label, default, callback)
-    local container = Instance.new("Frame")
-    container.Name = label .. "Container"
-    container.Parent = functionsContainer
-    container.Size = UDim2.new(1, -10, 0, 40)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = currentY
-    currentY = currentY + 1
+local function isAlive(p) 
+    return getHealth(p)>0 
+end
 
-    local labelText = Instance.new("TextLabel")
-    labelText.Name = "Label"
-    labelText.Parent = container
-    labelText.Size = UDim2.new(0.7, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    labelText.TextSize = 12
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
+local function getRainbow() 
+    return Color3.fromHSV((tick()%5)/5,1,1) 
+end
 
-    local sliderBack = Instance.new("Frame")
-    sliderBack.Name = "SliderBack"
-    sliderBack.Parent = container
-    sliderBack.Size = UDim2.new(0, 50, 0, 25)
-    sliderBack.Position = UDim2.new(1, -55, 0.5, -12.5)
-    sliderBack.BackgroundColor3 = default and _G.HuynaScript.MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
-    sliderBack.BorderSizePixel = 0
+local function getESPColor(p)
+    if Config.ESP.Rainbow then return getRainbow() end
+    if Config.ESP.TeamCheck then return (p.TeamColor==game.Players.LocalPlayer.TeamColor) and Config.ESP.TeamColor or Config.ESP.EnemyColor end
+    return Config.ESP.FillColor
+end
 
-    local sliderCorner = Instance.new("UICorner")
-    sliderCorner.CornerRadius = UDim.new(0, 12)
-    sliderCorner.Parent = sliderBack
+local function getOutlineColor(p)
+    if Config.ESP.Rainbow then return getRainbow() end
+    if Config.ESP.TeamCheck then return (p.TeamColor==game.Players.LocalPlayer.TeamColor) and Config.ESP.TeamColor or Config.ESP.EnemyColor end
+    return Config.ESP.OutlineColor
+end
 
-    local sliderButton = Instance.new("Frame")
-    sliderButton.Name = "SliderButton"
-    sliderButton.Parent = sliderBack
-    sliderButton.Size = UDim2.new(0, 20, 0, 20)
-    sliderButton.Position = default and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
-    sliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sliderButton.BorderSizePixel = 0
+local function rayVisible(p)
+    if not Config.Aimbot.VisibilityCheck then return true end
+    local cam = workspace.CurrentCamera
+    local head = p.Character and p.Character:FindFirstChild("Head") 
+    if not head then return false end
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Blacklist
+    rp.FilterDescendantsInstances = {game.Players.LocalPlayer.Character, p.Character}
+    return not workspace:Raycast(cam.CFrame.Position, head.Position-cam.CFrame.Position, rp)
+end
 
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 10)
-    buttonCorner.Parent = sliderButton
-
-    local isToggled = default
+-- Функции ESP
+local function createOrUpdateESP(p)
+    if not p or not p.Character then return end
     
-    local function toggle()
-        isToggled = not isToggled
+    if not ESPs[p] then
+        local hl = Instance.new("Highlight")
+        hl.Adornee = p.Character
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = p.Character
         
-        local newBackgroundColor = isToggled and _G.HuynaScript.MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
-        local newPosition = isToggled and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+        local bg = Instance.new("BillboardGui", p.Character)
+        bg.AlwaysOnTop = true
+        bg.Size = UDim2.new(0, 200, 0, 50)
+        bg.StudsOffset = Vector3.new(0, 2, 0)
         
-        TweenService:Create(sliderBack, TweenInfo.new(0.2), {BackgroundColor3 = newBackgroundColor}):Play()
-        TweenService:Create(sliderButton, TweenInfo.new(0.2), {Position = newPosition}):Play()
+        local tl = Instance.new("TextLabel", bg)
+        tl.Size = UDim2.new(1, 0, 1, 0)
+        tl.BackgroundTransparency = 1
+        tl.Font = Config.ESP.Font
+        tl.TextSize = 18
         
-        if callback then
-            callback(isToggled)
-        end
+        ESPs[p] = {hl = hl, bg = bg, tl = tl}
     end
-
-    sliderBack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            toggle()
-        end
-    end)
-
-    return container
-end
-
-local function createSlider(label, min, max, default, callback)
-    local container = Instance.new("Frame")
-    container.Name = label .. "Container"
-    container.Parent = functionsContainer
-    container.Size = UDim2.new(1, -10, 0, 40)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = currentY
-    currentY = currentY + 1
-
-    local labelText = Instance.new("TextLabel")
-    labelText.Name = "Label"
-    labelText.Parent = container
-    labelText.Size = UDim2.new(0.5, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    labelText.TextSize = 12
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.Name = "ValueLabel"
-    valueLabel.Parent = container
-    valueLabel.Size = UDim2.new(0, 50, 1, 0)
-    valueLabel.Position = UDim2.new(1, -200, 0, 0)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Text = tostring(default)
-    valueLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    valueLabel.TextSize = 12
-    valueLabel.Font = Enum.Font.Gotham
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Center
-
-    local sliderFrame = Instance.new("Frame")
-    sliderFrame.Name = "SliderFrame"
-    sliderFrame.Parent = container
-    sliderFrame.Size = UDim2.new(0, 140, 0, 6)
-    sliderFrame.Position = UDim2.new(1, -145, 0.5, -3)
-    sliderFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    sliderFrame.BorderSizePixel = 0
-
-    local sliderCorner = Instance.new("UICorner")
-    sliderCorner.CornerRadius = UDim.new(0, 3)
-    sliderCorner.Parent = sliderFrame
-
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Name = "SliderFill"
-    sliderFill.Parent = sliderFrame
-    sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    sliderFill.Position = UDim2.new(0, 0, 0, 0)
-    sliderFill.BackgroundColor3 = _G.HuynaScript.MenuSettings.AccentColor
-    sliderFill.BorderSizePixel = 0
-
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(0, 3)
-    fillCorner.Parent = sliderFill
-
-    local dragging = false
-    local currentValue = default
-
-    local function updateSlider(input)
-        local relativePos = math.clamp((input.Position.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
-        currentValue = math.floor(min + (max - min) * relativePos)
-        
-        valueLabel.Text = tostring(currentValue)
-        sliderFill.Size = UDim2.new(relativePos, 0, 1, 0)
-        
-        if callback then
-            callback(currentValue)
-        end
+    
+    local d = ESPs[p]
+    d.hl.FillColor = getESPColor(p)
+    d.hl.FillTransparency = Config.ESP.FillTransparency
+    d.hl.OutlineColor = getOutlineColor(p)
+    d.hl.OutlineTransparency = Config.ESP.ShowOutline and Config.ESP.OutlineTransparency or 1
+    d.tl.TextColor3 = Config.ESP.TextColor
+    
+    local localPlayer = game.Players.LocalPlayer
+    local localChar = localPlayer and localPlayer.Character
+    local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local targetChar = p and p.Character
+    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    
+    local distance = 0
+    if localRoot and targetRoot then
+        distance = math.floor((localRoot.Position - targetRoot.Position).Magnitude)
     end
-
-    sliderFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            updateSlider(input)
-        end
-    end)
-
-    sliderFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateSlider(input)
-        end
-    end)
-
-    return container
+    
+    local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
+    d.tl.Text = baseText
 end
 
-local function createColorPicker(label, defaultColor, callback)
-    local container = Instance.new("Frame")
-    container.Name = label .. "Container"
-    container.Parent = functionsContainer
-    container.Size = UDim2.new(1, -10, 0, 30)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = currentY
-    currentY = currentY + 1
-
-    local labelText = Instance.new("TextLabel")
-    labelText.Name = "Label"
-    labelText.Parent = container
-    labelText.Size = UDim2.new(0.7, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    labelText.TextSize = 12
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-
-    local colorPreview = Instance.new("Frame")
-    colorPreview.Name = "ColorPreview"
-    colorPreview.Parent = container
-    colorPreview.Size = UDim2.new(0, 60, 0, 20)
-    colorPreview.Position = UDim2.new(1, -70, 0.5, -10)
-    colorPreview.BackgroundColor3 = defaultColor
-    colorPreview.BorderSizePixel = 1
-    colorPreview.BorderColor3 = Color3.fromRGB(200, 200, 200)
-
-    local colorCorner = Instance.new("UICorner")
-    colorCorner.CornerRadius = UDim.new(0, 4)
-    colorCorner.Parent = colorPreview
-
-    -- Простая реализация выбора цвета (можно расширить)
-    colorPreview.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            -- Циклическое переключение между предустановленными цветами
-            local colors = {
-                Color3.fromRGB(255, 0, 0),    -- Красный
-                Color3.fromRGB(0, 255, 0),    -- Зеленый
-                Color3.fromRGB(0, 0, 255),    -- Синий
-                Color3.fromRGB(255, 255, 0),  -- Желтый
-                Color3.fromRGB(255, 0, 255),  -- Пурпурный
-                Color3.fromRGB(0, 255, 255),  -- Голубой
-                Color3.fromRGB(255, 255, 255), -- Белый
-            }
-            
-            local currentIndex = 1
-            for i, color in ipairs(colors) do
-                if colorPreview.BackgroundColor3 == color then
-                    currentIndex = i
-                    break
-                end
-            end
-            
-            local nextIndex = (currentIndex % #colors) + 1
-            local newColor = colors[nextIndex]
-            
-            colorPreview.BackgroundColor3 = newColor
-            if callback then
-                callback(newColor)
-            end
-        end
-    end)
-
-    return container
+local function removeESP(p)
+    if ESPs[p] then 
+        if ESPs[p].hl and ESPs[p].hl.Parent then ESPs[p].hl:Destroy() end
+        if ESPs[p].bg and ESPs[p].bg.Parent then ESPs[p].bg:Destroy() end
+        ESPs[p] = nil 
+    end
+    if Lines[p] then Lines[p]:Remove(); Lines[p] = nil end
 end
 
-local function createKeyBindButton(label, currentKey, callback)
-    local container = Instance.new("Frame")
-    container.Name = label .. "KeyBindContainer"
-    container.Parent = functionsContainer
-    container.Size = UDim2.new(1, -10, 0, 35)
-    container.BackgroundTransparency = 1
-    container.LayoutOrder = currentY
-    currentY = currentY + 1
-
-    local labelText = Instance.new("TextLabel")
-    labelText.Name = "Label"
-    labelText.Parent = container
-    labelText.Size = UDim2.new(0.6, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = label
-    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    labelText.TextSize = 12
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-
-    local keyButton = Instance.new("TextButton")
-    keyButton.Name = "KeyButton"
-    keyButton.Parent = container
-    keyButton.Size = UDim2.new(0, 100, 0, 25)
-    keyButton.Position = UDim2.new(1, -105, 0.5, -12.5)
-    keyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    keyButton.Text = currentKey and currentKey.Name or "None"
-    keyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keyButton.TextSize = 11
-    keyButton.Font = Enum.Font.Gotham
-    keyButton.BorderSizePixel = 0
-
-    local keyCorner = Instance.new("UICorner")
-    keyCorner.CornerRadius = UDim.new(0, 4)
-    keyCorner.Parent = keyButton
-
-    local isListening = false
-
-    keyButton.MouseButton1Click:Connect(function()
-        if isListening then return end
-        
-        isListening = true
-        keyButton.Text = "Press a key..."
-        keyButton.BackgroundColor3 = _G.HuynaScript.MenuSettings.AccentColor
-
-        local connection
-        connection = UserInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
-            
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                keyButton.Text = input.KeyCode.Name
-                keyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                isListening = false
-                
-                if callback then
-                    callback(input.KeyCode)
-                end
-                
-                connection:Disconnect()
-            end
-        end)
-    end)
-
-    return container
-end
-
--- Функции движения
+-- Функции полета
 local function startFly()
-    local plr = Players.LocalPlayer
+    local plr = game.Players.LocalPlayer
     local char = plr.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -475,7 +201,7 @@ local function startFly()
     
     local ctrl = {f = 0, b = 0, l = 0, r = 0, u = 0, d = 0}
     
-    local inputDown = UserInputService.InputBegan:Connect(function(input, gp)
+    local inputDown = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.W then ctrl.f = 1
         elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = -1
@@ -485,7 +211,7 @@ local function startFly()
         elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = -1 end
     end)
     
-    local inputUp = UserInputService.InputEnded:Connect(function(input, gp)
+    local inputUp = game:GetService("UserInputService").InputEnded:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.W then ctrl.f = 0
         elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = 0
@@ -495,7 +221,7 @@ local function startFly()
         elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = 0 end
     end)
     
-    local renderConnection = RunService.RenderStepped:Connect(function()
+    local renderConnection = game:GetService("RunService").RenderStepped:Connect(function()
         if not isFlying or not char or not char:FindFirstChild("Humanoid") or not root then
             if hum then
                 hum.JumpPower = flyOriginalJumpPower
@@ -548,7 +274,7 @@ end
 local function stopFly()
     isFlying = false
     
-    local char = Players.LocalPlayer.Character
+    local char = game.Players.LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local root = char and char:FindFirstChild("HumanoidRootPart")
     
@@ -575,8 +301,9 @@ local function stopFly()
     flyConnections = {}
 end
 
+-- Функции NoClip
 local function startNoClip()
-    local char = Players.LocalPlayer.Character
+    local char = game.Players.LocalPlayer.Character
     if not char then return end
     
     isNoClipping = true
@@ -597,7 +324,7 @@ local function startNoClip()
         end
     end
     
-    local noClipLoop = RunService.Heartbeat:Connect(function()
+    local noClipLoop = game:GetService("RunService").Heartbeat:Connect(function()
         if not isNoClipping or not char or not char.Parent then
             return
         end
@@ -626,7 +353,7 @@ end
 local function stopNoClip()
     isNoClipping = false
     
-    local char = Players.LocalPlayer.Character
+    local char = game.Players.LocalPlayer.Character
     if not char then return end
     
     for _, part in pairs(char:GetDescendants()) do
@@ -647,109 +374,472 @@ local function stopNoClip()
     noClipConnections = {}
 end
 
--- Anti-AFK Functions
-local function startAntiAfk()
-    if isAntiAfkEnabled then return end
+-- Функции SpeedHack
+local function startSpeedHack()
+    local char = game.Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
     
-    isAntiAfkEnabled = true
-    AntiAfkConfig.Enabled = true
+    isSpeedHacking = true
+    local originalWalkSpeed = hum.WalkSpeed
+    local originalJumpPower = hum.JumpPower
     
-    local virtualUser = game:GetService('VirtualUser')
+    hum.WalkSpeed = MovementConfig.Speed.Speed * 16
     
-    antiAfkConnection = Players.LocalPlayer.Idled:Connect(function()
-        if isAntiAfkEnabled then
-            virtualUser:CaptureController()
-            virtualUser:ClickButton2(Vector2.new())
-            print("Anti-AFK: Активность имитирована")
+    if MovementConfig.Speed.UseJumpPower then
+        hum.JumpPower = MovementConfig.Speed.Speed * 50
+    end
+    
+    local function onCharacterAdded(newChar)
+        local newHum = newChar:WaitForChild("Humanoid")
+        if isSpeedHacking then
+            newHum.WalkSpeed = MovementConfig.Speed.Speed * 16
+            if MovementConfig.Speed.UseJumpPower then
+                newHum.JumpPower = MovementConfig.Speed.Speed * 50
+            end
+        end
+    end
+    
+    local characterAddedConnection = game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+    table.insert(speedHackConnections, characterAddedConnection)
+    
+    local speedLoop = game:GetService("RunService").Heartbeat:Connect(function()
+        if not isSpeedHacking then return end
+        
+        local currentChar = game.Players.LocalPlayer.Character
+        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+        
+        if currentHum then
+            if currentHum.WalkSpeed ~= MovementConfig.Speed.Speed * 16 then
+                currentHum.WalkSpeed = MovementConfig.Speed.Speed * 16
+            end
+            
+            if MovementConfig.Speed.UseJumpPower and currentHum.JumpPower ~= MovementConfig.Speed.Speed * 50 then
+                currentHum.JumpPower = MovementConfig.Speed.Speed * 50
+            end
         end
     end)
     
-    print("Anti-AFK активирован")
+    table.insert(speedHackConnections, speedLoop)
 end
 
-local function stopAntiAfk()
-    if not isAntiAfkEnabled then return end
+local function stopSpeedHack()
+    isSpeedHacking = false
     
-    isAntiAfkEnabled = false
-    AntiAfkConfig.Enabled = false
-    
-    if antiAfkConnection then
-        antiAfkConnection:Disconnect()
-        antiAfkConnection = nil
+    local char = game.Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.WalkSpeed = 16
+        hum.JumpPower = 50
     end
     
-    print("Anti-AFK деактивирован")
+    for _, connection in ipairs(speedHackConnections) do
+        if connection then
+            if typeof(connection) == "RBXScriptConnection" then
+                pcall(function() connection:Disconnect() end)
+            elseif typeof(connection) == "Instance" then
+                pcall(function() connection:Destroy() end)
+            end
+        end
+    end
+    speedHackConnections = {}
 end
 
--- Экспорт функций для других модулей
-_G.HuynaScript.Functions.startFly = startFly
-_G.HuynaScript.Functions.stopFly = stopFly
-_G.HuynaScript.Functions.startNoClip = startNoClip
-_G.HuynaScript.Functions.stopNoClip = stopNoClip
-_G.HuynaScript.Functions.startAntiAfk = startAntiAfk
-_G.HuynaScript.Functions.stopAntiAfk = stopAntiAfk
+-- Функции LongJump
+local function startLongJump()
+    local char = game.Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    isLongJumping = true
+    local originalLongJumpPower = hum.JumpPower
+    
+    hum.JumpPower = MovementConfig.LongJump.JumpPower
+    
+    local function onCharacterAdded(newChar)
+        local newHum = newChar:WaitForChild("Humanoid")
+        if isLongJumping then
+            newHum.JumpPower = MovementConfig.LongJump.JumpPower
+        end
+    end
+    
+    local characterAddedConnection = game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+    table.insert(longJumpConnections, characterAddedConnection)
+    
+    local longJumpLoop = game:GetService("RunService").Heartbeat:Connect(function()
+        if not isLongJumping then return end
+        
+        local currentChar = game.Players.LocalPlayer.Character
+        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+        
+        if currentHum and currentHum.JumpPower ~= MovementConfig.LongJump.JumpPower then
+            currentHum.JumpPower = MovementConfig.LongJump.JumpPower
+        end
+    end)
+    
+    table.insert(longJumpConnections, longJumpLoop)
+end
 
--- Создание интерфейса для Main функций
-if _G.HuynaScript.GUI.contentTitle.Text == "MAIN FUNCTIONS" then
-    currentY = 0
+local function stopLongJump()
+    isLongJumping = false
     
-    -- Hotkeys секция
-    createSectionHeader("🔧 Hotkeys")
+    local char = game.Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.JumpPower = 50
+    end
     
-    createKeyBindButton("ESP", Config.ESP.ToggleKey, function(newKey)
-        Config.ESP.ToggleKey = newKey
+    for _, connection in ipairs(longJumpConnections) do
+        if connection then
+            if typeof(connection) == "RBXScriptConnection" then
+                pcall(function() connection:Disconnect() end)
+            elseif typeof(connection) == "Instance" then
+                pcall(function() connection:Destroy() end)
+            end
+        end
+    end
+    longJumpConnections = {}
+end
+
+-- Функции InfiniteJump
+local function startInfiniteJump()
+    local char = game.Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+    
+    isInfiniteJumping = true
+    local lastJumpTime = 0
+    
+    local function onJumpRequest()
+        if not isInfiniteJumping then return end
+        
+        local currentTime = tick()
+        if currentTime - lastJumpTime < 0.1 then return end 
+        
+        lastJumpTime = currentTime
+        
+        local bv = Instance.new("BodyVelocity", root)
+        bv.MaxForce = Vector3.new(0, math.huge, 0)
+        bv.Velocity = Vector3.new(0, MovementConfig.InfiniteJump.JumpPower, 0)
+        
+        task.spawn(function()
+            task.wait(0.3)
+            if bv and bv.Parent then
+                bv:Destroy()
+            end
+        end)
+    end
+    
+    local jumpConnection = hum.Jumping:Connect(onJumpRequest)
+    table.insert(infiniteJumpConnections, jumpConnection)
+    
+    local function onInputBegan(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.Space then
+            onJumpRequest()
+        end
+    end
+    
+    local inputConnection = game:GetService("UserInputService").InputBegan:Connect(onInputBegan)
+    table.insert(infiniteJumpConnections, inputConnection)
+    
+    local function onCharacterAdded(newChar)
+        if isInfiniteJumping then
+            task.wait(1) 
+            startInfiniteJump() 
+        end
+    end
+    
+    local characterAddedConnection = game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+    table.insert(infiniteJumpConnections, characterAddedConnection)
+end
+
+local function stopInfiniteJump()
+    isInfiniteJumping = false
+    
+    for _, connection in ipairs(infiniteJumpConnections) do
+        if connection then
+            if typeof(connection) == "RBXScriptConnection" then
+                pcall(function() connection:Disconnect() end)
+            elseif typeof(connection) == "Instance" then
+                pcall(function() connection:Destroy() end)
+            end
+        end
+    end
+    infiniteJumpConnections = {}
+    
+    local char = game.Players.LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        for _, child in pairs(root:GetChildren()) do
+            if child:IsA("BodyVelocity") then
+                child:Destroy()
+            end
+        end
+    end
+end
+
+-- Функции телепортации
+local function startTeleport()
+    if not TeleportConfig.TargetPlayer then return end
+    
+    local char = game.Players.LocalPlayer.Character
+    local targetChar = TeleportConfig.TargetPlayer.Character
+    if not char or not targetChar then return end
+    
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    if not root or not targetRoot then return end
+    
+    isTeleporting = true
+    TeleportConfig.OriginalPosition = root.Position
+    
+    if not isNoClipping then
+        startNoClip()
+    end
+    
+    local teleportLoop = game:GetService("RunService").Heartbeat:Connect(function()
+        if not isTeleporting or not targetChar or not targetChar.Parent then
+            return
+        end
+        
+        local currentTargetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if currentTargetRoot then
+            local targetPos = currentTargetRoot.Position
+            local currentPos = root.Position
+            local distance = (targetPos - currentPos).Magnitude
+            
+            if distance > 1.5 then
+                local direction = (targetPos - currentPos).Unit
+                local bv = root:FindFirstChild("BodyVelocity")
+                if not bv then
+                    bv = Instance.new("BodyVelocity", root)
+                    bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+                end
+                bv.Velocity = direction * TeleportConfig.TeleportSpeed
+            else
+                local bv = root:FindFirstChild("BodyVelocity")
+                if bv then
+                    bv:Destroy()
+                end
+                isTeleporting = false
+            end
+        end
     end)
     
-    createKeyBindButton("Aimbot", Config.Aimbot.ToggleKey, function(newKey)
-        Config.Aimbot.ToggleKey = newKey
-    end)
+    table.insert(teleportConnections, teleportLoop)
+end
+
+local function stopTeleport()
+    isTeleporting = false
     
-    createKeyBindButton("Anti-AFK", AntiAfkConfig.ToggleKey, function(newKey)
-        AntiAfkConfig.ToggleKey = newKey
-    end)
+    local char = game.Players.LocalPlayer.Character
+    if not char then return end
     
-    createKeyBindButton("Fly", MovementConfig.Fly.ToggleKey, function(newKey)
-        MovementConfig.Fly.ToggleKey = newKey
-    end)
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChild("Humanoid")
     
-    createKeyBindButton("NoClip", MovementConfig.NoClip.ToggleKey, function(newKey)
-        MovementConfig.NoClip.ToggleKey = newKey
-    end)
+    for _, connection in ipairs(teleportConnections) do
+        if connection then
+            if typeof(connection) == "RBXScriptConnection" then
+                pcall(function() connection:Disconnect() end)
+            end
+        end
+    end
+    teleportConnections = {}
     
-    createDivider()
+    local bv = root and root:FindFirstChild("BodyVelocity")
+    if bv then
+        bv.Velocity = Vector3.new(0, 0, 0)
+        task.wait(0.1)
+        bv:Destroy()
+    end
+    
+    if humanoid then
+        humanoid.WalkSpeed = 16
+        humanoid.JumpPower = 50
+    end
+end
+
+-- Функция создания GUI
+function MainModule.createGUI(container)
+    local currentY = 0
+    local padding = 8
+    
+    -- Функции создания элементов GUI
+    local function createSectionHeader(text)
+        currentY = currentY + padding
+        local spacer = Instance.new("Frame", container)
+        spacer.Size = UDim2.new(1, 0, 0, 10)
+        spacer.Position = UDim2.new(0, 0, 0, currentY)
+        spacer.BackgroundTransparency = 1
+        currentY = currentY + 10
+        
+        local lbl = Instance.new("TextLabel", container)
+        lbl.Text = text
+        lbl.Size = UDim2.new(1, -10, 0, 30)
+        lbl.Position = UDim2.new(0, 5, 0, currentY)
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 16
+        lbl.TextColor3 = Color3.fromRGB(255,255,255)
+        lbl.BackgroundTransparency = 1
+        currentY = currentY + 30 + padding
+        return lbl
+    end
+    
+    local function createToggleSlider(label, default, callback)
+        local containerFrame = Instance.new("Frame", container)
+        containerFrame.Size = UDim2.new(1, -10, 0, 40)
+        containerFrame.Position = UDim2.new(0, 5, 0, currentY)
+        containerFrame.BackgroundTransparency = 1
+
+        local lbl = Instance.new("TextLabel", containerFrame)
+        lbl.Text = label
+        lbl.Size = UDim2.new(0.7, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 0, 0, 0)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 14
+        lbl.TextColor3 = Color3.new(1,1,1)
+        lbl.BackgroundTransparency = 1
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+        local sliderBack = Instance.new("Frame", containerFrame)
+        sliderBack.Position = UDim2.new(0.7, 5, 0.3, 0)
+        sliderBack.Size = UDim2.new(0, 50, 0, 20)
+        sliderBack.BackgroundColor3 = default and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
+        sliderBack.BorderSizePixel = 0
+        Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(1, 0)
+
+        local sliderKnob = Instance.new("Frame", sliderBack)
+        sliderKnob.Size = UDim2.new(0, 16, 0, 16)
+        sliderKnob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        sliderKnob.BackgroundColor3 = Color3.new(1, 1, 1)
+        sliderKnob.BorderSizePixel = 0
+        Instance.new("UICorner", sliderKnob).CornerRadius = UDim.new(1, 0)
+
+        local isEnabled = default
+        sliderBack.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isEnabled = not isEnabled
+                
+                local targetPos = isEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+                local targetColor = isEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
+                
+                local tween1 = game:GetService("TweenService"):Create(sliderKnob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = targetPos})
+                local tween2 = game:GetService("TweenService"):Create(sliderBack, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = targetColor})
+                
+                tween1:Play()
+                tween2:Play()
+                
+                callback(isEnabled)
+            end
+        end)
+        
+        currentY = currentY + 40 + padding
+        return containerFrame
+    end
+    
+    local function createSlider(label, min, max, value, callback)
+        local containerFrame = Instance.new("Frame", container)
+        containerFrame.Size = UDim2.new(1, -10, 0, 36)
+        containerFrame.Position = UDim2.new(0, 5, 0, currentY)
+        containerFrame.BackgroundTransparency = 1
+
+        local lbl = Instance.new("TextLabel", containerFrame)
+        lbl.Text = label .. ": " .. math.floor(value)
+        lbl.Size = UDim2.new(1, 0, 0.5, 0)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 13
+        lbl.TextColor3 = Color3.new(1,1,1)
+        lbl.BackgroundTransparency = 1
+
+        local sliderBack = Instance.new("Frame", containerFrame)
+        sliderBack.Position = UDim2.new(0,0,0.5,4)
+        sliderBack.Size = UDim2.new(1, 0, 0, 6)
+        sliderBack.BackgroundColor3 = Color3.fromRGB(50,50,50)
+        Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(1,0)
+
+        local sliderFill = Instance.new("Frame", sliderBack)
+        sliderFill.Size = UDim2.new((math.floor(value) - min) / (max - min), 0, 1, 0)
+        sliderFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1,0)
+
+        local dragging = false
+        sliderBack.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+            end
+        end)
+        
+        game:GetService("UserInputService").InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        game:GetService("RunService").RenderStepped:Connect(function()
+            if dragging then
+                local pos = game:GetService("UserInputService"):GetMouseLocation().X
+                local abs = sliderBack.AbsolutePosition.X
+                local width = sliderBack.AbsoluteSize.X
+                local pct = math.clamp((pos - abs) / width, 0, 1)
+                local newVal = math.floor(min + (max - min) * pct)
+                sliderFill.Size = UDim2.new(pct, 0, 1, 0)
+                lbl.Text = label .. ": " .. newVal
+                callback(newVal)
+            end
+        end)
+        
+        currentY = currentY + 36 + padding
+    end
+    
+    local function createDivider()
+        local divider = Instance.new("Frame", container)
+        divider.Size = UDim2.new(1, -10, 0, 2)
+        divider.Position = UDim2.new(0, 5, 0, currentY)
+        divider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        divider.BorderSizePixel = 0
+        currentY = currentY + 2 + padding
+    end
+    
+    local function createButton(label, callback)
+        local btn = Instance.new("TextButton", container)
+        btn.Size = UDim2.new(1, -10, 0, 28)
+        btn.Position = UDim2.new(0, 5, 0, currentY)
+        btn.Text = label
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 14
+        btn.TextColor3 = Color3.new(1,1,1)
+        btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+        btn.AutoButtonColor = false
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+        
+        btn.MouseButton1Click:Connect(function()
+            callback()
+        end)
+        
+        currentY = currentY + 28 + padding
+        return btn
+    end
     
     -- ESP Settings
     createSectionHeader("🔷ESP Settings")
-    createToggleSlider(getText("ESP"), Config.ESP.Enabled, function(v) Config.ESP.Enabled = v end)
-    createToggleSlider(getText("TeamCheck"), Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
-    createToggleSlider(getText("ShowOutline"), Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
-    createToggleSlider(getText("ShowLines"), Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
-    createToggleSlider(getText("RainbowColors"), Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
-    
-    createColorPicker("Fill Color", Config.ESP.FillColor, function(c) Config.ESP.FillColor = c end)
-    createColorPicker("Outline Color", Config.ESP.OutlineColor, function(c) Config.ESP.OutlineColor = c end)
-    createColorPicker("Text Color", Config.ESP.TextColor, function(c) Config.ESP.TextColor = c end)
-    createSlider("Fill Transparency", 0, 1, Config.ESP.FillTransparency, function(v) Config.ESP.FillTransparency = v / 100 end)
+    createToggleSlider("ESP", Config.ESP.Enabled, function(v) Config.ESP.Enabled = v end)
+    createToggleSlider("Team Check", Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
+    createToggleSlider("Show Outline", Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
+    createToggleSlider("Show Lines", Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
+    createToggleSlider("Rainbow Colors", Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
     
     createDivider()
     
     -- Aimbot Settings
     createSectionHeader("🔷Aimbot Settings")
-    createToggleSlider(getText("Aimbot"), Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
-    createToggleSlider(getText("TeamCheck"), Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
-    createToggleSlider(getText("VisibilityCheck"), Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
+    createToggleSlider("Aimbot", Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
+    createToggleSlider("Team Check", Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
+    createToggleSlider("Visibility Check", Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
     createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
-    createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
-    createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
-    
-    createDivider()
-    
-    -- Anti-AFK
-    createSectionHeader("⚡ Anti-AFK")
-    createToggleSlider("Anti-AFK", AntiAfkConfig.Enabled, function(v)
-        AntiAfkConfig.Enabled = v
-        if v then startAntiAfk() else stopAntiAfk() end
-    end)
+    createToggleSlider("FOV Rainbow", Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
     
     createDivider()
     
@@ -759,99 +849,187 @@ if _G.HuynaScript.GUI.contentTitle.Text == "MAIN FUNCTIONS" then
         MovementConfig.Fly.Enabled = v
         if v then startFly() else stopFly() end
     end)
-    
-    createSlider("Fly Speed", 0.1, 5, MovementConfig.Fly.Speed, function(v)
+    createSlider("Fly Speed", 0.1, 10, MovementConfig.Fly.Speed, function(v)
         MovementConfig.Fly.Speed = v
-        if MovementConfig.Fly.Enabled then
-            stopFly()
-            task.wait(0.1)
-            startFly()
-        end
     end)
     
     createDivider()
     
-    -- NoClip Settings  
-    createSectionHeader("🟩 NoClip Settings")
+    -- NoClip Settings
+    createSectionHeader("🟪 NoClip Settings")
     createToggleSlider("NoClip", isNoClipping, function(v)
-        if v then
-            startNoClip()
-        else
-            stopNoClip()
-        end
-    end)
-
-elseif _G.HuynaScript.GUI.contentTitle.Text == "MENU SETTINGS" then
-    currentY = 0
-    
-    -- Menu Settings
-    createSectionHeader("⚙️ Menu Settings")
-    
-    createToggleSlider("Blur Effect", _G.HuynaScript.MenuSettings.BlurEnabled, function(v)
-        _G.HuynaScript.MenuSettings.BlurEnabled = v
-        _G.HuynaScript.Functions.updateBlurEffect()
-    end)
-    
-    createColorPicker("Accent Color", _G.HuynaScript.MenuSettings.AccentColor, function(c)
-        _G.HuynaScript.MenuSettings.AccentColor = c
-        _G.HuynaScript.Functions.updateAccentColor()
+        if v then startNoClip() else stopNoClip() end
     end)
     
     createDivider()
     
-    -- Credits
-    createSectionHeader("ℹ️ About")
+    -- SpeedHack Settings
+    createSectionHeader("🟦 SpeedHack Settings")
+    createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
+        MovementConfig.Speed.Enabled = v
+        if v then startSpeedHack() else stopSpeedHack() end
+    end)
+    createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
+        MovementConfig.Speed.UseJumpPower = v
+        if MovementConfig.Speed.Enabled then
+            stopSpeedHack()
+            startSpeedHack()
+        end
+    end)
+    createSlider("SpeedHack Speed", 0.1, 10, MovementConfig.Speed.Speed, function(v)
+        MovementConfig.Speed.Speed = v
+        if MovementConfig.Speed.Enabled then
+            local char = game.Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = v * 16
+                if MovementConfig.Speed.UseJumpPower then
+                    hum.JumpPower = v * 50
+                end
+            end
+        end
+    end)
     
-    local creditsLabel = Instance.new("TextLabel")
-    creditsLabel.Name = "CreditsLabel"
-    creditsLabel.Parent = functionsContainer
-    creditsLabel.Size = UDim2.new(1, -10, 0, 60)
-    creditsLabel.BackgroundTransparency = 1
-    creditsLabel.Text = "🚀 Huyna Script v2.0\n\nМодульная архитектура с динамической загрузкой\nСоздано для оптимизации производительности"
-    creditsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    creditsLabel.TextSize = 11
-    creditsLabel.Font = Enum.Font.Gotham
-    creditsLabel.TextXAlignment = Enum.TextXAlignment.Center
-    creditsLabel.TextYAlignment = Enum.TextYAlignment.Top
-    creditsLabel.LayoutOrder = currentY
-    currentY = currentY + 1
+    createDivider()
+    
+    -- Jump Settings
+    createSectionHeader("🦘 Jump Settings")
+    createToggleSlider("Long Jump", MovementConfig.LongJump.Enabled, function(v)
+        MovementConfig.LongJump.Enabled = v
+        if v then startLongJump() else stopLongJump() end
+    end)
+    createSlider("Long Jump Power", 50, 500, MovementConfig.LongJump.JumpPower, function(v)
+        MovementConfig.LongJump.JumpPower = v
+        if MovementConfig.LongJump.Enabled then
+            local char = game.Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.JumpPower = v
+            end
+        end
+    end)
+    
+    createToggleSlider("Infinite Jump", MovementConfig.InfiniteJump.Enabled, function(v)
+        MovementConfig.InfiniteJump.Enabled = v
+        if v then startInfiniteJump() else stopInfiniteJump() end
+    end)
+    createSlider("Infinite Jump Power", 20, 150, MovementConfig.InfiniteJump.JumpPower, function(v)
+        MovementConfig.InfiniteJump.JumpPower = v
+    end)
+    
+    createDivider()
+    
+    -- Teleport Settings
+    createSectionHeader("🟩 Teleport Settings")
+    createButton("Select Player", function()
+        -- Простая реализация выбора игрока
+        local players = game.Players:GetPlayers()
+        for _, player in ipairs(players) do
+            if player ~= game.Players.LocalPlayer then
+                TeleportConfig.TargetPlayer = player
+                TeleportConfig.SelectedPlayerName = player.Name
+                break
+            end
+        end
+    end)
+    
+    createToggleSlider("Teleport", TeleportConfig.Enabled, function(v)
+        TeleportConfig.Enabled = v
+        if v then
+            if TeleportConfig.TargetPlayer then
+                startTeleport()
+            end
+        else
+            stopTeleport()
+        end
+    end)
+    
+    -- ESP Loop
+    game:GetService("RunService").RenderStepped:Connect(function()
+        local cam = workspace.CurrentCamera
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player == game.Players.LocalPlayer then continue end
+            
+            local char = player.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            
+            if hum and hum.Health > 0 and root then
+                if Config.ESP.Enabled then
+                    createOrUpdateESP(player)
+                    if Config.ESP.ShowLines then
+                        if not Lines[player] then
+                            local ln = Drawing.new("Line")
+                            ln.Thickness = 2
+                            ln.Transparency = 1
+                            Lines[player] = ln
+                        end
+                        local pos, onScreen = cam:WorldToViewportPoint(root.Position)
+                        Lines[player].Visible = onScreen
+                        if onScreen then
+                            Lines[player].From = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y)
+                            Lines[player].To = Vector2.new(pos.X, pos.Y)
+                            Lines[player].Color = getESPColor(player)
+                        end
+                    elseif Lines[player] then
+                        Lines[player].Visible = false
+                    end
+                else
+                    removeESP(player)
+                end
+            else
+                removeESP(player)
+            end
+        end
+        
+        -- Aimbot
+        if Config.Aimbot.Enabled then
+            local closest, minDist = nil, Config.Aimbot.FOV
+            for _, p in ipairs(game.Players:GetPlayers()) do
+                if p == game.Players.LocalPlayer then continue end
+                if Config.Aimbot.TeamCheck and p.Team == game.Players.LocalPlayer.Team then continue end
+                if not isAlive(p) then continue end
+                if Config.Aimbot.VisibilityCheck and not rayVisible(p) then continue end
+
+                local head = p.Character and p.Character:FindFirstChild("Head")
+                if not head then continue end
+                local screenPos, onScreen = cam:WorldToViewportPoint(head.Position)
+                if not onScreen then continue end
+
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)).Magnitude
+                if dist < minDist then
+                    closest = head
+                    minDist = dist
+                end
+            end
+            
+            if closest then
+                cam.CFrame = CFrame.lookAt(cam.CFrame.Position, closest.Position)
+            end
+        end
+        
+        -- FOV Circle
+        FOVCircle.Visible = Config.Aimbot.Enabled
+        FOVCircle.Position = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)
+        FOVCircle.Color = Config.Aimbot.FOVRainbow and getRainbow() or Config.Aimbot.FOVColor
+        FOVCircle.Radius = Config.Aimbot.FOV
+    end)
+    
+    -- Hotkeys
+    game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            if Config.ESP.ToggleKey and input.KeyCode == Config.ESP.ToggleKey then
+                Config.ESP.Enabled = not Config.ESP.Enabled
+                print("ESP toggled:", Config.ESP.Enabled)
+            elseif Config.Aimbot.ToggleKey and input.KeyCode == Config.Aimbot.ToggleKey then
+                Config.Aimbot.Enabled = not Config.Aimbot.Enabled
+                print("Aimbot toggled:", Config.Aimbot.Enabled)
+            end
+        end
+    end)
+    
+    return currentY
 end
 
--- Обработка горячих клавиш
-UserInputService.InputBegan:Connect(function(inp, gp)
-    if gp then return end
-    if inp.UserInputType == Enum.UserInputType.Keyboard then
-        if Config.ESP.ToggleKey and inp.KeyCode == Config.ESP.ToggleKey then
-            Config.ESP.Enabled = not Config.ESP.Enabled
-            print("ESP toggled:", Config.ESP.Enabled)
-        elseif Config.Aimbot.ToggleKey and inp.KeyCode == Config.Aimbot.ToggleKey then
-            Config.Aimbot.Enabled = not Config.Aimbot.Enabled
-            print("Aimbot toggled:", Config.Aimbot.Enabled)
-        elseif AntiAfkConfig.ToggleKey and inp.KeyCode == AntiAfkConfig.ToggleKey then
-            AntiAfkConfig.Enabled = not AntiAfkConfig.Enabled
-            if AntiAfkConfig.Enabled then 
-                startAntiAfk() 
-            else 
-                stopAntiAfk() 
-            end
-            print("Anti-AFK toggled:", AntiAfkConfig.Enabled)
-        elseif MovementConfig.Fly.ToggleKey and inp.KeyCode == MovementConfig.Fly.ToggleKey then
-            MovementConfig.Fly.Enabled = not MovementConfig.Fly.Enabled
-            if MovementConfig.Fly.Enabled then 
-                startFly() 
-            else 
-                stopFly() 
-            end
-            print("Fly toggled:", MovementConfig.Fly.Enabled)
-        elseif MovementConfig.NoClip.ToggleKey and inp.KeyCode == MovementConfig.NoClip.ToggleKey then
-            if isNoClipping then
-                stopNoClip()
-            else
-                startNoClip()
-            end
-            print("NoClip toggled:", isNoClipping)
-        end
-    end
-end)
-
-print("📦 Main Functions модуль загружен!")
+return MainModule
