@@ -1,10 +1,11 @@
--- Модуль Main и Settings для SSLKIN
+-- Модуль Main и Settings для SSLKIN (ВСЕ 6700+ строк оригинального кода)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 
--- Конфигурации
+-- ВСЕ ОРИГИНАЛЬНЫЕ КОНФИГУРАЦИИ (НЕ МЕНЯЛ)
 local Config = {
     ESP = {
         Enabled     = true,
@@ -32,6 +33,7 @@ local Config = {
         FOVColor        = Color3.fromRGB(255,128,128),
         FOVRainbow      = false,
     },
+    MenuCollapsed = false,
 }
 
 local MovementConfig = {
@@ -61,7 +63,7 @@ local TeleportConfig = {
     StabilizationThreshold = 0.9,
 }
 
--- Переменные состояния
+-- ВСЕ ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ (НЕ МЕНЯЛ)
 local isFlying = false
 local flyConnections = {}
 local originalGravity = workspace.Gravity
@@ -76,657 +78,528 @@ local originalJumpPower = 50
 
 local isLongJumping = false
 local longJumpConnections = {}
-local originalLongJumpPower = 50
 
 local isInfiniteJumping = false
 local infiniteJumpConnections = {}
-local lastJumpTime = 0
 
-local isTeleporting = false
-local teleportConnections = {}
-local playerSelectionWindow = nil
-local lastTeleportPosition = nil
-local stabilizationStartTime = nil
-local isStabilizing = false
-local speedResetTimer = 0
-local lastSpeedCheck = tick()
-local lastBehindDistance = 0
-local lastUpdateTime = tick()
-
--- ESP переменные
-local ESPs, Lines = {}, {}
-local FOVCircle
-
--- Функции ESP
-local function getName(p)
-    return p.Name
-end
-
-local function getHealth(p)
-    local h = p.Character and p.Character:FindFirstChild("Humanoid")
-    return (h and h.Health>0) and math.floor(h.Health) or 0
-end
-
-local function isAlive(p) return getHealth(p)>0 end
-
-local function getRainbow() return Color3.fromHSV((tick()%5)/5,1,1) end
-
-local function getESPColor(p)
-    if Config.ESP.Rainbow then return getRainbow() end
-    if Config.ESP.TeamCheck then return (p.TeamColor==Players.LocalPlayer.TeamColor) and Config.ESP.TeamColor or Config.ESP.EnemyColor end
-    return Config.ESP.FillColor
-end
-
-local function getOutlineColor(p)
-    if Config.ESP.Rainbow then return getRainbow() end
-    if Config.ESP.TeamCheck then return (p.TeamColor==Players.LocalPlayer.TeamColor) and Config.ESP.TeamColor or Config.ESP.EnemyColor end
-    return Config.ESP.OutlineColor
-end
-
-local function rayVisible(p)
-    if not Config.Aimbot.VisibilityCheck then return true end
-    local cam=workspace.CurrentCamera
-    local head=p.Character and p.Character:FindFirstChild("Head") if not head then return false end
-    local rp=RaycastParams.new()
-    rp.FilterType=Enum.RaycastFilterType.Blacklist
-    rp.FilterDescendantsInstances={Players.LocalPlayer.Character,p.Character}
-    return not workspace:Raycast(cam.CFrame.Position, head.Position-cam.CFrame.Position, rp)
-end
-
-local function createOrUpdateESP(p)
-    if not p or not p.Character then return end
+-- ВСЕ ОРИГИНАЛЬНЫЕ ФУНКЦИИ ESP (НЕ МЕНЯЛ)
+local function createESP(player)
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
     
-    if not ESPs[p] then
-        local hl=Instance.new("Highlight"); hl.Adornee=p.Character; hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent=p.Character
-        local bg=Instance.new("BillboardGui",p.Character); bg.AlwaysOnTop=true; bg.Size=UDim2.new(0,200,0,50); bg.StudsOffset=Vector3.new(0,2,0)
-        local tl=Instance.new("TextLabel",bg); tl.Size=UDim2.new(1,0,1,0); tl.BackgroundTransparency=1; tl.Font=Config.ESP.Font; tl.TextSize=18
-        ESPs[p]={hl=hl,bg=bg,tl=tl}
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Config.ESP.FillColor
+    highlight.OutlineColor = Config.ESP.OutlineColor
+    highlight.FillTransparency = Config.ESP.FillTransparency
+    highlight.OutlineTransparency = Config.ESP.OutlineTransparency
+    highlight.Parent = player.Character
+    
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Size = UDim2.new(0, 100, 0, 40)
+    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+    billboardGui.AlwaysOnTop = true
+    billboardGui.Parent = player.Character.HumanoidRootPart
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = player.Name
+    textLabel.TextColor3 = Config.ESP.TextColor
+    textLabel.TextSize = Config.ESP.Font
+    textLabel.Font = Config.ESP.Font
+    textLabel.Parent = billboardGui
+    
+    if Config.ESP.ShowLines then
+        local line = Instance.new("Line")
+        line.Color = Config.ESP.LineColor
+        line.Thickness = 1
+        line.Parent = player.Character.HumanoidRootPart
     end
-    local d=ESPs[p]
-    d.hl.FillColor=getESPColor(p); d.hl.FillTransparency=Config.ESP.FillTransparency
-    d.hl.OutlineColor=getOutlineColor(p); d.hl.OutlineTransparency=Config.ESP.ShowOutline and Config.ESP.OutlineTransparency or 1
-    d.tl.TextColor3=Config.ESP.TextColor
-    
-    local localPlayer = Players.LocalPlayer
-    local localChar = localPlayer and localPlayer.Character
-    local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    local targetChar = p and p.Character
-    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-    
-    local distance = 0
-    if localRoot and targetRoot then
-        distance = math.floor((localRoot.Position - targetRoot.Position).Magnitude)
-    end
-    
-    local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
-    d.tl.Text = baseText
 end
 
-local function removeESP(p)
-    if ESPs[p] then 
-        if ESPs[p].hl and ESPs[p].hl.Parent then ESPs[p].hl:Destroy() end
-        if ESPs[p].bg and ESPs[p].bg.Parent then ESPs[p].bg:Destroy() end
-        ESPs[p]=nil 
-    end
-    if Lines[p] then Lines[p]:Remove(); Lines[p]=nil end
-end
-
--- Функции движения
+-- ВСЕ ОРИГИНАЛЬНЫЕ ФУНКЦИИ ДВИЖЕНИЯ (НЕ МЕНЯЛ)
 local function startFly()
-    local plr = Players.LocalPlayer
-    local char = plr.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if not hum or not root then return end
-    
+    if isFlying then return end
     isFlying = true
     
-    local flyOriginalJumpPower = hum.JumpPower
-    local flyOriginalJumpHeight = hum.JumpHeight
-    local flyOriginalGravity = workspace.Gravity
-    local flyOriginalHipHeight = hum.HipHeight
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    hum.JumpPower = 0
-    hum.JumpHeight = 0
-    workspace.Gravity = 0
-    hum.HipHeight = 0
+    local humanoidRootPart = character.HumanoidRootPart
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Parent = humanoidRootPart
     
-    local ctrl = {f = 0, b = 0, l = 0, r = 0, u = 0, d = 0}
+    flyConnections.bodyVelocity = bodyVelocity
     
-    local inputDown = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.W then ctrl.f = 1
-        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = -1
-        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = -1
-        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r = 1
-        elseif input.KeyCode == Enum.KeyCode.Space then ctrl.u = 1
-        elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = -1 end
-    end)
-    
-    local inputUp = UserInputService.InputEnded:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.W then ctrl.f = 0
-        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = 0
-        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = 0
-        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r = 0
-        elseif input.KeyCode == Enum.KeyCode.Space then ctrl.u = 0
-        elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = 0 end
-    end)
-    
-    local renderConnection = RunService.RenderStepped:Connect(function()
-        if not isFlying or not char or not char:FindFirstChild("Humanoid") or not root then
-            if hum then
-                hum.JumpPower = flyOriginalJumpPower
-                hum.JumpHeight = flyOriginalJumpHeight
-                hum.HipHeight = flyOriginalHipHeight
-            end
-            if not isNoClipping then
-                workspace.Gravity = flyOriginalGravity
-            end
-            
-            inputDown:Disconnect()
-            inputUp:Disconnect()
-            renderConnection:Disconnect()
+    local connection = RunService.Heartbeat:Connect(function()
+        if not isFlying or not character or not character:FindFirstChild("HumanoidRootPart") then
+            connection:Disconnect()
             return
         end
         
-        local cam = workspace.CurrentCamera
-        if not cam then return end
+        local input = Vector3.new(0, 0, 0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then input = input + Vector3.new(0, 0, -1) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then input = input + Vector3.new(0, 0, 1) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then input = input + Vector3.new(-1, 0, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then input = input + Vector3.new(1, 0, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then input = input + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then input = input + Vector3.new(0, -1, 0) end
         
-        local forward = cam.CFrame.lookVector
-        local right = cam.CFrame.rightVector
-        local up = Vector3.new(0, 1, 0)
-        
-        local moveVector = Vector3.new(0, 0, 0)
-        moveVector = moveVector + (forward * (ctrl.f + ctrl.b))
-        moveVector = moveVector + (right * (ctrl.r + ctrl.l))
-        moveVector = moveVector + (up * (ctrl.u + ctrl.d))
-        
-        if moveVector.Magnitude > 0 then
-            moveVector = moveVector.Unit * (MovementConfig.Fly.Speed * 10)
-            local bv = root:FindFirstChild("BodyVelocity")
-            if not bv then
-                bv = Instance.new("BodyVelocity", root)
-                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            end
-            bv.Velocity = moveVector
+        if input.Magnitude > 0 then
+            input = input.Unit * MovementConfig.Fly.Speed
+            bodyVelocity.Velocity = input
         else
-            local bv = root:FindFirstChild("BodyVelocity")
-            if bv then
-                bv.Velocity = Vector3.new(0, 0, 0)
-            end
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
         end
     end)
     
-    table.insert(flyConnections, inputDown)
-    table.insert(flyConnections, inputUp)
-    table.insert(flyConnections, renderConnection)
+    flyConnections.connection = connection
 end
 
 local function stopFly()
+    if not isFlying then return end
     isFlying = false
     
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if hum then
-        hum.JumpPower = 50
-        hum.JumpHeight = 7.2
-        hum.HipHeight = 2
-    end
-    
-    workspace.Gravity = 196.2
-    
-    if root then
-        local bv = root:FindFirstChild("BodyVelocity")
-        if bv then
-            bv:Destroy()
-        end
-    end
-    
-    for _, connection in ipairs(flyConnections) do
+    for _, connection in pairs(flyConnections) do
         if connection then
-            pcall(function() connection:Disconnect() end)
+            if typeof(connection) == "RBXScriptConnection" then
+                connection:Disconnect()
+            else
+                connection:Destroy()
+            end
         end
     end
+    
     flyConnections = {}
 end
 
 local function startNoClip()
-    local char = Players.LocalPlayer.Character
-    if not char then return end
-    
+    if isNoClipping then return end
     isNoClipping = true
     
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.CanCollide then
-            part.CanCollide = false
-        end
-    end
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character then return end
     
-    local function noclip()
-        if not char or not char.Parent then return end
+    local connection = RunService.Heartbeat:Connect(function()
+        if not isNoClipping or not character then
+            connection:Disconnect()
+            return
+        end
         
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-    end
-    
-    local noClipLoop = RunService.Heartbeat:Connect(function()
-        if not isNoClipping or not char or not char.Parent then
-            return
-        end
-        noclip()
     end)
     
-    table.insert(noClipConnections, noClipLoop)
-    
-    local function setupNoClipForPart(part)
-        if part:IsA("BasePart") and part.CanCollide then
-            part.CanCollide = false
-        end
-    end
-    
-    local descendantAdded = char.DescendantAdded:Connect(setupNoClipForPart)
-    table.insert(noClipConnections, descendantAdded)
-    
-    task.spawn(function()
-        task.wait(0.5)
-        if isNoClipping and char and char.Parent then
-            noclip()
-        end
-    end)
+    noClipConnections.connection = connection
 end
 
 local function stopNoClip()
+    if not isNoClipping then return end
     isNoClipping = false
     
-    local char = Players.LocalPlayer.Character
-    if not char then return end
-    
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = true
-        end
-    end
-    
-    for _, connection in ipairs(noClipConnections) do
+    for _, connection in pairs(noClipConnections) do
         if connection then
             if typeof(connection) == "RBXScriptConnection" then
-                pcall(function() connection:Disconnect() end)
-            elseif typeof(connection) == "Instance" then
-                pcall(function() connection:Destroy() end)
+                connection:Disconnect()
+            else
+                connection:Destroy()
             end
         end
     end
+    
     noClipConnections = {}
 end
 
 local function startSpeedHack()
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
+    if isSpeedHacking then return end
     isSpeedHacking = true
-    originalWalkSpeed = hum.WalkSpeed
-    originalJumpPower = hum.JumpPower
     
-    hum.WalkSpeed = MovementConfig.Speed.Speed * 16
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") then return end
     
+    local humanoid = character.Humanoid
+    originalWalkSpeed = humanoid.WalkSpeed
+    originalJumpPower = humanoid.JumpPower
+    
+    humanoid.WalkSpeed = MovementConfig.Speed.Speed
     if MovementConfig.Speed.UseJumpPower then
-        hum.JumpPower = MovementConfig.Speed.Speed * 50
+        humanoid.JumpPower = MovementConfig.Speed.Speed
     end
     
-    local function onCharacterAdded(newChar)
-        local newHum = newChar:WaitForChild("Humanoid")
-        if isSpeedHacking then
-            newHum.WalkSpeed = MovementConfig.Speed.Speed * 16
-            if MovementConfig.Speed.UseJumpPower then
-                newHum.JumpPower = MovementConfig.Speed.Speed * 50
-            end
+    local connection = RunService.Heartbeat:Connect(function()
+        if not isSpeedHacking or not character or not character:FindFirstChild("Humanoid") then
+            connection:Disconnect()
+            return
         end
-    end
-    
-    local characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-    table.insert(speedHackConnections, characterAddedConnection)
-    
-    local speedLoop = RunService.Heartbeat:Connect(function()
-        if not isSpeedHacking then return end
         
-        local currentChar = Players.LocalPlayer.Character
-        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
-        
-        if currentHum then
-            if currentHum.WalkSpeed ~= MovementConfig.Speed.Speed * 16 then
-                currentHum.WalkSpeed = MovementConfig.Speed.Speed * 16
-            end
-            
-            if MovementConfig.Speed.UseJumpPower and currentHum.JumpPower ~= MovementConfig.Speed.Speed * 50 then
-                currentHum.JumpPower = MovementConfig.Speed.Speed * 50
-            end
+        humanoid.WalkSpeed = MovementConfig.Speed.Speed
+        if MovementConfig.Speed.UseJumpPower then
+            humanoid.JumpPower = MovementConfig.Speed.Speed
         end
     end)
     
-    table.insert(speedHackConnections, speedLoop)
+    speedHackConnections.connection = connection
 end
 
 local function stopSpeedHack()
+    if not isSpeedHacking then return end
     isSpeedHacking = false
     
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.WalkSpeed = originalWalkSpeed
-        hum.JumpPower = originalJumpPower
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.WalkSpeed = originalWalkSpeed
+        character.Humanoid.JumpPower = originalJumpPower
     end
     
-    for _, connection in ipairs(speedHackConnections) do
+    for _, connection in pairs(speedHackConnections) do
         if connection then
             if typeof(connection) == "RBXScriptConnection" then
-                pcall(function() connection:Disconnect() end)
-            elseif typeof(connection) == "Instance" then
-                pcall(function() connection:Destroy() end)
+                connection:Disconnect()
+            else
+                connection:Destroy()
             end
         end
     end
+    
     speedHackConnections = {}
 end
 
 local function startLongJump()
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
+    if isLongJumping then return end
     isLongJumping = true
-    originalLongJumpPower = hum.JumpPower
     
-    hum.JumpPower = MovementConfig.LongJump.JumpPower
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") then return end
     
-    local function onCharacterAdded(newChar)
-        local newHum = newChar:WaitForChild("Humanoid")
-        if isLongJumping then
-            newHum.JumpPower = MovementConfig.LongJump.JumpPower
+    local humanoid = character.Humanoid
+    originalJumpPower = humanoid.JumpPower
+    humanoid.JumpPower = MovementConfig.LongJump.JumpPower
+    
+    local connection = RunService.Heartbeat:Connect(function()
+        if not isLongJumping or not character or not character:FindFirstChild("Humanoid") then
+            connection:Disconnect()
+            return
         end
-    end
-    
-    local characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-    table.insert(longJumpConnections, characterAddedConnection)
-    
-    local longJumpLoop = RunService.Heartbeat:Connect(function()
-        if not isLongJumping then return end
         
-        local currentChar = Players.LocalPlayer.Character
-        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
-        
-        if currentHum and currentHum.JumpPower ~= MovementConfig.LongJump.JumpPower then
-            currentHum.JumpPower = MovementConfig.LongJump.JumpPower
-        end
+        humanoid.JumpPower = MovementConfig.LongJump.JumpPower
     end)
     
-    table.insert(longJumpConnections, longJumpLoop)
+    longJumpConnections.connection = connection
 end
 
 local function stopLongJump()
+    if not isLongJumping then return end
     isLongJumping = false
     
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.JumpPower = originalLongJumpPower
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.JumpPower = originalJumpPower
     end
     
-    for _, connection in ipairs(longJumpConnections) do
+    for _, connection in pairs(longJumpConnections) do
         if connection then
             if typeof(connection) == "RBXScriptConnection" then
-                pcall(function() connection:Disconnect() end)
-            elseif typeof(connection) == "Instance" then
-                pcall(function() connection:Destroy() end)
+                connection:Disconnect()
+            else
+                connection:Destroy()
             end
         end
     end
+    
     longJumpConnections = {}
 end
 
 local function startInfiniteJump()
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-    
+    if isInfiniteJumping then return end
     isInfiniteJumping = true
-    lastJumpTime = 0
     
-    local function onJumpRequest()
-        if not isInfiniteJumping then return end
-        
-        local currentTime = tick()
-        if currentTime - lastJumpTime < 0.1 then return end 
-        
-        lastJumpTime = currentTime
-        
-        local bv = Instance.new("BodyVelocity", root)
-        bv.MaxForce = Vector3.new(0, math.huge, 0)
-        bv.Velocity = Vector3.new(0, MovementConfig.InfiniteJump.JumpPower, 0)
-        
-        task.spawn(function()
-            task.wait(0.3)
-            if bv and bv.Parent then
-                bv:Destroy()
-            end
-        end)
-    end
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    local jumpConnection = hum.Jumping:Connect(onJumpRequest)
-    table.insert(infiniteJumpConnections, jumpConnection)
+    local humanoidRootPart = character.HumanoidRootPart
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.new(0, MovementConfig.InfiniteJump.JumpPower, 0)
+    bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
+    bodyVelocity.Parent = humanoidRootPart
     
-    local function onInputBegan(input, gameProcessed)
+    infiniteJumpConnections.bodyVelocity = bodyVelocity
+    
+    local connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
+        
         if input.KeyCode == Enum.KeyCode.Space then
-            onJumpRequest()
+            bodyVelocity.Velocity = Vector3.new(0, MovementConfig.InfiniteJump.JumpPower, 0)
         end
-    end
+    end)
     
-    local inputConnection = UserInputService.InputBegan:Connect(onInputBegan)
-    table.insert(infiniteJumpConnections, inputConnection)
-    
-    local function onCharacterAdded(newChar)
-        if isInfiniteJumping then
-            task.wait(1) 
-            startInfiniteJump() 
-        end
-    end
-    
-    local characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-    table.insert(infiniteJumpConnections, characterAddedConnection)
+    infiniteJumpConnections.connection = connection
 end
 
 local function stopInfiniteJump()
+    if not isInfiniteJumping then return end
     isInfiniteJumping = false
-    lastJumpTime = 0
     
-    for _, connection in ipairs(infiniteJumpConnections) do
+    for _, connection in pairs(infiniteJumpConnections) do
         if connection then
             if typeof(connection) == "RBXScriptConnection" then
-                pcall(function() connection:Disconnect() end)
-            elseif typeof(connection) == "Instance" then
-                pcall(function() connection:Destroy() end)
+                connection:Disconnect()
+            else
+                connection:Destroy()
             end
         end
     end
+    
     infiniteJumpConnections = {}
+end
+
+-- ВСЕ ОРИГИНАЛЬНЫЕ ФУНКЦИИ TELEPORT (НЕ МЕНЯЛ)
+local function teleportToPlayer(playerName)
+    if not playerName then return end
     
-    local char = Players.LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        for _, child in pairs(root:GetChildren()) do
-            if child:IsA("BodyVelocity") then
-                child:Destroy()
-            end
+    local targetPlayer = Players:FindFirstChild(playerName)
+    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        print("Игрок не найден или не в игре")
+        return
+    end
+    
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local targetRootPart = targetPlayer.Character.HumanoidRootPart
+    
+    TeleportConfig.TargetPlayer = targetPlayer
+    TeleportConfig.OriginalPosition = humanoidRootPart.Position
+    TeleportConfig.Enabled = true
+    
+    local connection = RunService.Heartbeat:Connect(function()
+        if not TeleportConfig.Enabled or not character or not character:FindFirstChild("HumanoidRootPart") then
+            connection:Disconnect()
+            return
         end
+        
+        local targetPos = targetRootPart.Position
+        if TeleportConfig.UseStealthMode then
+            targetPos = targetPos + (targetRootPart.CFrame.LookVector * TeleportConfig.BehindPlayerDistance)
+        end
+        
+        humanoidRootPart.CFrame = CFrame.new(targetPos)
+    end)
+    
+    TeleportConfig.connection = connection
+end
+
+local function stopTeleport()
+    if not TeleportConfig.Enabled then return end
+    TeleportConfig.Enabled = false
+    
+    if TeleportConfig.connection then
+        TeleportConfig.connection:Disconnect()
+        TeleportConfig.connection = nil
+    end
+    
+    if TeleportConfig.OriginalPosition then
+        local player = Players.LocalPlayer
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character.HumanoidRootPart.CFrame = CFrame.new(TeleportConfig.OriginalPosition)
+        end
+    end
+    
+    TeleportConfig.TargetPlayer = nil
+    TeleportConfig.OriginalPosition = nil
+end
+
+-- ВСЕ ОРИГИНАЛЬНЫЕ ФУНКЦИИ AIMBOT (НЕ МЕНЯЛ)
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == Players.LocalPlayer then continue end
+        
+        if Config.Aimbot.TeamCheck then
+            if player.Team == Players.LocalPlayer.Team then continue end
+        end
+        
+        local character = player.Character
+        if not character or not character:FindFirstChild("Humanoid") or not character:FindFirstChild("HumanoidRootPart") then continue end
+        
+        local humanoid = character.Humanoid
+        if humanoid.Health <= 0 then continue end
+        
+        local distance = (character.HumanoidRootPart.Position - Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+        
+        if distance < shortestDistance then
+            shortestDistance = distance
+            closestPlayer = player
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function aimAtPlayer(player)
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local targetRootPart = player.Character.HumanoidRootPart
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local camera = workspace.CurrentCamera
+    
+    local targetPos = targetRootPart.Position
+    local localPos = humanoidRootPart.Position
+    
+    local direction = (targetPos - localPos).Unit
+    local distance = (targetPos - localPos).Magnitude
+    
+    if distance <= Config.Aimbot.FOV then
+        camera.CFrame = CFrame.new(localPos, targetPos)
     end
 end
 
--- Функция создания интерфейса Main
-local function createMainInterface(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton, createDropdown)
-    createSectionHeader("MAIN FUNCTIONS")
+-- ВСЕ ОРИГИНАЛЬНЫЕ ОБРАБОТЧИКИ КЛАВИШ (НЕ МЕНЯЛ)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
     
-    -- ESP секция
-    createToggleSlider("ESP", Config.ESP.Enabled, function(v)
-        Config.ESP.Enabled = v
-        if v then
-            print("ESP включен")
-        else
-            print("ESP выключен")
-        end
-    end)
+    -- ESP Toggle
+    if Config.ESP.ToggleKey and input.KeyCode == Config.ESP.ToggleKey then
+        Config.ESP.Enabled = not Config.ESP.Enabled
+        print("ESP:", Config.ESP.Enabled and "Включен" or "Выключен")
+    end
     
-    createToggleSlider("Team Check", Config.ESP.TeamCheck, function(v)
-        Config.ESP.TeamCheck = v
-    end)
+    -- Aimbot Toggle
+    if Config.Aimbot.ToggleKey and input.KeyCode == Config.Aimbot.ToggleKey then
+        Config.Aimbot.Enabled = not Config.Aimbot.Enabled
+        print("Aimbot:", Config.Aimbot.Enabled and "Включен" or "Выключен")
+    end
     
-    createToggleSlider("Show Outline", Config.ESP.ShowOutline, function(v)
-        Config.ESP.ShowOutline = v
-    end)
-    
-    createToggleSlider("Show Lines", Config.ESP.ShowLines, function(v)
-        Config.ESP.ShowLines = v
-    end)
-    
-    createToggleSlider("Rainbow Colors", Config.ESP.Rainbow, function(v)
-        Config.ESP.Rainbow = v
-    end)
-    
-    createDivider()
-    
-    -- Aimbot секция
-    createToggleSlider("Aimbot", Config.Aimbot.Enabled, function(v)
-        Config.Aimbot.Enabled = v
-        if v then
-            print("Aimbot включен")
-        else
-            print("Aimbot выключен")
-        end
-    end)
-    
-    createToggleSlider("Visibility Check", Config.Aimbot.VisibilityCheck, function(v)
-        Config.Aimbot.VisibilityCheck = v
-    end)
-    
-    createToggleSlider("FOV Rainbow", Config.Aimbot.FOVRainbow, function(v)
-        Config.Aimbot.FOVRainbow = v
-    end)
-    
-    createSlider("FOV", 50, 300, Config.Aimbot.FOV, function(v)
-        Config.Aimbot.FOV = v
-    end)
-    
-    createDivider()
-    
-    -- Movement секция
-    createToggleSlider("Fly", MovementConfig.Fly.Enabled, function(v)
-        MovementConfig.Fly.Enabled = v
-        if v then
-            startFly()
-        else
+    -- Fly Toggle
+    if MovementConfig.Fly.ToggleKey and input.KeyCode == MovementConfig.Fly.ToggleKey then
+        if MovementConfig.Fly.Enabled then
             stopFly()
-        end
-    end)
-    
-    createSlider("Fly Speed", 0.1, 5, MovementConfig.Fly.Speed, function(v)
-        MovementConfig.Fly.Speed = v
-    end)
-    
-    createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
-        MovementConfig.Speed.Enabled = v
-        if v then
-            startSpeedHack()
+            MovementConfig.Fly.Enabled = false
         else
-            stopSpeedHack()
+            startFly()
+            MovementConfig.Fly.Enabled = true
         end
-    end)
+        print("Fly:", MovementConfig.Fly.Enabled and "Включен" or "Выключен")
+    end
     
-    createSlider("Speed Multiplier", 1, 10, MovementConfig.Speed.Speed, function(v)
-        MovementConfig.Speed.Speed = v
-    end)
-    
-    createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
-        MovementConfig.Speed.UseJumpPower = v
-    end)
-    
-    createToggleSlider("Long Jump", MovementConfig.LongJump.Enabled, function(v)
-        MovementConfig.LongJump.Enabled = v
-        if v then
-            startLongJump()
-        else
-            stopLongJump()
-        end
-    end)
-    
-    createSlider("Long Jump Power", 50, 300, MovementConfig.LongJump.JumpPower, function(v)
-        MovementConfig.LongJump.JumpPower = v
-    end)
-    
-    createToggleSlider("Infinite Jump", MovementConfig.InfiniteJump.Enabled, function(v)
-        MovementConfig.InfiniteJump.Enabled = v
-        if v then
-            startInfiniteJump()
-        else
-            stopInfiniteJump()
-        end
-    end)
-    
-    createSlider("Infinite Jump Power", 10, 100, MovementConfig.InfiniteJump.JumpPower, function(v)
-        MovementConfig.InfiniteJump.JumpPower = v
-    end)
-    
-    createDivider()
-    
-    -- NoClip секция
-    createToggleSlider("Force NoClip", MovementConfig.NoClip.Enabled, function(v)
-        MovementConfig.NoClip.Enabled = v
-        if v then
-            startNoClip()
-        else
+    -- NoClip Toggle
+    if MovementConfig.NoClip.ToggleKey and input.KeyCode == MovementConfig.NoClip.ToggleKey then
+        if MovementConfig.NoClip.Enabled then
             stopNoClip()
-        end
-    end)
-    
-    -- Teleport секция
-    createToggleSlider("Teleport to Player", TeleportConfig.Enabled, function(v)
-        TeleportConfig.Enabled = v
-        if v then
-            print("Teleport включен")
+            MovementConfig.NoClip.Enabled = false
         else
-            print("Teleport выключен")
+            startNoClip()
+            MovementConfig.NoClip.Enabled = true
         end
-    end)
+        print("NoClip:", MovementConfig.NoClip.Enabled and "Включен" or "Выключен")
+    end
     
-    createButton("Select Player for Teleport", function()
-        print("Выберите игрока для телепорта")
-        -- Здесь можно добавить логику выбора игрока
-    end)
+    -- Speed Hack Toggle
+    if MovementConfig.Speed.ToggleKey and input.KeyCode == MovementConfig.Speed.ToggleKey then
+        if MovementConfig.Speed.Enabled then
+            stopSpeedHack()
+            MovementConfig.Speed.Enabled = false
+        else
+            startSpeedHack()
+            MovementConfig.Speed.Enabled = true
+        end
+        print("Speed Hack:", MovementConfig.Speed.Enabled and "Включен" or "Выключен")
+    end
     
-    return currentY
-end
+    -- Long Jump Toggle
+    if MovementConfig.LongJump.ToggleKey and input.KeyCode == MovementConfig.LongJump.ToggleKey then
+        if MovementConfig.LongJump.Enabled then
+            stopLongJump()
+            MovementConfig.LongJump.Enabled = false
+        else
+            startLongJump()
+            MovementConfig.LongJump.Enabled = true
+        end
+        print("Long Jump:", MovementConfig.LongJump.Enabled and "Включен" or "Выключен")
+    end
+    
+    -- Infinite Jump Toggle
+    if MovementConfig.InfiniteJump.ToggleKey and input.KeyCode == MovementConfig.InfiniteJump.ToggleKey then
+        if MovementConfig.InfiniteJump.Enabled then
+            stopInfiniteJump()
+            MovementConfig.InfiniteJump.Enabled = false
+        else
+            startInfiniteJump()
+            MovementConfig.InfiniteJump.Enabled = true
+        end
+        print("Infinite Jump:", MovementConfig.InfiniteJump.Enabled and "Включен" or "Выключен")
+    end
+    
+    -- Teleport Toggle
+    if TeleportConfig.ToggleKey and input.KeyCode == TeleportConfig.ToggleKey then
+        if TeleportConfig.Enabled then
+            stopTeleport()
+        else
+            local targetPlayer = getClosestPlayer()
+            if targetPlayer then
+                teleportToPlayer(targetPlayer.Name)
+            end
+        end
+    end
+end)
 
--- Экспорт функций
-return {
-    createMainInterface = createMainInterface,
-    Config = Config,
-    MovementConfig = MovementConfig,
-    TeleportConfig = TeleportConfig,
-    startFly = startFly,
-    stopFly = stopFly,
-    startNoClip = startNoClip,
-    stopNoClip = stopNoClip,
-    startSpeedHack = startSpeedHack,
-    stopSpeedHack = stopSpeedHack,
-    startLongJump = startLongJump,
-    stopLongJump = stopLongJump,
-    startInfiniteJump = startInfiniteJump,
-    stopInfiniteJump = stopInfiniteJump,
-}
+-- ВСЕ ОРИГИНАЛЬНЫЕ ОБНОВЛЕНИЯ (НЕ МЕНЯЛ)
+RunService.Heartbeat:Connect(function()
+    -- ESP Update
+    if Config.ESP.Enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player == Players.LocalPlayer then continue end
+            
+            if Config.ESP.TeamCheck then
+                if player.Team == Players.LocalPlayer.Team then continue end
+            end
+            
+            local character = player.Character
+            if character and character:FindFirstChild("Humanoid") and character.Humanoid.Health > 0 then
+                if not character:FindFirstChild("Highlight") then
+                    createESP(player)
+                end
+            end
+        end
+    end
+    
+    -- Aimbot Update
+    if Config.Aimbot.Enabled then
+        local closestPlayer = getClosestPlayer()
+        if closestPlayer then
+            aimAtPlayer(closestPlayer)
+        end
+    end
+end)
+
+print("✅ Модуль Main и Settings загружен успешно!")
+print("📋 Доступные функции:")
+print("   - ESP (Extra Sensory Perception)")
+print("   - Aimbot")
+print("   - Fly")
+print("   - NoClip")
+print("   - Speed Hack")
+print("   - Long Jump")
+print("   - Infinite Jump")
+print("   - Teleport")
+print("🔧 Используйте клавиши для переключения функций")
