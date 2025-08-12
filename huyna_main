@@ -1,0 +1,353 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Основные настройки
+local MenuSettings = {
+    BlurEnabled = true,
+    AccentColor = Color3.fromRGB(0, 150, 0),
+    Language = "English",
+}
+
+-- GUI элементы
+local screenGui, mainFrame, leftPanel, rightPanel, contentTitle, functionsContainer, scrollFrame
+local selectedTab = "Main"
+local tabScrollPositions = {}
+
+-- Создание основного GUI
+local function createMainGUI()
+    -- Создаем ScreenGui
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "HuynaScript"
+    screenGui.Parent = CoreGui
+    
+    -- Создаем основной фрейм
+    mainFrame = Instance.new("Frame", screenGui)
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 800, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -400, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    mainFrame.BorderSizePixel = 0
+    
+    local mainCorner = Instance.new("UICorner", mainFrame)
+    mainCorner.CornerRadius = UDim.new(0, 8)
+    
+    -- Создаем левую панель с вкладками
+    leftPanel = Instance.new("Frame", mainFrame)
+    leftPanel.Name = "LeftPanel"
+    leftPanel.Size = UDim2.new(0, 200, 1, 0)
+    leftPanel.Position = UDim2.new(0, 0, 0, 0)
+    leftPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    leftPanel.BorderSizePixel = 0
+    
+    local leftCorner = Instance.new("UICorner", leftPanel)
+    leftCorner.CornerRadius = UDim.new(0, 8, 0, 0)
+    
+    -- Заголовок левой панели
+    local leftTitle = Instance.new("TextLabel", leftPanel)
+    leftTitle.Name = "LeftTitle"
+    leftTitle.Size = UDim2.new(1, 0, 0, 50)
+    leftTitle.Position = UDim2.new(0, 0, 0, 0)
+    leftTitle.Text = "HUYNA SCRIPT"
+    leftTitle.Font = Enum.Font.GothamBold
+    leftTitle.TextSize = 18
+    leftTitle.TextColor3 = Color3.new(1, 1, 1)
+    leftTitle.BackgroundTransparency = 1
+    leftTitle.TextXAlignment = Enum.TextXAlignment.Center
+    
+    -- Создаем вкладки
+    local tabs = {"Main", "YBA Hacks", "Settings"}
+    local tabButtons = {}
+    
+    for i, tabName in ipairs(tabs) do
+        local tabBtn = Instance.new("TextButton", leftPanel)
+        tabBtn.Name = tabName .. "Tab"
+        tabBtn.Size = UDim2.new(1, -20, 0, 40)
+        tabBtn.Position = UDim2.new(0, 10, 0, 60 + (i-1) * 50)
+        tabBtn.Text = tabName
+        tabBtn.Font = Enum.Font.Gotham
+        tabBtn.TextSize = 14
+        tabBtn.TextColor3 = Color3.new(1, 1, 1)
+        tabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        tabBtn.AutoButtonColor = false
+        tabBtn.BorderSizePixel = 0
+        
+        local tabCorner = Instance.new("UICorner", tabBtn)
+        tabCorner.CornerRadius = UDim.new(0, 6)
+        
+        -- Подсветка активной вкладки
+        local highlight = Instance.new("Frame", tabBtn)
+        highlight.Name = "Highlight"
+        highlight.Size = UDim2.new(0, 4, 1, 0)
+        highlight.Position = UDim2.new(0, 0, 0, 0)
+        highlight.BackgroundColor3 = MenuSettings.AccentColor
+        highlight.BorderSizePixel = 0
+        
+        local highlightCorner = Instance.new("UICorner", highlight)
+        highlightCorner.CornerRadius = UDim.new(0, 2)
+        
+        tabBtn.MouseButton1Click:Connect(function()
+            selectedTab = tabName
+            showContent(tabName)
+            
+            -- Обновляем подсветку
+            for _, btn in pairs(tabButtons) do
+                if btn and btn.Parent then
+                    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+                end
+            end
+            tabBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        end)
+        
+        table.insert(tabButtons, tabBtn)
+    end
+    
+    -- Создаем правую панель
+    rightPanel = Instance.new("Frame", mainFrame)
+    rightPanel.Name = "RightPanel"
+    rightPanel.Size = UDim2.new(1, -200, 1, 0)
+    rightPanel.Position = UDim2.new(0, 200, 0, 0)
+    rightPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    rightPanel.BorderSizePixel = 0
+    
+    local rightCorner = Instance.new("UICorner", rightPanel)
+    rightCorner.CornerRadius = UDim.new(0, 0, 0, 8)
+    
+    -- Заголовок контента
+    contentTitle = Instance.new("TextLabel", rightPanel)
+    contentTitle.Name = "ContentTitle"
+    contentTitle.Size = UDim2.new(1, 0, 0, 50)
+    contentTitle.Position = UDim2.new(0, 0, 0, 0)
+    contentTitle.Text = "MAIN FUNCTIONS"
+    contentTitle.Font = Enum.Font.GothamBold
+    contentTitle.TextSize = 18
+    contentTitle.TextColor3 = Color3.new(1, 1, 1)
+    contentTitle.BackgroundTransparency = 1
+    contentTitle.TextXAlignment = Enum.TextXAlignment.Center
+    
+    -- Контейнер для прокрутки
+    scrollFrame = Instance.new("ScrollingFrame", rightPanel)
+    scrollFrame.Name = "ScrollFrame"
+    scrollFrame.Size = UDim2.new(1, -20, 1, -100)
+    scrollFrame.Position = UDim2.new(0, 10, 0, 60)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    
+    -- Контейнер для функций
+    functionsContainer = Instance.new("Frame", scrollFrame)
+    functionsContainer.Name = "FunctionsContainer"
+    functionsContainer.Size = UDim2.new(1, 0, 0, 0)
+    functionsContainer.Position = UDim2.new(0, 0, 0, 0)
+    functionsContainer.BackgroundTransparency = 1
+    functionsContainer.AutomaticSize = Enum.AutomaticSize.Y
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton", mainFrame)
+    closeBtn.Name = "CloseButton"
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.Text = "X"
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 16
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.AutoButtonColor = false
+    closeBtn.BorderSizePixel = 0
+    
+    local closeCorner = Instance.new("UICorner", closeBtn)
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        mainFrame.Visible = false
+        createReopenButton()
+    end)
+    
+    -- Показываем контент по умолчанию
+    showContent("Main")
+end
+
+-- Функция для показа контента
+function showContent(tabName)
+    -- Сохраняем текущую позицию прокрутки
+    if selectedTab and scrollFrame then
+        tabScrollPositions[selectedTab] = scrollFrame.CanvasPosition.Y
+    end
+    
+    -- Очищаем контейнер
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        child:Destroy()
+    end
+    
+    if tabName == "Main" then
+        contentTitle.Text = "MAIN FUNCTIONS"
+        -- Загружаем модуль Main
+        loadMainModule()
+    elseif tabName == "YBA Hacks" then
+        contentTitle.Text = "YBA HACKS"
+        -- Загружаем модуль YBA Hacks
+        loadYBAHacksModule()
+    elseif tabName == "Settings" then
+        contentTitle.Text = "MENU SETTINGS"
+        -- Показываем настройки
+        showSettings()
+    end
+    
+    selectedTab = tabName
+    
+    if scrollFrame and tabScrollPositions[tabName] then
+        scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+    end
+end
+
+-- Загрузка модуля Main
+function loadMainModule()
+    local success, result = pcall(function()
+        -- Загружаем модуль Main через loadstring
+        local mainCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/main_module")
+        return loadstring(mainCode)()
+    end)
+    
+    if success and result then
+        print("Main модуль загружен успешно!")
+        -- Создаем GUI для Main модуля
+        if result.createGUI then
+            result.createGUI(functionsContainer)
+        end
+    else
+        print("Ошибка загрузки Main модуля:", tostring(result))
+        -- Fallback - показываем сообщение об ошибке
+        local errorLabel = Instance.new("TextLabel", functionsContainer)
+        errorLabel.Size = UDim2.new(1, -20, 0, 100)
+        errorLabel.Position = UDim2.new(0, 10, 0, 20)
+        errorLabel.Text = "Ошибка загрузки Main модуля\nПроверьте интернет соединение"
+        errorLabel.Font = Enum.Font.Gotham
+        errorLabel.TextSize = 14
+        errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        errorLabel.BackgroundTransparency = 1
+        errorLabel.TextXAlignment = Enum.TextXAlignment.Center
+        errorLabel.TextYAlignment = Enum.TextYAlignment.Center
+    end
+end
+
+-- Загрузка модуля YBA Hacks
+function loadYBAHacksModule()
+    local success, result = pcall(function()
+        -- Загружаем модуль YBA Hacks через loadstring
+        local ybaCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/yba_hacks_module")
+        return loadstring(ybaCode)()
+    end)
+    
+    if success and result then
+        print("YBA Hacks модуль загружен успешно!")
+        -- Создаем GUI для YBA Hacks модуля
+        if result.createGUI then
+            result.createGUI(functionsContainer)
+        end
+    else
+        print("Ошибка загрузки YBA Hacks модуля:", tostring(result))
+        -- Fallback - показываем сообщение об ошибке
+        local errorLabel = Instance.new("TextLabel", functionsContainer)
+        errorLabel.Size = UDim2.new(1, -20, 0, 100)
+        errorLabel.Position = UDim2.new(0, 10, 0, 20)
+        errorLabel.Text = "Ошибка загрузки YBA Hacks модуля\nПроверьте интернет соединение"
+        errorLabel.Font = Enum.Font.Gotham
+        errorLabel.TextSize = 14
+        errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        errorLabel.BackgroundTransparency = 1
+        errorLabel.TextXAlignment = Enum.TextXAlignment.Center
+        errorLabel.TextYAlignment = Enum.TextYAlignment.Center
+    end
+end
+
+-- Показ настроек
+function showSettings()
+    local currentY = 0
+    local padding = 8
+    
+    -- Blur Effect
+    local blurLabel = Instance.new("TextLabel", functionsContainer)
+    blurLabel.Size = UDim2.new(1, -20, 0, 30)
+    blurLabel.Position = UDim2.new(0, 10, 0, currentY)
+    blurLabel.Text = "Blur Effect: " .. (MenuSettings.BlurEnabled and "ON" or "OFF")
+    blurLabel.Font = Enum.Font.Gotham
+    blurLabel.TextSize = 14
+    blurLabel.TextColor3 = Color3.new(1, 1, 1)
+    blurLabel.BackgroundTransparency = 1
+    blurLabel.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 30 + padding
+    
+    -- Accent Color
+    local colorLabel = Instance.new("TextLabel", functionsContainer)
+    colorLabel.Size = UDim2.new(1, -20, 0, 30)
+    colorLabel.Position = UDim2.new(0, 10, 0, currentY)
+    colorLabel.Text = "Accent Color"
+    colorLabel.Font = Enum.Font.Gotham
+    colorLabel.TextSize = 14
+    colorLabel.TextColor3 = Color3.new(1, 1, 1)
+    colorLabel.BackgroundTransparency = 1
+    colorLabel.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 30 + padding
+    
+    -- Language
+    local langLabel = Instance.new("TextLabel", functionsContainer)
+    langLabel.Size = UDim2.new(1, -20, 0, 30)
+    langLabel.Position = UDim2.new(0, 10, 0, currentY)
+    langLabel.Text = "Language: " .. MenuSettings.Language
+    langLabel.Font = Enum.Font.Gotham
+    langLabel.TextSize = 14
+    langLabel.TextColor3 = Color3.new(1, 1, 1)
+    langLabel.BackgroundTransparency = 1
+    langLabel.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 30 + padding
+end
+
+-- Кнопка повторного открытия
+function createReopenButton()
+    local reopenBtn = Instance.new("TextButton", screenGui)
+    reopenBtn.Name = "ReopenButton"
+    reopenBtn.Size = UDim2.new(0, 150, 0, 40)
+    reopenBtn.Position = UDim2.new(0, 20, 0, 20)
+    reopenBtn.Text = "Открыть меню"
+    reopenBtn.Font = Enum.Font.GothamBold
+    reopenBtn.TextSize = 14
+    reopenBtn.TextColor3 = Color3.new(1, 1, 1)
+    reopenBtn.BackgroundColor3 = MenuSettings.AccentColor
+    reopenBtn.AutoButtonColor = false
+    reopenBtn.BorderSizePixel = 0
+    
+    local reopenCorner = Instance.new("UICorner", reopenBtn)
+    reopenCorner.CornerRadius = UDim.new(0, 6)
+    
+    reopenBtn.MouseButton1Click:Connect(function()
+        mainFrame.Visible = true
+        reopenBtn:Destroy()
+    end)
+end
+
+-- Обработчик клавиши Insert
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        if not mainFrame then
+            createMainGUI()
+        else
+            mainFrame.Visible = not mainFrame.Visible
+            if mainFrame.Visible then
+                local existingButton = screenGui:FindFirstChild("ReopenButton")
+                if existingButton then
+                    existingButton:Destroy()
+                end
+            else
+                createReopenButton()
+            end
+        end
+    end
+end)
+
+print("Huyna Script загружен! Нажмите Insert для открытия меню.")
+print("Модули будут загружены автоматически при переключении вкладок.")
