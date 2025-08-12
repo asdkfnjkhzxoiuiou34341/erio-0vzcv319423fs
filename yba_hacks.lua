@@ -1,10 +1,16 @@
--- Модуль для вкладки YBA Hacks
--- Содержит специфичную функциональность для игры Your Bizarre Adventure
+-- Модуль YBA функций
+-- Загружается динамически через основной загрузчик
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local Players = _G.HuynaScript.Players
+local RunService = _G.HuynaScript.RunService
+local UserInputService = _G.HuynaScript.UserInputService
+local TweenService = _G.HuynaScript.TweenService
+local CoreGui = _G.HuynaScript.CoreGui
+
+-- Получаем ссылки на GUI элементы
+local GUI = _G.HuynaScript.GUI
+local functionsContainer = GUI.functionsContainer
+local scrollFrame = GUI.scrollFrame
 
 -- YBA конфигурации
 local YBAConfig = {
@@ -89,6 +95,7 @@ local AntiTimeStopConfig = {
     ServerSync = true,
 }
 
+-- Autofarm конфигурация
 local AutofarmConfig = {
     Enabled = false,
     ToggleKey = nil,
@@ -117,553 +124,359 @@ local AutofarmConfig = {
         ["Lucky Stone Mask"] = true,
         ["Rib Cage of The Saint's Corpse"] = true,
         ["DIO's Diary"] = true,
-    }
-}
-
--- Переводы для YBA элементов
-local YBATranslations = {
-    English = {
-        YBAStandRange = "YBA Stand Range",
-        UndergroundFlight = "Underground Flight",
-        ForceNoClip = "Force NoClip",
-        AntiTimeStop = "Anti Time Stop",
-        ItemESP = "Item ESP",
-        MysteriousArrow = "Mysterious Arrow",
-        Rokakaka = "Rokakaka",
-        PureRokakaka = "Pure Rokakaka",
-        Diamond = "Diamond",
-        GoldCoin = "Gold Coin",
-        SteelBall = "Steel Ball",
-        Clackers = "Clackers",
-        CaesarsHeadband = "Caesar's Headband",
-        ZeppeliHat = "Zeppeli's Hat",
-        ZeppeliScarf = "Zeppeli's Scarf",
-        QuintonsGlove = "Quinton's Glove",
-        StoneMask = "Stone Mask",
-        RibCage = "Rib Cage of The Saint's Corpse",
-        AncientScroll = "Ancient Scroll",
-        DiosDiary = "DIO's Diary",
-        LuckyStoneMask = "Lucky Stone Mask",
-        LuckyArrow = "Lucky Arrow"
-    },
-    Russian = {
-        YBAStandRange = "YBA Стенд Рендж",
-        UndergroundFlight = "Подземный полёт",
-        ForceNoClip = "Принудительный NoClip",
-        AntiTimeStop = "Анти Тайм Стоп",
-        ItemESP = "ESP предметов",
-        MysteriousArrow = "Таинственная стрела",
-        Rokakaka = "Рокакака",
-        PureRokakaka = "Чистая рокакака",
-        Diamond = "Алмаз",
-        GoldCoin = "Золотая монета",
-        SteelBall = "Стальной шар",
-        Clackers = "Клакеры",
-        CaesarsHeadband = "Повязка Цезаря",
-        ZeppeliHat = "Шляпа Цеппели",
-        ZeppeliScarf = "Шарф Цеппели",
-        QuintonsGlove = "Перчатка Квинтона",
-        StoneMask = "Каменная маска",
-        RibCage = "Ребро Святого трупа",
-        AncientScroll = "Древний свиток",
-        DiosDiary = "Дневник Дио",
-        LuckyStoneMask = "Удачная каменная маска",
-        LuckyArrow = "Удачная стрела"
+        ["Dio's Diary"] = true,
     }
 }
 
 -- Переменные состояния
 local isYBAEnabled = false
-local isUndergroundControlEnabled = false
-local isAntiTimeStopEnabled = false
-local isItemESPEnabled = false
-local isAutofarmEnabled = false
-local controlledStand = nil
+local ybaConnections = {}
+local originalPlayerPosition = nil
 local originalPlayerCFrame = nil
 local originalCameraCFrame = nil
+local controlledStand = nil
 local standControlConnections = {}
-local itemESPElements = {}
+local originalGravity = workspace.Gravity
+local originalYBAWalkSpeed = 16
+local originalYBAJumpPower = 50
+
+local isAntiTimeStopEnabled = false
+local antiTimeStopConnections = {}
+local originalAntiTimeStopWalkSpeed = 16
+local originalAntiTimeStopJumpPower = 50
+local timeStopDetected = false
+local timeStopStartTime = 0
+local timeStopDuration = 0
+local antiTimeStopEffect = nil
+
+local isUndergroundControlEnabled = false
+local undergroundControlConnections = {}
+local controlledStandForUnderground = nil
+local isShiftPressed = false
+
 local itemESPConnections = {}
+local itemESPElements = {}
+local itemESPEnabled = false
+
+local isAutofarmEnabled = false
 local autofarmConnections = {}
+local autofarmCurrentTarget = nil
+local autofarmItemQueue = {}
+local autofarmOriginalPosition = nil
+local autofarmPickingUp = false
+local autofarmSkippedItems = {}
+local autofarmItemAttempts = {}
+local autofarmSkippedReturns = {}
+local autofarmLastPickupTime = 0
+local autofarmRestartTimer = nil
+local autofarmAutoRestarting = false
+local autofarmDeathCheckConnection = nil
+
+-- Сохраняем конфигурации в глобальную область
+_G.HuynaScript.Configs.YBA = YBAConfig
+_G.HuynaScript.Configs.AntiTimeStop = AntiTimeStopConfig
+_G.HuynaScript.Configs.Autofarm = AutofarmConfig
+
+-- Текущая позиция Y для элементов
 local currentY = 0
 local padding = 5
-local functionsContainer = nil
 
--- Функции YBA Stand Range
-local function startYBA()
-    if isYBAEnabled then return end
-    isYBAEnabled = true
-    
-    print("🎯 YBA Stand Range: Активирован")
-    
-    local player = Players.LocalPlayer
-    if not player.Character then return end
-    
-    -- Поиск ближайшего стенда
-    local nearestStand = nil
-    local nearestDistance = math.huge
-    
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj.Name == "Stand" and obj:FindFirstChild("Root") then
-            local distance = (obj.Root.Position - player.Character.HumanoidRootPart.Position).Magnitude
-            if distance < nearestDistance and distance <= YBAConfig.MaxStandDistance then
-                nearestDistance = distance
-                nearestStand = obj
-            end
-        end
-    end
-    
-    if nearestStand then
-        controlledStand = nearestStand
-        print("🎯 YBA: Найден стенд на расстоянии", nearestDistance)
-        
-        -- Сохраняем исходную позицию игрока
-        originalPlayerCFrame = player.Character.HumanoidRootPart.CFrame
-        
-        -- Запускаем управление стендом
-        local connection = RunService.Heartbeat:Connect(function()
-            if controlledStand and controlledStand.Parent then
-                -- Здесь можно добавить логику управления стендом
-            end
-        end)
-        table.insert(standControlConnections, connection)
-    else
-        print("🎯 YBA: Стенд не найден в радиусе", YBAConfig.MaxStandDistance)
-        isYBAEnabled = false
-    end
-end
+-- Функция получения текста
+local function getText(key) return key end
 
-local function stopYBA()
-    if not isYBAEnabled then return end
-    isYBAEnabled = false
-    
-    -- Отключаем все соединения
-    for _, connection in pairs(standControlConnections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    standControlConnections = {}
-    
-    -- Восстанавливаем игрока
-    local player = Players.LocalPlayer
-    if player.Character and originalPlayerCFrame then
-        player.Character.HumanoidRootPart.CFrame = originalPlayerCFrame
-        originalPlayerCFrame = nil
-    end
-    
-    controlledStand = nil
-    print("🎯 YBA Stand Range: Деактивирован")
-end
-
-local function startUndergroundControl()
-    if isUndergroundControlEnabled then return end
-    isUndergroundControlEnabled = true
-    
-    print("🛩️ Underground Flight: Активирован")
-    
-    -- Включаем NoClip автоматически
-    if YBAConfig.UndergroundControl.AutoNoClip then
-        -- Включить NoClip
-    end
-end
-
-local function stopUndergroundControl()
-    if not isUndergroundControlEnabled then return end
-    isUndergroundControlEnabled = false
-    
-    print("🛩️ Underground Flight: Деактивирован")
-end
-
-local function startAntiTimeStop()
-    if isAntiTimeStopEnabled then return end
-    isAntiTimeStopEnabled = true
-    
-    print("⏰ Anti Time Stop: Активирован")
-    
-    local player = Players.LocalPlayer
-    if not player.Character then return end
-    
-    -- Логика анти тайм стопа
-    local connection = RunService.Heartbeat:Connect(function()
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                -- Предотвращаем заморозку
-                if AntiTimeStopConfig.AntiFreeze then
-                    humanoid.WalkSpeed = AntiTimeStopConfig.WalkSpeed
-                    humanoid.JumpPower = AntiTimeStopConfig.JumpPower
-                end
-            end
-        end
-    end)
-    
-    task.wait(0.1) -- Быстрое отключение
-    connection:Disconnect()
-    stopAntiTimeStop()
-end
-
-local function stopAntiTimeStop()
-    if not isAntiTimeStopEnabled then return end
-    isAntiTimeStopEnabled = false
-    
-    print("⏰ Anti Time Stop: Деактивирован")
-end
-
--- Функции ESP
-local function createItemESP(item)
-    if not item or not item:FindFirstChild("Handle") then return end
-    
-    local handle = item.Handle
-    local itemName = item.Name
-    
-    -- Проверяем, включен ли этот предмет
-    if not YBAConfig.ItemESP.Items[itemName] then return end
-    
-    -- Создаем BillboardGui
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "ItemESP"
-    billboard.Parent = handle
-    billboard.Size = UDim2.new(0, 200, 0, 100)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.AlwaysOnTop = true
-    
-    -- Создаем фон
-    local background = Instance.new("Frame", billboard)
-    background.Size = UDim2.new(1, 0, 1, 0)
-    background.Position = UDim2.new(0, 0, 0, 0)
-    background.BackgroundColor3 = YBAConfig.ItemESP.TextBackgroundColor
-    background.BackgroundTransparency = YBAConfig.ItemESP.TextBackgroundTransparency
-    background.BorderSizePixel = 0
-    
-    local backgroundCorner = Instance.new("UICorner", background)
-    backgroundCorner.CornerRadius = UDim.new(0, 4)
-    
-    -- Создаем рамку
-    local border = Instance.new("Frame", background)
-    border.Size = UDim2.new(1, 2, 1, 2)
-    border.Position = UDim2.new(0, -1, 0, -1)
-    border.BackgroundColor3 = YBAConfig.ItemESP.OutlineColor
-    border.BackgroundTransparency = YBAConfig.ItemESP.OutlineTransparency
-    border.BorderSizePixel = 0
-    border.ZIndex = 0
-    
-    local borderCorner = Instance.new("UICorner", border)
-    borderCorner.CornerRadius = UDim.new(0, 4)
-    
-    -- Создаем текст с названием предмета
-    local nameLabel = Instance.new("TextLabel", background)
-    nameLabel.Size = UDim2.new(1, -10, 0.5, 0)
-    nameLabel.Position = UDim2.new(0, 5, 0, 0)
-    nameLabel.Text = itemName
-    nameLabel.Font = YBAConfig.ItemESP.Font
-    nameLabel.TextSize = YBAConfig.ItemESP.TextSize
-    nameLabel.TextColor3 = YBAConfig.ItemESP.TextColor
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextScaled = true
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-    
-    -- Создаем текст с расстоянием
-    local distanceLabel = Instance.new("TextLabel", background)
-    distanceLabel.Size = UDim2.new(1, -10, 0.5, 0)
-    distanceLabel.Position = UDim2.new(0, 5, 0.5, 0)
-    distanceLabel.Font = YBAConfig.ItemESP.Font
-    distanceLabel.TextSize = YBAConfig.ItemESP.DistanceTextSize
-    distanceLabel.TextColor3 = YBAConfig.ItemESP.TextColor
-    distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextScaled = true
-    distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
-    
-    -- Сохраняем ESP элемент
-    itemESPElements[item] = {
-        billboard = billboard,
-        nameLabel = nameLabel,
-        distanceLabel = distanceLabel,
-        itemName = itemName
-    }
-    
-    -- Обновляем расстояние
-    local updateConnection = RunService.Heartbeat:Connect(function()
-        local player = Players.LocalPlayer
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and item.Parent then
-            local distance = (item.Handle.Position - player.Character.HumanoidRootPart.Position).Magnitude
-            distanceLabel.Text = math.floor(distance) .. "m"
-            
-            -- Скрываем если слишком далеко
-            if distance > YBAConfig.ItemESP.MaxRenderDistance then
-                billboard.Enabled = false
-            else
-                billboard.Enabled = true
-            end
-        else
-            -- Предмет удален, убираем ESP
-            if itemESPElements[item] then
-                itemESPElements[item] = nil
-            end
-            updateConnection:Disconnect()
-        end
-    end)
-end
-
-local function startItemESP()
-    if isItemESPEnabled then return end
-    isItemESPEnabled = true
-    
-    print("📦 Item ESP: Активирован")
-    
-    -- Сканируем все предметы в workspace
-    local function scanItems()
-        for _, item in pairs(workspace:GetChildren()) do
-            if YBAConfig.ItemESP.Items[item.Name] and not itemESPElements[item] then
-                createItemESP(item)
-            end
-        end
-    end
-    
-    -- Первоначальное сканирование
-    scanItems()
-    
-    -- Периодическое сканирование
-    local scanConnection = RunService.Heartbeat:Connect(function()
-        scanItems()
-    end)
-    table.insert(itemESPConnections, scanConnection)
-end
-
-local function stopItemESP()
-    if not isItemESPEnabled then return end
-    isItemESPEnabled = false
-    
-    -- Отключаем все соединения
-    for _, connection in pairs(itemESPConnections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    itemESPConnections = {}
-    
-    -- Удаляем все ESP элементы
-    for item, espData in pairs(itemESPElements) do
-        if espData.billboard then
-            espData.billboard:Destroy()
-        end
-    end
-    itemESPElements = {}
-    
-    print("📦 Item ESP: Деактивирован")
-end
-
-local function startAutofarm()
-    if isAutofarmEnabled then return end
-    isAutofarmEnabled = true
-    
-    print("🤖 Autofarm: Активирован")
-    
-    -- Логика автофарма будет добавлена здесь
-end
-
-local function stopAutofarm()
-    if not isAutofarmEnabled then return end
-    isAutofarmEnabled = false
-    
-    -- Отключаем все соединения автофарма
-    for _, connection in pairs(autofarmConnections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    autofarmConnections = {}
-    
-    print("🤖 Autofarm: Деактивирован")
-end
-
--- Функции создания GUI элементов (упрощенные версии)
-local function createToggleSlider(name, defaultValue, callback)
-    local container = Instance.new("Frame", functionsContainer)
-    container.Size = UDim2.new(1, -10, 0, 35)
-    container.Position = UDim2.new(0, 5, 0, currentY)
-    container.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    container.BorderSizePixel = 0
-    
-    local corner = Instance.new("UICorner", container)
-    corner.CornerRadius = UDim.new(0, 6)
-    
-    local label = Instance.new("TextLabel", container)
-    label.Size = UDim2.new(0.7, 0, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
-    label.Text = name
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.BackgroundTransparency = 1
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local slider = Instance.new("Frame", container)
-    slider.Size = UDim2.new(0, 50, 0, 20)
-    slider.Position = UDim2.new(1, -60, 0.5, -10)
-    slider.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
-    slider.BorderSizePixel = 0
-    
-    local sliderCorner = Instance.new("UICorner", slider)
-    sliderCorner.CornerRadius = UDim.new(0, 10)
-    
-    local handle = Instance.new("Frame", slider)
-    handle.Size = UDim2.new(0, 18, 0, 18)
-    handle.Position = defaultValue and UDim2.new(1, -19, 0.5, -9) or UDim2.new(0, 1, 0.5, -9)
-    handle.BackgroundColor3 = Color3.new(1, 1, 1)
-    handle.BorderSizePixel = 0
-    
-    local handleCorner = Instance.new("UICorner", handle)
-    handleCorner.CornerRadius = UDim.new(0, 9)
-    
-    local enabled = defaultValue
-    
-    local function toggle()
-        enabled = not enabled
-        slider.BackgroundColor3 = enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
-        
-        local targetPosition = enabled and UDim2.new(1, -19, 0.5, -9) or UDim2.new(0, 1, 0.5, -9)
-        local tween = TweenService:Create(handle, TweenInfo.new(0.2), {Position = targetPosition})
-        tween:Play()
-        
-        callback(enabled)
-    end
-    
-    slider.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            toggle()
-        end
-    end)
-    
-    currentY = currentY + 35 + padding
-    return container
-end
-
-local function createSlider(name, min, max, defaultValue, callback)
-    local container = Instance.new("Frame", functionsContainer)
-    container.Size = UDim2.new(1, -10, 0, 50)
-    container.Position = UDim2.new(0, 5, 0, currentY)
-    container.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    container.BorderSizePixel = 0
-    
-    local corner = Instance.new("UICorner", container)
-    corner.CornerRadius = UDim.new(0, 6)
-    
-    local label = Instance.new("TextLabel", container)
-    label.Size = UDim2.new(1, -10, 0, 25)
-    label.Position = UDim2.new(0, 5, 0, 0)
-    label.Text = name .. ": " .. defaultValue
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.BackgroundTransparency = 1
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local sliderBack = Instance.new("Frame", container)
-    sliderBack.Size = UDim2.new(1, -20, 0, 6)
-    sliderBack.Position = UDim2.new(0, 10, 1, -15)
-    sliderBack.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    sliderBack.BorderSizePixel = 0
-    
-    local sliderCorner = Instance.new("UICorner", sliderBack)
-    sliderCorner.CornerRadius = UDim.new(0, 3)
-    
-    local sliderHandle = Instance.new("Frame", sliderBack)
-    sliderHandle.Size = UDim2.new(0, 12, 1, 6)
-    sliderHandle.Position = UDim2.new((defaultValue - min) / (max - min), -6, 0, -3)
-    sliderHandle.BackgroundColor3 = Color3.new(1, 1, 1)
-    sliderHandle.BorderSizePixel = 0
-    
-    local handleCorner = Instance.new("UICorner", sliderHandle)
-    handleCorner.CornerRadius = UDim.new(0, 6)
-    
-    currentY = currentY + 50 + padding
-    return container
-end
-
-local function createSectionHeader(text)
-    local header = Instance.new("TextLabel", functionsContainer)
+-- Вспомогательные функции для создания GUI элементов
+local function createSectionHeader(title)
+    local header = Instance.new("TextLabel")
+    header.Name = "SectionHeader"
+    header.Parent = functionsContainer
     header.Size = UDim2.new(1, -10, 0, 30)
-    header.Position = UDim2.new(0, 5, 0, currentY)
-    header.Text = text
+    header.BackgroundTransparency = 1
+    header.Text = title
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.TextSize = 14
     header.Font = Enum.Font.GothamBold
-    header.TextSize = 16
-    header.TextColor3 = Color3.fromRGB(255, 255, 0)
-    header.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    header.BorderSizePixel = 1
-    header.BorderColor3 = Color3.fromRGB(100, 100, 120)
     header.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local headerCorner = Instance.new("UICorner", header)
-    headerCorner.CornerRadius = UDim.new(0, 4)
-    
-    currentY = currentY + 30 + padding
+    header.LayoutOrder = currentY
+    currentY = currentY + 1
     return header
 end
 
 local function createDivider()
-    local divider = Instance.new("Frame", functionsContainer)
+    local divider = Instance.new("Frame")
+    divider.Name = "Divider"
+    divider.Parent = functionsContainer
     divider.Size = UDim2.new(1, -20, 0, 2)
-    divider.Position = UDim2.new(0, 10, 0, currentY)
     divider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     divider.BorderSizePixel = 0
+    divider.LayoutOrder = currentY
+    currentY = currentY + 1
     
-    currentY = currentY + 2 + padding * 2
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 1)
+    corner.Parent = divider
+    
     return divider
 end
 
-local function createButton(text, callback)
-    local button = Instance.new("TextButton", functionsContainer)
-    button.Size = UDim2.new(1, -10, 0, 35)
-    button.Position = UDim2.new(0, 5, 0, currentY)
-    button.Text = text
-    button.Font = Enum.Font.GothamBold
-    button.TextSize = 14
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    button.BorderSizePixel = 0
-    button.AutoButtonColor = false
-    
-    local corner = Instance.new("UICorner", button)
-    corner.CornerRadius = UDim.new(0, 6)
-    
-    button.MouseButton1Click:Connect(callback)
-    
-    currentY = currentY + 35 + padding
-    return button
-end
+local function createToggleSlider(label, default, callback)
+    local container = Instance.new("Frame")
+    container.Name = label .. "Container"
+    container.Parent = functionsContainer
+    container.Size = UDim2.new(1, -10, 0, 40)
+    container.BackgroundTransparency = 1
+    container.LayoutOrder = currentY
+    currentY = currentY + 1
 
--- Основная функция модуля
-local function showContent(rightPanel, getText)
-    -- Очищаем контейнер
-    for _, child in pairs(rightPanel:GetChildren()) do
-        if child.Name ~= "ContentTitle" and child.Name ~= "CloseButton" and child.Name ~= "LoadingLabel" then
-            child:Destroy()
+    local labelText = Instance.new("TextLabel")
+    labelText.Name = "Label"
+    labelText.Parent = container
+    labelText.Size = UDim2.new(0.7, 0, 1, 0)
+    labelText.Position = UDim2.new(0, 0, 0, 0)
+    labelText.BackgroundTransparency = 1
+    labelText.Text = label
+    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    labelText.TextSize = 12
+    labelText.Font = Enum.Font.Gotham
+    labelText.TextXAlignment = Enum.TextXAlignment.Left
+
+    local sliderBack = Instance.new("Frame")
+    sliderBack.Name = "SliderBack"
+    sliderBack.Parent = container
+    sliderBack.Size = UDim2.new(0, 50, 0, 25)
+    sliderBack.Position = UDim2.new(1, -55, 0.5, -12.5)
+    sliderBack.BackgroundColor3 = default and _G.HuynaScript.MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
+    sliderBack.BorderSizePixel = 0
+
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 12)
+    sliderCorner.Parent = sliderBack
+
+    local sliderButton = Instance.new("Frame")
+    sliderButton.Name = "SliderButton"
+    sliderButton.Parent = sliderBack
+    sliderButton.Size = UDim2.new(0, 20, 0, 20)
+    sliderButton.Position = default and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+    sliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    sliderButton.BorderSizePixel = 0
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 10)
+    buttonCorner.Parent = sliderButton
+
+    local isToggled = default
+    
+    local function toggle()
+        isToggled = not isToggled
+        
+        local newBackgroundColor = isToggled and _G.HuynaScript.MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
+        local newPosition = isToggled and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+        
+        TweenService:Create(sliderBack, TweenInfo.new(0.2), {BackgroundColor3 = newBackgroundColor}):Play()
+        TweenService:Create(sliderButton, TweenInfo.new(0.2), {Position = newPosition}):Play()
+        
+        if callback then
+            callback(isToggled)
         end
     end
-    
-    -- Создаем контейнер для контента
-    local scrollFrame = Instance.new("ScrollingFrame", rightPanel)
-    scrollFrame.Name = "ScrollFrame"
-    scrollFrame.Size = UDim2.new(1, -30, 1, -60)
-    scrollFrame.Position = UDim2.new(0, 15, 0, 50)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.ScrollBarThickness = 6
-    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-    
-    functionsContainer = Instance.new("Frame", scrollFrame)
-    functionsContainer.Name = "FunctionsContainer"
-    functionsContainer.Size = UDim2.new(1, 0, 0, 0)
-    functionsContainer.Position = UDim2.new(0, 0, 0, 0)
-    functionsContainer.BackgroundTransparency = 1
-    
+
+    sliderBack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            toggle()
+        end
+    end)
+
+    return container
+end
+
+local function createSlider(label, min, max, default, callback)
+    local container = Instance.new("Frame")
+    container.Name = label .. "Container"
+    container.Parent = functionsContainer
+    container.Size = UDim2.new(1, -10, 0, 40)
+    container.BackgroundTransparency = 1
+    container.LayoutOrder = currentY
+    currentY = currentY + 1
+
+    local labelText = Instance.new("TextLabel")
+    labelText.Name = "Label"
+    labelText.Parent = container
+    labelText.Size = UDim2.new(0.5, 0, 1, 0)
+    labelText.Position = UDim2.new(0, 0, 0, 0)
+    labelText.BackgroundTransparency = 1
+    labelText.Text = label
+    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    labelText.TextSize = 12
+    labelText.Font = Enum.Font.Gotham
+    labelText.TextXAlignment = Enum.TextXAlignment.Left
+
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Name = "ValueLabel"
+    valueLabel.Parent = container
+    valueLabel.Size = UDim2.new(0, 50, 1, 0)
+    valueLabel.Position = UDim2.new(1, -200, 0, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    valueLabel.TextSize = 12
+    valueLabel.Font = Enum.Font.Gotham
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Name = "SliderFrame"
+    sliderFrame.Parent = container
+    sliderFrame.Size = UDim2.new(0, 140, 0, 6)
+    sliderFrame.Position = UDim2.new(1, -145, 0.5, -3)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    sliderFrame.BorderSizePixel = 0
+
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 3)
+    sliderCorner.Parent = sliderFrame
+
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Name = "SliderFill"
+    sliderFill.Parent = sliderFrame
+    sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    sliderFill.Position = UDim2.new(0, 0, 0, 0)
+    sliderFill.BackgroundColor3 = _G.HuynaScript.MenuSettings.AccentColor
+    sliderFill.BorderSizePixel = 0
+
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 3)
+    fillCorner.Parent = sliderFill
+
+    local dragging = false
+    local currentValue = default
+
+    local function updateSlider(input)
+        local relativePos = math.clamp((input.Position.X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+        currentValue = math.floor(min + (max - min) * relativePos)
+        
+        valueLabel.Text = tostring(currentValue)
+        sliderFill.Size = UDim2.new(relativePos, 0, 1, 0)
+        
+        if callback then
+            callback(currentValue)
+        end
+    end
+
+    sliderFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(input)
+        end
+    end)
+
+    sliderFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+
+    return container
+end
+
+-- Заглушки для функций (в полной версии здесь будут реальные реализации)
+local function startYBA()
+    print("YBA Stand Range активирован (заглушка)")
+    isYBAEnabled = true
+    YBAConfig.Enabled = true
+end
+
+local function stopYBA()
+    print("YBA Stand Range деактивирован (заглушка)")
+    isYBAEnabled = false
+    YBAConfig.Enabled = false
+end
+
+local function startUndergroundControl()
+    print("Underground Flight активирован (заглушка)")
+    isUndergroundControlEnabled = true
+end
+
+local function stopUndergroundControl()
+    print("Underground Flight деактивирован (заглушка)")
+    isUndergroundControlEnabled = false
+end
+
+local function startAntiTimeStop()
+    print("Anti Time Stop активирован (заглушка)")
+    isAntiTimeStopEnabled = true
+    AntiTimeStopConfig.Enabled = true
+end
+
+local function stopAntiTimeStop()
+    print("Anti Time Stop деактивирован (заглушка)")
+    isAntiTimeStopEnabled = false
+    AntiTimeStopConfig.Enabled = false
+end
+
+local function startUserStandESP()
+    print("User Stand ESP активирован (заглушка)")
+end
+
+local function stopUserStandESP()
+    print("User Stand ESP деактивирован (заглушка)")
+end
+
+local function startUserStyleESP()
+    print("User Style ESP активирован (заглушка)")
+end
+
+local function stopUserStyleESP()
+    print("User Style ESP деактивирован (заглушка)")
+end
+
+local function startItemESP()
+    print("Item ESP активирован (заглушка)")
+    itemESPEnabled = true
+    YBAConfig.ItemESP.Enabled = true
+end
+
+local function stopItemESP()
+    print("Item ESP деактивирован (заглушка)")
+    itemESPEnabled = false
+    YBAConfig.ItemESP.Enabled = false
+end
+
+local function startAutofarm()
+    print("Autofarm активирован (заглушка)")
+    isAutofarmEnabled = true
+    AutofarmConfig.Enabled = true
+end
+
+local function stopAutofarm()
+    print("Autofarm деактивирован (заглушка)")
+    isAutofarmEnabled = false
+    AutofarmConfig.Enabled = false
+end
+
+-- Экспорт функций для других модулей
+_G.HuynaScript.Functions.startYBA = startYBA
+_G.HuynaScript.Functions.stopYBA = stopYBA
+_G.HuynaScript.Functions.startUndergroundControl = startUndergroundControl
+_G.HuynaScript.Functions.stopUndergroundControl = stopUndergroundControl
+_G.HuynaScript.Functions.startAntiTimeStop = startAntiTimeStop
+_G.HuynaScript.Functions.stopAntiTimeStop = stopAntiTimeStop
+_G.HuynaScript.Functions.startItemESP = startItemESP
+_G.HuynaScript.Functions.stopItemESP = stopItemESP
+_G.HuynaScript.Functions.startAutofarm = startAutofarm
+_G.HuynaScript.Functions.stopAutofarm = stopAutofarm
+
+-- Создание интерфейса для YBA функций
+if _G.HuynaScript.GUI.contentTitle.Text == "YBA HACKS" then
     currentY = 0
     
-    -- YBA Hacks content
+    -- 🎯 STAND RANGE
     createSectionHeader("🎯 STAND RANGE")
     
-    createToggleSlider("YBA Stand Range", YBAConfig.Enabled, function(v)
+    createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
         YBAConfig.Enabled = v
         if v then 
             startYBA() 
@@ -672,7 +485,7 @@ local function showContent(rightPanel, getText)
         end
     end)
     
-    createToggleSlider("Underground Flight", isUndergroundControlEnabled, function(v)
+    createToggleSlider(getText("UndergroundFlight"), isUndergroundControlEnabled, function(v)
         if v then
             startUndergroundControl()
         else
@@ -680,35 +493,112 @@ local function showContent(rightPanel, getText)
         end
     end)
     
-    createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed, function(v)
+    -- NoClip статус для YBA
+    local ybaNoClipStatusLabel = Instance.new("TextLabel")
+    ybaNoClipStatusLabel.Name = "YBANoClipStatus"
+    ybaNoClipStatusLabel.Parent = functionsContainer
+    ybaNoClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
+    ybaNoClipStatusLabel.BackgroundTransparency = 1
+    ybaNoClipStatusLabel.Text = "NoClip Status: " .. ((_G.HuynaScript.Functions.isNoClipping and _G.HuynaScript.Functions.isNoClipping()) and "ON" or "OFF")
+    ybaNoClipStatusLabel.Font = Enum.Font.GothamBold
+    ybaNoClipStatusLabel.TextSize = 12
+    ybaNoClipStatusLabel.TextColor3 = ((_G.HuynaScript.Functions.isNoClipping and _G.HuynaScript.Functions.isNoClipping()) and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100))
+    ybaNoClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ybaNoClipStatusLabel.LayoutOrder = currentY
+    currentY = currentY + 1
+    
+    createToggleSlider(getText("ForceNoClip"), (_G.HuynaScript.Functions.isNoClipping and _G.HuynaScript.Functions.isNoClipping()) or false, function(v)
+        if v then
+            if _G.HuynaScript.Functions.startNoClip then
+                _G.HuynaScript.Functions.startNoClip()
+            end
+            ybaNoClipStatusLabel.Text = "NoClip Status: ON"
+            ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
+        else
+            if _G.HuynaScript.Functions.stopNoClip then
+                _G.HuynaScript.Functions.stopNoClip()
+            end
+            ybaNoClipStatusLabel.Text = "NoClip Status: OFF"
+            ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
+        end
+    end)
+    
+    createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
         YBAConfig.UndergroundControl.FlightSpeed = v
+        if isUndergroundControlEnabled and controlledStandForUnderground then
+            print("YBA: Скорость подземного полета изменена на:", v)
+        end
     end)
     
     createDivider()
     
+    -- ⏰ ANTI TS
     createSectionHeader("⏰ ANTI TS")
     
-    createButton("ANTI TIME STOP", function()
-        startAntiTimeStop()
+    local antiTimeStopBtn = Instance.new("TextButton")
+    antiTimeStopBtn.Name = "AntiTimeStopButton"
+    antiTimeStopBtn.Parent = functionsContainer
+    antiTimeStopBtn.Size = UDim2.new(1, -10, 0, 28)
+    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
+    antiTimeStopBtn.Text = getText("AntiTimeStop")
+    antiTimeStopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    antiTimeStopBtn.TextSize = 14
+    antiTimeStopBtn.Font = Enum.Font.GothamBold
+    antiTimeStopBtn.BorderSizePixel = 0
+    antiTimeStopBtn.LayoutOrder = currentY
+    currentY = currentY + 1
+    
+    local antiTSCorner = Instance.new("UICorner")
+    antiTSCorner.CornerRadius = UDim.new(0, 6)
+    antiTSCorner.Parent = antiTimeStopBtn
+    
+    antiTimeStopBtn.MouseButton1Click:Connect(function()
+        if not isAntiTimeStopEnabled then
+            AntiTimeStopConfig.Enabled = true
+            startAntiTimeStop()
+            antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
+            antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
+            
+            -- Быстрое отключение после освобождения
+            task.spawn(function()
+                task.wait(0.1) -- Минимальное время для освобождения
+                
+                AntiTimeStopConfig.Enabled = false
+                stopAntiTimeStop()
+                antiTimeStopBtn.Text = "ANTI TIME STOP"
+                antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
+                print("Anti TS: ГОТОВО!")
+            end)
+        end
     end)
     
     createDivider()
     
+    -- 👥 PLAYER ESP
     createSectionHeader("👥 PLAYER ESP")
     
     createToggleSlider("User Stand", false, function(v)
-        -- Логика User Stand ESP
+        if v then
+            startUserStandESP()
+        else
+            stopUserStandESP()
+        end
     end)
     
     createToggleSlider("User Style", false, function(v)
-        -- Логика User Style ESP  
+        if v then
+            startUserStyleESP()
+        else
+            stopUserStyleESP()
+        end
     end)
     
     createDivider()
     
+    -- 📦 ITEM ESP
     createSectionHeader("📦 ITEM ESP")
     
-    createToggleSlider("Item ESP", YBAConfig.ItemESP.Enabled, function(v)
+    createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
         YBAConfig.ItemESP.Enabled = v
         if v then 
             startItemESP() 
@@ -717,35 +607,56 @@ local function showContent(rightPanel, getText)
         end
     end)
     
-    createSectionHeader("📦 ITEM SELECTION")
+    -- Item Selection Header
+    local itemSelectionHeader = Instance.new("TextLabel")
+    itemSelectionHeader.Name = "ItemSelectionHeader"
+    itemSelectionHeader.Parent = functionsContainer
+    itemSelectionHeader.Size = UDim2.new(1, -10, 0, 25)
+    itemSelectionHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    itemSelectionHeader.BorderSizePixel = 1
+    itemSelectionHeader.BorderColor3 = Color3.fromRGB(100, 100, 120)
+    itemSelectionHeader.Text = "📦 ITEM SELECTION"
+    itemSelectionHeader.Font = Enum.Font.GothamBold
+    itemSelectionHeader.TextSize = 14
+    itemSelectionHeader.TextColor3 = Color3.fromRGB(255, 255, 0)
+    itemSelectionHeader.TextXAlignment = Enum.TextXAlignment.Left
+    itemSelectionHeader.LayoutOrder = currentY
+    currentY = currentY + 1
     
-    -- Создаем переключатели для всех предметов
+    local itemHeaderCorner = Instance.new("UICorner")
+    itemHeaderCorner.CornerRadius = UDim.new(0, 4)
+    itemHeaderCorner.Parent = itemSelectionHeader
+    
     local function createItemToggle(itemName, defaultState)
-        return createToggleSlider(itemName, defaultState, function(v)
+        local btn = createToggleSlider(itemName, defaultState, function(v)
             YBAConfig.ItemESP.Items[itemName] = v
+            print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
         end)
+        return btn
     end
     
-    createItemToggle("Mysterious Arrow", YBAConfig.ItemESP.Items["Mysterious Arrow"])
-    createItemToggle("Rokakaka", YBAConfig.ItemESP.Items["Rokakaka"])
-    createItemToggle("Pure Rokakaka", YBAConfig.ItemESP.Items["Pure Rokakaka"])
-    createItemToggle("Diamond", YBAConfig.ItemESP.Items["Diamond"])
-    createItemToggle("Gold Coin", YBAConfig.ItemESP.Items["Gold Coin"])
-    createItemToggle("Steel Ball", YBAConfig.ItemESP.Items["Steel Ball"])
-    createItemToggle("Clackers", YBAConfig.ItemESP.Items["Clackers"])
-    createItemToggle("Caesar's Headband", YBAConfig.ItemESP.Items["Caesar's Headband"])
-    createItemToggle("Zeppeli's Hat", YBAConfig.ItemESP.Items["Zeppeli's Hat"])
-    createItemToggle("Zeppeli's Scarf", YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
-    createItemToggle("Quinton's Glove", YBAConfig.ItemESP.Items["Quinton's Glove"])
-    createItemToggle("Stone Mask", YBAConfig.ItemESP.Items["Stone Mask"])
-    createItemToggle("Rib Cage of The Saint's Corpse", YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
-    createItemToggle("Ancient Scroll", YBAConfig.ItemESP.Items["Ancient Scroll"])
-    createItemToggle("DIO's Diary", YBAConfig.ItemESP.Items["DIO's Diary"])
-    createItemToggle("Lucky Stone Mask", YBAConfig.ItemESP.Items["Lucky Stone Mask"])
-    createItemToggle("Lucky Arrow", YBAConfig.ItemESP.Items["Lucky Arrow"])
+    -- Создаем переключатели для всех предметов
+    createItemToggle(getText("MysteriousArrow"), YBAConfig.ItemESP.Items["Mysterious Arrow"])
+    createItemToggle(getText("Rokakaka"), YBAConfig.ItemESP.Items["Rokakaka"])
+    createItemToggle(getText("PureRokakaka"), YBAConfig.ItemESP.Items["Pure Rokakaka"])
+    createItemToggle(getText("Diamond"), YBAConfig.ItemESP.Items["Diamond"])
+    createItemToggle(getText("GoldCoin"), YBAConfig.ItemESP.Items["Gold Coin"])
+    createItemToggle(getText("SteelBall"), YBAConfig.ItemESP.Items["Steel Ball"])
+    createItemToggle(getText("Clackers"), YBAConfig.ItemESP.Items["Clackers"])
+    createItemToggle(getText("CaesarsHeadband"), YBAConfig.ItemESP.Items["Caesar's Headband"])
+    createItemToggle(getText("ZeppeliHat"), YBAConfig.ItemESP.Items["Zeppeli's Hat"])
+    createItemToggle(getText("ZeppeliScarf"), YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
+    createItemToggle(getText("QuintonsGlove"), YBAConfig.ItemESP.Items["Quinton's Glove"])
+    createItemToggle(getText("StoneMask"), YBAConfig.ItemESP.Items["Stone Mask"])
+    createItemToggle(getText("RibCage"), YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
+    createItemToggle(getText("AncientScroll"), YBAConfig.ItemESP.Items["Ancient Scroll"])
+    createItemToggle(getText("DiosDiary"), YBAConfig.ItemESP.Items["DIO's Diary"])
+    createItemToggle(getText("LuckyStoneMask"), YBAConfig.ItemESP.Items["Lucky Stone Mask"])
+    createItemToggle(getText("LuckyArrow"), YBAConfig.ItemESP.Items["Lucky Arrow"])
     
     createDivider()
     
+    -- 🤖 AUTOFARM
     createSectionHeader("🤖 AUTOFARM")
     
     createToggleSlider("Autofarm", isAutofarmEnabled, function(v)
@@ -756,15 +667,31 @@ local function showContent(rightPanel, getText)
         end
     end)
     
+    createDivider()
+    
+    -- Заголовок для выбора предметов автофарма
     createSectionHeader("📦 ITEMS FARM")
     
-    -- Создаем переключатели для автофарма предметов
+    -- Функция для создания переключателей предметов автофарма
     local function createAutofarmItemToggle(itemName, defaultState)
-        return createToggleSlider(itemName, defaultState, function(v)
+        local btn = createToggleSlider(itemName, defaultState, function(v)
             AutofarmConfig.Items[itemName] = v
+            
+            -- Синхронизируем ОБА варианта ключей для предметов
+            if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" then
+                AutofarmConfig.Items["Mysterious Arrow"] = v
+                AutofarmConfig.Items["MysteriousArrow"] = v
+            elseif itemName == "GoldCoin" or itemName == "Gold Coin" then
+                AutofarmConfig.Items["Gold Coin"] = v
+                AutofarmConfig.Items["GoldCoin"] = v
+            end
+            
+            print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
         end)
+        return btn
     end
     
+    -- Создаем переключатели для автофарма предметов
     createAutofarmItemToggle("Mysterious Arrow", AutofarmConfig.Items["Mysterious Arrow"])
     createAutofarmItemToggle("Rokakaka", AutofarmConfig.Items["Rokakaka"])
     createAutofarmItemToggle("Pure Rokakaka", AutofarmConfig.Items["Pure Rokakaka"])
@@ -775,42 +702,13 @@ local function showContent(rightPanel, getText)
     createAutofarmItemToggle("Caesar's Headband", AutofarmConfig.Items["Caesar's Headband"])
     createAutofarmItemToggle("Zeppeli's Hat", AutofarmConfig.Items["Zeppeli's Hat"])
     createAutofarmItemToggle("Zeppeli's Scarf", AutofarmConfig.Items["Zeppeli's Scarf"])
+    createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
     createAutofarmItemToggle("Quinton's Glove", AutofarmConfig.Items["Quinton's Glove"])
     createAutofarmItemToggle("Stone Mask", AutofarmConfig.Items["Stone Mask"])
-    createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
-    createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
-    createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
-    createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
     createAutofarmItemToggle("Lucky Arrow", AutofarmConfig.Items["Lucky Arrow"])
-    
-    createDivider()
-    
-    createSectionHeader("🤖 AUTO SELL")
-    
-    createButton("Load Autosell Module", function()
-        print("🤖 AUTOSELL: Загружаем модуль автоселла...")
-        
-        local success, result = pcall(function()
-            local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh98232")
-            return loadstring(autosellCode)()
-        end)
-        
-        if success then
-            print("🤖 AUTOSELL: Модуль загружен успешно!")
-        else
-            print("🤖 AUTOSELL: Ошибка загрузки модуля:", tostring(result))
-        end
-    end)
-    
-    functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+    createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
+    createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
+    createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
 end
 
--- Возвращаем модуль
-return {
-    showContent = showContent,
-    YBAConfig = YBAConfig,
-    AntiTimeStopConfig = AntiTimeStopConfig,
-    AutofarmConfig = AutofarmConfig,
-    YBATranslations = YBATranslations
-}
+print("⚔️ YBA Functions модуль загружен!")

@@ -6,10 +6,6 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
--- Переменные для модулей
-local MainAndSettingsModule = nil
-local YBAHacksModule = nil
-
 -- Настройки меню
 local MenuSettings = {
     AccentColor = Color3.fromRGB(0, 150, 0),
@@ -27,293 +23,394 @@ local Translations = {
     },
     Russian = {
         MainFunctions = "Основные функции",
-        YBAHacks = "YBA хаки",
+        YBAHacks = "YBA Hacks",
         MenuSettings = "Настройки меню",
         AccentColor = "Цвет акцента",
         Language = "Язык"
     }
 }
 
-local function getText(key)
-    return Translations[MenuSettings.Language] and Translations[MenuSettings.Language][key] or key
-end
-
--- Создание основного GUI
-local screenGui = Instance.new("ScreenGui", CoreGui)
-screenGui.Name = "SslkinGui"
-screenGui.ResetOnSpawn = false
-
-local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Name = "MainFrame"
-mainFrame.Position = UDim2.new(0, 20, 0.5, -250)
-mainFrame.Size = UDim2.new(0, 400, 0, 500)
-mainFrame.BackgroundTransparency = 1
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-
-local mainCorner = Instance.new("UICorner", mainFrame)
-mainCorner.CornerRadius = UDim.new(0, 8)
-
-local leftPanel = Instance.new("Frame", mainFrame)
-leftPanel.Name = "LeftPanel"
-leftPanel.Size = UDim2.new(0, 120, 1, 0)
-leftPanel.Position = UDim2.new(0, 0, 0, 0)
-leftPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-leftPanel.BackgroundTransparency = 0
-leftPanel.BorderSizePixel = 0
-
-local leftCorner = Instance.new("UICorner", leftPanel)
-leftCorner.CornerRadius = UDim.new(0, 8)
-
-local logoFrame = Instance.new("Frame", leftPanel)
-logoFrame.Name = "LogoFrame"
-logoFrame.Size = UDim2.new(1, 0, 0, 80)
-logoFrame.Position = UDim2.new(0, 0, 0, 0)
-logoFrame.BackgroundTransparency = 1
-
-local logoText = Instance.new("TextLabel", logoFrame)
-logoText.Name = "LogoText"
-logoText.Size = UDim2.new(1, 0, 0, 40)
-logoText.Position = UDim2.new(0, 0, 0, 10)
-logoText.Text = "SSLKIN"
-logoText.Font = Enum.Font.GothamBold
-logoText.TextSize = 18
-logoText.TextColor3 = Color3.new(1, 1, 1)
-logoText.BackgroundTransparency = 1
-logoText.TextXAlignment = Enum.TextXAlignment.Center
-
-local versionText = Instance.new("TextLabel", logoFrame)
-versionText.Name = "VersionText"
-versionText.Size = UDim2.new(1, 0, 0, 20)
-versionText.Position = UDim2.new(0, 0, 0, 50)
-versionText.Text = "UNIVERSAL SCRIPT"
-versionText.Font = Enum.Font.Gotham
-versionText.TextSize = 10
-versionText.TextColor3 = Color3.new(1, 1, 1)
-versionText.BackgroundTransparency = 1
-versionText.TextXAlignment = Enum.TextXAlignment.Center
-
-local navButtons = {
-    {name = "Main", icon = "🏠"},
-    {name = "YBA Hacks", icon = "⚔️"},
-    {name = "Settings", icon = "⚙️"}
+-- Создание глобального объекта для хранения данных
+_G.HuynaScript = {
+    Players = Players,
+    RunService = RunService,
+    UserInputService = UserInputService,
+    TweenService = TweenService,
+    CoreGui = CoreGui,
+    MenuSettings = MenuSettings,
+    Translations = Translations,
+    GUI = {}
 }
 
-local selectedTab = "Main"
+-- Создание основного GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HuynaMenu"
+screenGui.Parent = CoreGui
+screenGui.IgnoreGuiInset = true
+screenGui.ResetOnSpawn = false
+
+-- Основной фрейм
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainFrame.BorderSizePixel = 0
+mainFrame.Position = UDim2.new(0.5, -400, 0.5, -300)
+mainFrame.Size = UDim2.new(0, 800, 0, 600)
+mainFrame.ClipsDescendants = true
+
+-- Углы
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- Заголовок
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Parent = mainFrame
+titleLabel.BackgroundTransparency = 1
+titleLabel.Position = UDim2.new(0, 20, 0, 10)
+titleLabel.Size = UDim2.new(1, -140, 0, 40)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "Huyna Script v2.0"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Кнопка закрытия
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Parent = mainFrame
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+closeButton.BorderSizePixel = 0
+closeButton.Position = UDim2.new(1, -40, 0, 10)
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Text = "×"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 18
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeButton
+
+-- Кнопка минимизации
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Name = "MinimizeButton"
+minimizeButton.Parent = mainFrame
+minimizeButton.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+minimizeButton.BorderSizePixel = 0
+minimizeButton.Position = UDim2.new(1, -80, 0, 10)
+minimizeButton.Size = UDim2.new(0, 30, 0, 30)
+minimizeButton.Font = Enum.Font.GothamBold
+minimizeButton.Text = "–"
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.TextSize = 18
+
+local minimizeCorner = Instance.new("UICorner")
+minimizeCorner.CornerRadius = UDim.new(0, 6)
+minimizeCorner.Parent = minimizeButton
+
+-- Контейнер для навигации
+local navContainer = Instance.new("Frame")
+navContainer.Name = "NavContainer"
+navContainer.Parent = mainFrame
+navContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+navContainer.BorderSizePixel = 0
+navContainer.Position = UDim2.new(0, 0, 0, 60)
+navContainer.Size = UDim2.new(0, 200, 1, -60)
+
+local navCorner = Instance.new("UICorner")
+navCorner.CornerRadius = UDim.new(0, 8)
+navCorner.Parent = navContainer
+
+-- Контейнер для функций
+local functionsContainer = Instance.new("Frame")
+functionsContainer.Name = "FunctionsContainer"
+functionsContainer.Parent = mainFrame
+functionsContainer.BackgroundTransparency = 1
+functionsContainer.Position = UDim2.new(0, 220, 0, 60)
+functionsContainer.Size = UDim2.new(1, -240, 1, -80)
+
+-- Скролл фрейм для функций
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.Parent = functionsContainer
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.Size = UDim2.new(1, 0, 1, 0)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.ScrollBarThickness = 8
+
+-- Layout для скролла
+local scrollLayout = Instance.new("UIListLayout")
+scrollLayout.Parent = scrollFrame
+scrollLayout.SortOrder = Enum.SortOrder.LayoutOrder
+scrollLayout.Padding = UDim.new(0, 10)
+
+-- Padding для скролла
+local scrollPadding = Instance.new("UIPadding")
+scrollPadding.Parent = scrollFrame
+scrollPadding.PaddingLeft = UDim.new(0, 10)
+scrollPadding.PaddingRight = UDim.new(0, 10)
+scrollPadding.PaddingTop = UDim.new(0, 10)
+scrollPadding.PaddingBottom = UDim.new(0, 10)
+
+-- Layout для навигации
+local navLayout = Instance.new("UIListLayout")
+navLayout.Parent = navContainer
+navLayout.SortOrder = Enum.SortOrder.LayoutOrder
+navLayout.Padding = UDim.new(0, 5)
+
+-- Padding для навигации
+local navPadding = Instance.new("UIPadding")
+navPadding.Parent = navContainer
+navPadding.PaddingLeft = UDim.new(0, 10)
+navPadding.PaddingRight = UDim.new(0, 10)
+navPadding.PaddingTop = UDim.new(0, 10)
+navPadding.PaddingBottom = UDim.new(0, 10)
+
+-- Сохраняем ссылки в глобальном объекте
+_G.HuynaScript.GUI = {
+    screenGui = screenGui,
+    mainFrame = mainFrame,
+    navContainer = navContainer,
+    functionsContainer = functionsContainer,
+    scrollFrame = scrollFrame,
+    titleLabel = titleLabel,
+    closeButton = closeButton,
+    minimizeButton = minimizeButton
+}
 
 -- Создание кнопок навигации
-for i, buttonData in ipairs(navButtons) do
-    local navButton = Instance.new("TextButton", leftPanel)
-    navButton.Name = buttonData.name .. "Button"
-    navButton.Size = UDim2.new(1, -20, 0, 40)
-    navButton.Position = UDim2.new(0, 10, 0, 100 + (i-1) * 50)
-    navButton.Text = buttonData.icon .. " " .. buttonData.name
-    navButton.Font = Enum.Font.Gotham
-    navButton.TextSize = 14
-    navButton.TextColor3 = Color3.new(1, 1, 1)
-    navButton.BackgroundColor3 = buttonData.name == selectedTab and Color3.fromRGB(40, 40, 45) or Color3.fromRGB(30, 30, 35)
-    navButton.BorderSizePixel = 0
-    navButton.AutoButtonColor = false
-    
-    local buttonCorner = Instance.new("UICorner", navButton)
+local function createNavButton(text, layoutOrder)
+    local button = Instance.new("TextButton")
+    button.Name = text .. "Button"
+    button.Parent = navContainer
+    button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    button.BorderSizePixel = 0
+    button.Size = UDim2.new(1, 0, 0, 40)
+    button.Font = Enum.Font.Gotham
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(200, 200, 200)
+    button.TextSize = 14
+    button.LayoutOrder = layoutOrder
+
+    local buttonCorner = Instance.new("UICorner")
     buttonCorner.CornerRadius = UDim.new(0, 6)
-    
-    if buttonData.name == selectedTab then
-        local highlight = Instance.new("Frame", navButton)
-        highlight.Name = "Highlight"
-        highlight.Size = UDim2.new(0, 3, 1, 0)
-        highlight.Position = UDim2.new(0, 0, 0, 0)
-        highlight.BackgroundColor3 = MenuSettings.AccentColor
-        highlight.BorderSizePixel = 0
-        
-        local highlightCorner = Instance.new("UICorner", highlight)
-        highlightCorner.CornerRadius = UDim.new(0, 2)
-    end
-    
-    navButton.MouseButton1Click:Connect(function()
-        -- Обновляем выбранную вкладку
-        for _, btn in pairs(leftPanel:GetChildren()) do
-            if btn:IsA("TextButton") then
-                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-                local highlight = btn:FindFirstChild("Highlight")
-                if highlight then
-                    highlight:Destroy()
-                end
-            end
-        end
-        
-        navButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        selectedTab = buttonData.name
-        
-        local highlight = Instance.new("Frame", navButton)
-        highlight.Name = "Highlight"
-        highlight.Size = UDim2.new(0, 3, 1, 0)
-        highlight.Position = UDim2.new(0, 0, 0, 0)
-        highlight.BackgroundColor3 = MenuSettings.AccentColor
-        highlight.BorderSizePixel = 0
-        
-        local highlightCorner = Instance.new("UICorner", highlight)
-        highlightCorner.CornerRadius = UDim.new(0, 2)
-        
-        showContent(buttonData.name)
-    end)
+    buttonCorner.Parent = button
+
+    return button
 end
 
-local rightPanel = Instance.new("Frame", mainFrame)
-rightPanel.Name = "RightPanel"
-rightPanel.Size = UDim2.new(1, -120, 1, 0)
-rightPanel.Position = UDim2.new(0, 120, 0, 0)
-rightPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-rightPanel.BackgroundTransparency = 0.15
-rightPanel.BorderSizePixel = 0
+-- Создаем кнопки навигации
+local mainButton = createNavButton(Translations[MenuSettings.Language].MainFunctions, 1)
+local ybaButton = createNavButton(Translations[MenuSettings.Language].YBAHacks, 2)
+local settingsButton = createNavButton(Translations[MenuSettings.Language].MenuSettings, 3)
 
-local rightCorner = Instance.new("UICorner", rightPanel)
-rightCorner.CornerRadius = UDim.new(0, 8)
+-- Переменные для модулей
+local MainAndSettingsLoaded = false
+local YBAHacksLoaded = false
+local currentTab = "Main"
 
-local closeButton = Instance.new("TextButton", rightPanel)
-closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0, 30, 0, 30)
-closeButton.Position = UDim2.new(1, -35, 0, 5)
-closeButton.Text = "X"
-closeButton.Font = Enum.Font.GothamBold
-closeButton.TextSize = 16
-closeButton.TextColor3 = Color3.new(1, 1, 1)
-closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-closeButton.BorderSizePixel = 0
-closeButton.AutoButtonColor = false
-
-local closeCorner = Instance.new("UICorner", closeButton)
-closeCorner.CornerRadius = UDim.new(0, 6)
-
-closeButton.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-end)
-
-local contentTitle = Instance.new("TextLabel", rightPanel)
-contentTitle.Name = "ContentTitle"
-contentTitle.Size = UDim2.new(1, -50, 0, 40)
-contentTitle.Position = UDim2.new(0, 15, 0, 10)
-contentTitle.Text = getText("MainFunctions")
-contentTitle.Font = Enum.Font.GothamBold
-contentTitle.TextSize = 18
-contentTitle.TextColor3 = Color3.new(1, 1, 1)
-contentTitle.BackgroundTransparency = 1
-contentTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local loadingLabel = Instance.new("TextLabel", rightPanel)
-loadingLabel.Name = "LoadingLabel"
-loadingLabel.Size = UDim2.new(1, -30, 1, -60)
-loadingLabel.Position = UDim2.new(0, 15, 0, 50)
-loadingLabel.Text = "Загрузка модулей..."
-loadingLabel.Font = Enum.Font.Gotham
-loadingLabel.TextSize = 14
-loadingLabel.TextColor3 = Color3.new(1, 1, 1)
-loadingLabel.BackgroundTransparency = 1
-loadingLabel.TextXAlignment = Enum.TextXAlignment.Center
-loadingLabel.TextYAlignment = Enum.TextYAlignment.Center
-
--- Функция загрузки модулей
-local function loadModules()
-    print("🔄 Загружаем модули...")
-    
-    -- Загружаем модуль Main и Settings
-    spawn(function()
-        local success, result = pcall(function()
-            local code = game:HttpGet('https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/main_and_settings')
-            return loadstring(code)()
-        end)
-        
-        if success then
-            MainAndSettingsModule = result
-            print("✅ Модуль Main и Settings загружен")
-        else
-            print("❌ Ошибка загрузки модуля Main и Settings:", tostring(result))
-        end
-    end)
-    
-    -- Загружаем модуль YBA Hacks
-    spawn(function()
-        local success, result = pcall(function()
-            local code = game:HttpGet('https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/yba_hacks')
-            return loadstring(code)()
-        end)
-        
-        if success then
-            YBAHacksModule = result
-            print("✅ Модуль YBA Hacks загружен")
-        else
-            print("❌ Ошибка загрузки модуля YBA Hacks:", tostring(result))
-        end
-    end)
-    
-    -- Ждем загрузки модулей и показываем контент
-    spawn(function()
-        wait(2) -- Даем время на загрузку
-        loadingLabel.Visible = false
-        showContent("Main")
-        print("🎉 Инициализация завершена!")
-    end)
-end
-
--- Функция показа контента
-function showContent(tabName)
-    if loadingLabel.Visible then
-        return -- Еще загружаемся
-    end
-    
-    -- Очищаем старый контент
-    for _, child in pairs(rightPanel:GetChildren()) do
-        if child.Name ~= "ContentTitle" and child.Name ~= "CloseButton" and child.Name ~= "LoadingLabel" then
+-- Функция для отображения загрузки
+local function showLoading(text)
+    -- Очищаем контент
+    for _, child in pairs(scrollFrame:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextLabel") then
             child:Destroy()
         end
     end
     
-    selectedTab = tabName
+    local loadingLabel = Instance.new("TextLabel")
+    loadingLabel.Name = "LoadingLabel"
+    loadingLabel.Parent = scrollFrame
+    loadingLabel.BackgroundTransparency = 1
+    loadingLabel.Size = UDim2.new(1, 0, 0, 50)
+    loadingLabel.Font = Enum.Font.Gotham
+    loadingLabel.Text = text
+    loadingLabel.TextColor3 = MenuSettings.AccentColor
+    loadingLabel.TextSize = 16
+    loadingLabel.TextXAlignment = Enum.TextXAlignment.Center
+    loadingLabel.TextYAlignment = Enum.TextYAlignment.Center
+end
+
+-- Функция для показа контента вкладки
+local function showContent(tabName)
+    currentTab = tabName
     
-    if tabName == "Main" or tabName == "Settings" then
-        contentTitle.Text = tabName == "Main" and getText("MainFunctions") or getText("MenuSettings")
-        if MainAndSettingsModule and MainAndSettingsModule.showContent then
-            MainAndSettingsModule.showContent(tabName, rightPanel, MenuSettings, getText)
-        else
-            local errorLabel = Instance.new("TextLabel", rightPanel)
-            errorLabel.Name = "ErrorLabel"
-            errorLabel.Size = UDim2.new(1, -30, 1, -60)
-            errorLabel.Position = UDim2.new(0, 15, 0, 50)
-            errorLabel.Text = "Модуль Main и Settings не загружен"
-            errorLabel.Font = Enum.Font.Gotham
-            errorLabel.TextSize = 14
-            errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            errorLabel.BackgroundTransparency = 1
-            errorLabel.TextXAlignment = Enum.TextXAlignment.Center
-            errorLabel.TextYAlignment = Enum.TextYAlignment.Center
+    -- Обновляем цвета кнопок
+    for _, button in pairs(navContainer:GetChildren()) do
+        if button:IsA("TextButton") then
+            if button.Text == Translations[MenuSettings.Language].MainFunctions and tabName == "Main" then
+                button.BackgroundColor3 = MenuSettings.AccentColor
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            elseif button.Text == Translations[MenuSettings.Language].YBAHacks and tabName == "YBA" then
+                button.BackgroundColor3 = MenuSettings.AccentColor
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            elseif button.Text == Translations[MenuSettings.Language].MenuSettings and tabName == "Settings" then
+                button.BackgroundColor3 = MenuSettings.AccentColor
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                button.TextColor3 = Color3.fromRGB(200, 200, 200)
+            end
         end
-    elseif tabName == "YBA Hacks" then
-        contentTitle.Text = getText("YBAHacks")
-        if YBAHacksModule and YBAHacksModule.showContent then
-            YBAHacksModule.showContent(rightPanel, getText)
+    end
+    
+    if tabName == "Main" then
+        if not MainAndSettingsLoaded then
+            showLoading("Загрузка модуля main и settings...")
+            spawn(function()
+                local success, result = pcall(function()
+                    return loadstring(game:HttpGet('https://raw.githubusercontent.com/YourRepo/HuynaScript/main/main_and_settings.lua'))()
+                end)
+                
+                if success then
+                    MainAndSettingsLoaded = true
+                    if currentTab == "Main" then
+                        showContent("Main")
+                    end
+                else
+                    -- Загружаем локальный файл как fallback
+                    local localContent = readfile("main_and_settings.lua")
+                    loadstring(localContent)()
+                    MainAndSettingsLoaded = true
+                    if currentTab == "Main" then
+                        showContent("Main")
+                    end
+                end
+            end)
         else
-            local errorLabel = Instance.new("TextLabel", rightPanel)
-            errorLabel.Name = "ErrorLabel"
-            errorLabel.Size = UDim2.new(1, -30, 1, -60)
-            errorLabel.Position = UDim2.new(0, 15, 0, 50)
-            errorLabel.Text = "Модуль YBA Hacks не загружен"
-            errorLabel.Font = Enum.Font.Gotham
-            errorLabel.TextSize = 14
-            errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            errorLabel.BackgroundTransparency = 1
-            errorLabel.TextXAlignment = Enum.TextXAlignment.Center
-            errorLabel.TextYAlignment = Enum.TextYAlignment.Center
+            -- Показываем Main контент
+            if _G.HuynaScript.ShowMainContent then
+                _G.HuynaScript.ShowMainContent()
+            end
+        end
+    elseif tabName == "YBA" then
+        if not YBAHacksLoaded then
+            showLoading("Загрузка модуля YBA hacks...")
+            spawn(function()
+                local success, result = pcall(function()
+                    return loadstring(game:HttpGet('https://raw.githubusercontent.com/YourRepo/HuynaScript/main/yba_hacks.lua'))()
+                end)
+                
+                if success then
+                    YBAHacksLoaded = true
+                    if currentTab == "YBA" then
+                        showContent("YBA")
+                    end
+                else
+                    -- Загружаем локальный файл как fallback
+                    local localContent = readfile("yba_hacks.lua")
+                    loadstring(localContent)()
+                    YBAHacksLoaded = true
+                    if currentTab == "YBA" then
+                        showContent("YBA")
+                    end
+                end
+            end)
+        else
+            -- Показываем YBA контент
+            if _G.HuynaScript.ShowYBAContent then
+                _G.HuynaScript.ShowYBAContent()
+            end
+        end
+    elseif tabName == "Settings" then
+        if not MainAndSettingsLoaded then
+            showLoading("Загрузка модуля settings...")
+            spawn(function()
+                local success, result = pcall(function()
+                    return loadstring(game:HttpGet('https://raw.githubusercontent.com/YourRepo/HuynaScript/main/main_and_settings.lua'))()
+                end)
+                
+                if success then
+                    MainAndSettingsLoaded = true
+                    if currentTab == "Settings" then
+                        showContent("Settings")
+                    end
+                else
+                    -- Загружаем локальный файл как fallback
+                    local localContent = readfile("main_and_settings.lua")
+                    loadstring(localContent)()
+                    MainAndSettingsLoaded = true
+                    if currentTab == "Settings" then
+                        showContent("Settings")
+                    end
+                end
+            end)
+        else
+            -- Показываем Settings контент
+            if _G.HuynaScript.ShowSettingsContent then
+                _G.HuynaScript.ShowSettingsContent()
+            end
         end
     end
 end
 
--- Обработка клавиши Insert для открытия/закрытия меню
-UserInputService.InputBegan:Connect(function(input, gp)
-    if not gp and input.KeyCode == Enum.KeyCode.Insert then
-        mainFrame.Visible = not mainFrame.Visible
+-- Обработчики событий навигации
+mainButton.MouseButton1Click:Connect(function()
+    showContent("Main")
+end)
+
+ybaButton.MouseButton1Click:Connect(function()
+    showContent("YBA")
+end)
+
+settingsButton.MouseButton1Click:Connect(function()
+    showContent("Settings")
+end)
+
+-- Обработчики закрытия и минимизации
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+local isMinimized = false
+minimizeButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        local targetSize = UDim2.new(0, 800, 0, 50)
+        local tween = TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize})
+        tween:Play()
+        navContainer.Visible = false
+        functionsContainer.Visible = false
+    else
+        local targetSize = UDim2.new(0, 800, 0, 600)
+        local tween = TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize})
+        tween:Play()
+        tween.Completed:Connect(function()
+            navContainer.Visible = true
+            functionsContainer.Visible = true
+        end)
     end
 end)
 
--- Запускаем загрузку модулей
-loadModules()
+-- Перетаскивание окна
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+titleLabel.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+titleLabel.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+titleLabel.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Инициализация - показываем Main по умолчанию
+showContent("Main")
