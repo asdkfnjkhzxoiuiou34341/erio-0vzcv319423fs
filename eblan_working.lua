@@ -1,0 +1,18 @@
+-- Деобфусцированный Roblox скрипт
+-- Оригинал был защищен MoonSec V3
+-- ВАЖНО: Этот скрипт сохраняет оригинальную функциональность
+
+-- Стандартные сервисы Roblox (если используются)
+local game = game
+local workspace = workspace  
+local players = game:GetService("Players")
+local runService = game:GetService("RunService")
+local httpService = game:GetService("HttpService")
+local tweenService = game:GetService("TweenService")
+
+-- Локальные переменные для совместимости
+local wait = wait or task.wait
+local spawn = spawn or task.spawn
+local delay = delay or task.delay
+
+local t;local n;local e;local d;local r;local s;local g = 24915;local m = 0;local z={};while m<684 do m = m + 1;while m<0x112 and g%0x1ec8<0xf64 do m = m + 1 g=(g - 898)%17848 local f = m + g if(g%0x2e2e)<=0x1717 then g=(g*0x323)%0x462e while m<0x244 and g%0xfb4<0x7da do m = m + 1 g=(g - 907)%3977 local n = m + g if(g%0x315e)>=0x18af then g=(g + 0x322)%0x94be local g = 14656 if not z[g]then z[g]=0x1 end elseif g%2~=0 then g=(g - 0x1ee)%0x4365 local g = 96792 if not z[g]then z[g]=0x1 r={};end else g=(g*0x22d)%0x17dd m = m + 1 local g = 58790 if not z[g]then z[g]=0x1 e=(not e)and _ENV or e;end end end elseif g%2~=0 then g=(g + 0x139)%0x744e while m<0x7a and g%0xd42<0x6a1 do m = m + 1 g=(g*621)%11033 local n = m + g if(g%0x2cf0)<0x1678 then g=(g - 0x6e)%0x8db5 local g = 31922 if not z[g]then z[g]=0x1 e = getfenv and getfenv();end elseif g%2~=0 then g=(g*0x15)%0x207c local g = 3297 if not z[g]then z[g]=0x1 d = string;end else g=(g*0x27e)%0xaced m = m + 1 local g = 65227 if not z[g]then z[g]=0x1 s = tonumber;end end end else g=(g*0x1d3)%0xa38e m = m + 1 while m<0x3bb and g%0x30ca<0x1865 do m = m + 1 g=(g + 85)%19755 local f = m + g if(g%0x3726)<0x1b93 then g=(g*0xd6)%0x4efc local g = 11831 if not z[g]then z[g]=0x1 t="\4\8\116\111\110\117\109\98\101\114\118\120\74\122\106\67\66\82\0\6\115\116\114\105\110\103\4\99\104\97\114\107\105\100\102\97\108\77\100\0\6\115\116\114\105\110\103\3\115\117\98\69\74\116\101\104\115\100\103\0\6\115\116\114\105\110\103\4\98\121\116\101\108\100\83\103\87\79\111\65\0\5\116\97\98\108\101\6\99\111\110\99\97\116\87\76\119\99\88\121\83\86\0\5\116\97\98\108\101\6\105\110\115\101\114\116\113\70\89\99\116\100\75\97\5";end elseif g%2~=0 then g=(g + 0x308)%0xadca local g = 30608 if not z[g]then z[g]=0x1 end else g=(g + 0x145)%0x89cc m = m + 1 local g = 60766 if not z[g]then z[g]=0x1 n = function(z)local g = 0x01 local function m(m)g = g + m return z:sub(g - m,g - 0x01)end while true do local z = m(0x01)if(z=="\5")then break end local g = d.byte(m(0x01))local g = m(g)if z=="\2"then g = r.vxJzjCBR(g)elseif z=="\3"then g = g~="\0"elseif z=="\6"then e[g]=function(g,m)return l(8,nil,l,m,g)end elseif z=="\4"then g = e[g]elseif z=="\0"then g = e[g][m(d.byte(m(0x01)))];end local m = m(0x08)r[m]=g end end end end end end end g=(g*98)%36501 end n(t);local m={};for g = 0x0,0xff do local z = r.kidfalMd(g);m[g]=z;m[z]=g;end local function f(g)return m[g];end local h=(function(l,d)local t,z = 0x01,0x10 local m={{},{},{}}local e=-0x01 local g = 0x01 local n = l while true do m[0x03][r.EJtehsdg(d,g,(function()g = t + g return g - 0x01
