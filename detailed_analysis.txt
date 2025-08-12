@@ -1,0 +1,66 @@
+DETAILED ANALYSIS OF OBFUSCATED FILE 'eblan'
+
+FILE CHARACTERISTICS:
+- Size: 582KB (extremely large for Lua code)
+- Lines: 2 (very long lines)
+- Protection: MoonSec V3
+- Language: Lua
+
+OBFUSCATION TECHNIQUES IDENTIFIED:
+
+1. STRING ENCODING:
+   - Strings encoded as hex values: \116\111\110\117\109\98\101\114
+   - These decode to: "tonumber", "string", "sub", "byte", "char", "concat", "insert"
+   - String table stored in encoded format
+
+2. VARIABLE OBFUSCATION:
+   - Global variables: _DTEMjXUozCTu
+   - Local variables: t, n, e, d, r, s, g, m, z
+   - Variables used for different purposes than their names suggest
+
+3. CONTROL FLOW OBFUSCATION:
+   - Complex nested while loops
+   - Multiple exit conditions
+   - Arithmetic operations control loop execution
+   - Example: while m<684 do m=m+1;while m<0x112 and g%0x1ec8<0xf64 do
+
+4. ARITHMETIC OBFUSCATION:
+   - Large hex constants: 0x1ec8 (7880), 0xf64 (3940), 0x112 (274)
+   - Complex modulo operations: g%0x1ec8<0xf64
+   - Increment/decrement operations: g=(g-898)%17848
+
+5. STRUCTURE OBFUSCATION:
+   - Main logic wrapped in complex loops
+   - String decoding happens at runtime
+   - Function calls obfuscated through arithmetic
+
+DECODING STRATEGY:
+
+1. EXTRACT STRINGS:
+   - Find hex-encoded patterns
+   - Convert to readable strings
+   - Build string table
+
+2. SIMPLIFY ARITHMETIC:
+   - Replace hex constants with decimal
+   - Simplify modulo operations
+   - Track variable values
+
+3. RECONSTRUCT LOGIC:
+   - Map control flow
+   - Identify function boundaries
+   - Rebuild program structure
+
+4. VERIFY RESULTS:
+   - Test deobfuscated code
+   - Compare with original output
+   - Debug remaining issues
+
+ESTIMATED EFFORT:
+- Basic cleanup: 2-4 hours
+- Manual analysis: 8-16 hours
+- Complete deobfuscation: 20+ hours
+
+This represents one of the most complex obfuscations
+I've encountered, requiring both automated tools and
+extensive manual analysis for complete deobfuscation.
