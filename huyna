@@ -182,6 +182,12 @@ local AutofarmConfig = {
     }
 }
 
+-- Конфигурация анти-афк
+local AntiAfkConfig = {
+    Enabled = false,
+    ToggleKey = nil,
+}
+
 
 
 local isFlying = false
@@ -282,6 +288,10 @@ local autofarmLastPickupTime = 0 -- Время последнего подбор
 local autofarmRestartTimer = nil -- Таймер для автоматического перезапуска через 60 секунд
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
+
+-- Anti-AFK variables
+local isAntiAfkEnabled = false
+local antiAfkConnection = nil
 
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
@@ -1781,6 +1791,43 @@ local function stopInfiniteJump()
             end
         end
     end
+end
+
+-- Anti-AFK Functions
+local function startAntiAfk()
+    if isAntiAfkEnabled then return end
+    
+    isAntiAfkEnabled = true
+    AntiAfkConfig.Enabled = true
+    
+    -- Создаем VirtualUser для имитации активности
+    local virtualUser = game:GetService('VirtualUser')
+    
+    -- Подключаемся к событию бездействия
+    antiAfkConnection = Players.LocalPlayer.Idled:Connect(function()
+        if isAntiAfkEnabled then
+            -- Имитируем движение мыши для предотвращения кика
+            virtualUser:CaptureController()
+            virtualUser:ClickButton2(Vector2.new())
+            print("Anti-AFK: Активность имитирована")
+        end
+    end)
+    
+    print("Anti-AFK активирован")
+end
+
+local function stopAntiAfk()
+    if not isAntiAfkEnabled then return end
+    
+    isAntiAfkEnabled = false
+    AntiAfkConfig.Enabled = false
+    
+    if antiAfkConnection then
+        antiAfkConnection:Disconnect()
+        antiAfkConnection = nil
+    end
+    
+    print("Anti-AFK деактивирован")
 end
 -- Экспорт функций для модуля автоселла (ПОСЛЕ объявления всех функций)
 _G.startNoClip = startNoClip
@@ -3325,6 +3372,14 @@ UserInputService.InputBegan:Connect(function(inp, gp)
         elseif Config.Aimbot.ToggleKey and inp.KeyCode == Config.Aimbot.ToggleKey then
             Config.Aimbot.Enabled = not Config.Aimbot.Enabled
             print("Aimbot toggled:", Config.Aimbot.Enabled)
+        elseif AntiAfkConfig.ToggleKey and inp.KeyCode == AntiAfkConfig.ToggleKey then
+            AntiAfkConfig.Enabled = not AntiAfkConfig.Enabled
+            if AntiAfkConfig.Enabled then 
+                startAntiAfk() 
+            else 
+                stopAntiAfk() 
+            end
+            print("Anti-AFK toggled:", AntiAfkConfig.Enabled)
         end
     end
 end)
@@ -5913,6 +5968,10 @@ function showContent(tabName)
             Config.Aimbot.ToggleKey = newKey
         end)
         
+        createKeyBindButton("Anti-AFK", AntiAfkConfig.ToggleKey, function(newKey)
+            AntiAfkConfig.ToggleKey = newKey
+        end)
+        
         createKeyBindButton("Fly", MovementConfig.Fly.ToggleKey, function(newKey)
             MovementConfig.Fly.ToggleKey = newKey
         end)
@@ -5953,6 +6012,14 @@ function showContent(tabName)
         createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
         createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
         createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
+        
+        createDivider()
+        
+        createSectionHeader("⚡ Anti-AFK")
+        createToggleSlider("Anti-AFK", AntiAfkConfig.Enabled, function(v)
+            AntiAfkConfig.Enabled = v
+            if v then startAntiAfk() else stopAntiAfk() end
+        end)
         
         createDivider()
         
