@@ -321,6 +321,187 @@ local function createButton(label, callback)
     currentY = currentY + 28 + padding
 end
 
+local function createSlider(label, min, max, value, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 36)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label .. ": " .. math.floor(value)
+    lbl.Size = UDim2.new(1, 0, 0.5, 0)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 13
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+
+    local sliderBack = Instance.new("Frame", container)
+    sliderBack.Position = UDim2.new(0,0,0.5,4)
+    sliderBack.Size = UDim2.new(1, 0, 0, 6)
+    sliderBack.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(1,0)
+
+    local sliderFill = Instance.new("Frame", sliderBack)
+    sliderFill.Size = UDim2.new((math.floor(value) - min) / (max - min), 0, 1, 0)
+    sliderFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1,0)
+
+    local dragging = false
+    sliderBack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local pos = UserInputService:GetMouseLocation().X
+            local abs = sliderBack.AbsolutePosition.X
+            local width = sliderBack.AbsoluteSize.X
+            local pct = math.clamp((pos - abs) / width, 0, 1)
+            local newVal = math.floor(min + (max - min) * pct)
+            sliderFill.Size = UDim2.new(pct, 0, 1, 0)
+            lbl.Text = label .. ": " .. newVal
+            callback(newVal)
+        end
+    end)
+    
+    currentY = currentY + 36 + padding
+end
+
+local function createColorPicker(labelText, currentColor, callback)
+    local lbl = Instance.new("TextLabel", functionsContainer)
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, -10, 0, 20)
+    lbl.Position = UDim2.new(0, 5, 0, currentY)
+    lbl.Font = Enum.Font.SourceSans
+    lbl.TextSize = 14
+    currentY = currentY + 20 + padding
+
+    local colors = {
+        Color3.fromRGB(255, 255, 255),
+        Color3.fromRGB(255, 0, 0),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 0, 255),
+        Color3.fromRGB(255, 255, 0),
+        Color3.fromRGB(255, 0, 255),
+        Color3.fromRGB(0, 255, 255),
+        Color3.fromRGB(128, 128, 128),
+        Color3.fromRGB(255, 165, 0),
+    }
+
+    local row = Instance.new("Frame", functionsContainer)
+    row.Size = UDim2.new(1, -10, 0, 28)
+    row.Position = UDim2.new(0, 5, 0, currentY)
+    row.BackgroundTransparency = 1
+
+    local layout = Instance.new("UIListLayout", row)
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.Padding = UDim.new(0, 4)
+
+    for _, clr in pairs(colors) do
+        local btn = Instance.new("TextButton", row)
+        btn.Size = UDim2.new(0, 24, 0, 24)
+        btn.BackgroundColor3 = clr
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.MouseButton1Click:Connect(function()
+            callback(clr)
+        end)
+    end
+    
+    currentY = currentY + 28 + padding
+end
+
+local function createDropdown(label, options, currentValue, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 50)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label
+    lbl.Size = UDim2.new(1, 0, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
+    lbl.TextColor3 = Color3.new(1, 1, 1)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local dropdown = Instance.new("TextButton", container)
+    dropdown.Size = UDim2.new(1, 0, 0, 25)
+    dropdown.Position = UDim2.new(0, 0, 0, 25)
+    dropdown.Text = currentValue .. " ▼"
+    dropdown.TextColor3 = Color3.new(1, 1, 1)
+    dropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    dropdown.Font = Enum.Font.Gotham
+    dropdown.TextSize = 12
+    dropdown.BorderSizePixel = 0
+
+    local corner = Instance.new("UICorner", dropdown)
+    corner.CornerRadius = UDim.new(0, 4)
+
+    local expanded = false
+    local optionsFrame = nil
+
+    dropdown.MouseButton1Click:Connect(function()
+        if expanded then
+            if optionsFrame then
+                optionsFrame:Destroy()
+                optionsFrame = nil
+            end
+            expanded = false
+            dropdown.Text = currentValue .. " ▼"
+        else
+            optionsFrame = Instance.new("Frame", container)
+            optionsFrame.Size = UDim2.new(1, 0, 0, #options * 25)
+            optionsFrame.Position = UDim2.new(0, 0, 0, 50)
+            optionsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            optionsFrame.BorderSizePixel = 0
+            optionsFrame.ZIndex = 10
+
+            local optionsCorner = Instance.new("UICorner", optionsFrame)
+            optionsCorner.CornerRadius = UDim.new(0, 4)
+
+            for i, option in ipairs(options) do
+                local optionBtn = Instance.new("TextButton", optionsFrame)
+                optionBtn.Size = UDim2.new(1, 0, 0, 25)
+                optionBtn.Position = UDim2.new(0, 0, 0, (i - 1) * 25)
+                optionBtn.Text = option
+                optionBtn.TextColor3 = Color3.new(1, 1, 1)
+                optionBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                optionBtn.Font = Enum.Font.Gotham
+                optionBtn.TextSize = 12
+                optionBtn.BorderSizePixel = 0
+                optionBtn.ZIndex = 11
+
+                optionBtn.MouseButton1Click:Connect(function()
+                    currentValue = option
+                    dropdown.Text = currentValue .. " ▼"
+                    callback(option)
+                    optionsFrame:Destroy()
+                    optionsFrame = nil
+                    expanded = false
+                end)
+            end
+
+            expanded = true
+            dropdown.Text = currentValue .. " ▲"
+        end
+    end)
+
+    currentY = currentY + 50 + padding
+    return container
+end
+
 local function createDivider()
     local divider = Instance.new("Frame", functionsContainer)
     divider.Size = UDim2.new(1, -10, 0, 2)
@@ -386,6 +567,10 @@ function showContent(tabName)
                 end
             end)
             
+            createSlider("Fly Speed", 1, 10, MainModule.MovementConfig.Fly.Speed, function(v)
+                MainModule.MovementConfig.Fly.Speed = v
+            end)
+            
             createToggle("NoClip", MainModule.MovementConfig.NoClip.Enabled, function(v)
                 MainModule.MovementConfig.NoClip.Enabled = v
                 if v then
@@ -402,6 +587,14 @@ function showContent(tabName)
                 else
                     MainModule.stopSpeedHack()
                 end
+            end)
+            
+            createSlider("Speed Multiplier", 1, 10, MainModule.MovementConfig.Speed.Speed, function(v)
+                MainModule.MovementConfig.Speed.Speed = v
+            end)
+            
+            createToggle("Use JumpPower Method", MainModule.MovementConfig.Speed.UseJumpPower, function(v)
+                MainModule.MovementConfig.Speed.UseJumpPower = v
             end)
             
             createDivider()
@@ -472,7 +665,27 @@ function showContent(tabName)
             createSectionHeader("👁️ Item ESP")
             createToggle("Item ESP", YBAModule.YBAConfig.ItemESP.Enabled, function(v)
                 YBAModule.YBAConfig.ItemESP.Enabled = v
-                -- Здесь можно добавить логику Item ESP
+                if v then
+                    YBAModule.startItemESP()
+                else
+                    YBAModule.stopItemESP()
+                end
+            end)
+            
+            createSlider("Max Distance", 100, 2000, YBAModule.YBAConfig.ItemESP.MaxDistance, function(v)
+                YBAModule.YBAConfig.ItemESP.MaxDistance = v
+            end)
+            
+            createToggle("Show Outline", YBAModule.YBAConfig.ItemESP.ShowOutline, function(v)
+                YBAModule.YBAConfig.ItemESP.ShowOutline = v
+            end)
+            
+            createToggle("Show Text", YBAModule.YBAConfig.ItemESP.ShowText, function(v)
+                YBAModule.YBAConfig.ItemESP.ShowText = v
+            end)
+            
+            createColorPicker("ESP Color", YBAModule.YBAConfig.ItemESP.FillColor, function(color)
+                YBAModule.YBAConfig.ItemESP.FillColor = color
             end)
             
             createDivider()
@@ -480,7 +693,27 @@ function showContent(tabName)
             createSectionHeader("🤖 Auto Farm")
             createToggle("Auto Farm", YBAModule.AutofarmConfig.Enabled, function(v)
                 YBAModule.AutofarmConfig.Enabled = v
-                -- Здесь можно добавить логику автофарма
+                if v then
+                    YBAModule.startAutofarm()
+                else
+                    YBAModule.stopAutofarm()
+                end
+            end)
+            
+            createSlider("Flight Speed", 50, 200, YBAModule.AutofarmConfig.FlightSpeed, function(v)
+                YBAModule.AutofarmConfig.FlightSpeed = v
+            end)
+            
+            createSlider("Pickup Radius", 5, 30, YBAModule.AutofarmConfig.PickupRadius, function(v)
+                YBAModule.AutofarmConfig.PickupRadius = v
+            end)
+            
+            createToggle("Use Flight Movement", YBAModule.AutofarmConfig.UseFlightMovement, function(v)
+                YBAModule.AutofarmConfig.UseFlightMovement = v
+            end)
+            
+            createToggle("Use NoClip Movement", YBAModule.AutofarmConfig.UseNoClipMovement, function(v)
+                YBAModule.AutofarmConfig.UseNoClipMovement = v
             end)
         end
         

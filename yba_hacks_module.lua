@@ -1304,6 +1304,452 @@ local function stopUndergroundControl()
     controlledStandForUnderground = nil
 end
 
+-- Item ESP Functions
+local YBA_ITEM_NAMES = {
+    ["Mysterious Arrow"] = true,
+    ["Rokakaka"] = true,
+    ["Pure Rokakaka"] = true,
+    ["Diamond"] = true,
+    ["Gold Coin"] = true,
+    ["Steel Ball"] = true,
+    ["Clackers"] = true,
+    ["Caesar's Headband"] = true,
+    ["Zeppeli's Hat"] = true,
+    ["Zeppeli's Scarf"] = true,
+    ["Ancient Scroll"] = true,
+    ["Quinton's Glove"] = true,
+    ["Stone Mask"] = true,
+    ["Lucky Arrow"] = true,
+    ["Lucky Stone Mask"] = true,
+    ["Rib Cage of The Saint's Corpse"] = true,
+    ["DIO's Diary"] = true,
+    ["Dio's Diary"] = true,
+}
+
+local function scanForItems()
+    local player = Players.LocalPlayer
+    local playerChar = player.Character
+    local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+    
+    if not playerRoot then 
+        return {}
+    end
+    
+    local items = {}
+    local foundCount = 0
+    local searchedModels = {}
+    
+    -- Основной поиск в Item_Spawns
+    local itemSpawns = workspace:FindFirstChild("Item_Spawns")
+    if itemSpawns then
+        local itemsFolder = itemSpawns:FindFirstChild("Items")
+        if itemsFolder then
+            for _, child in pairs(itemsFolder:GetChildren()) do
+                if child:IsA("Model") then
+                    local proximityPrompt = child:FindFirstChildOfClass("ProximityPrompt")
+                    local itemName = child.Name
+                    
+                    if proximityPrompt then
+                        itemName = proximityPrompt.ObjectText or proximityPrompt.ActionText or child.Name
+                    end
+                    
+                    if YBA_ITEM_NAMES[itemName] and YBAConfig.ItemESP.Items[itemName] then
+                        for _, part in ipairs(child:GetDescendants()) do
+                            if part:IsA("MeshPart") or part:IsA("Part") then
+                                local distance = (part.Position - playerRoot.Position).Magnitude
+                                
+                                foundCount = foundCount + 1
+                                table.insert(items, {
+                                    Object = part,
+                                    Name = itemName,
+                                    Distance = distance,
+                                    Type = "YBA_Item",
+                                    Model = child,
+                                    Folder = "Item_Spawns.Items"
+                                })
+                                break
+                            end
+                        end
+                    elseif string.find(string.lower(itemName), "diary") and YBAConfig.ItemESP.Items["DIO's Diary"] then
+                        for _, part in ipairs(child:GetDescendants()) do
+                            if part:IsA("MeshPart") or part:IsA("Part") then
+                                local distance = (part.Position - playerRoot.Position).Magnitude
+                                
+                                foundCount = foundCount + 1
+                                table.insert(items, {
+                                    Object = part,
+                                    Name = "DIO's Diary",
+                                    Distance = distance,
+                                    Type = "YBA_Item",
+                                    Model = child,
+                                    Folder = "Item_Spawns.Items"
+                                })
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return items
+end
+
+local function createItemESP(item)
+    if itemESPElements[item.Object] then
+        return itemESPElements[item.Object]
+    end
+    
+    if not item.Object or not item.Object.Parent then
+        return nil
+    end
+
+    if item.Distance > YBAConfig.ItemESP.MaxRenderDistance then
+        return nil
+    end
+    
+    local esp = {}
+    esp.itemName = item.Name 
+
+    local function getItemColor(itemName)
+        if string.find(itemName, "Arrow") then
+            return Color3.fromRGB(255, 215, 0) 
+        elseif string.find(itemName, "Rokakaka") then
+            return Color3.fromRGB(255, 0, 255) 
+        elseif string.find(itemName, "Diamond") then
+            return Color3.fromRGB(0, 255, 255) 
+        elseif string.find(itemName, "Corpse") then
+            return Color3.fromRGB(255, 0, 0) 
+        elseif string.find(itemName, "Diary") then
+            return Color3.fromRGB(255, 165, 0)
+        else
+            return YBAConfig.ItemESP.FillColor 
+        end
+    end
+    
+    local itemColor = getItemColor(item.Name)
+
+    if YBAConfig.ItemESP.ShowOutline or YBAConfig.ItemESP.ShowFill then
+        local success, highlight = pcall(function()
+            local hl = Instance.new("Highlight")
+            hl.Adornee = item.Object
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.FillColor = YBAConfig.ItemESP.ShowFill and itemColor or Color3.fromRGB(0, 0, 0)
+            hl.FillTransparency = YBAConfig.ItemESP.ShowFill and YBAConfig.ItemESP.FillTransparency or 1
+            hl.OutlineColor = YBAConfig.ItemESP.ShowOutline and YBAConfig.ItemESP.OutlineColor or Color3.fromRGB(0, 0, 0)
+            hl.OutlineTransparency = YBAConfig.ItemESP.ShowOutline and YBAConfig.ItemESP.OutlineTransparency or 1
+            hl.Parent = item.Object
+
+            local pulseConnection
+            pulseConnection = RunService.Heartbeat:Connect(function()
+                if not hl.Parent then
+                    pulseConnection:Disconnect()
+                    return
+                end
+                
+                local time = tick()
+                local pulse = math.sin(time * 4) * 0.4 + 0.6
+                hl.FillTransparency = YBAConfig.ItemESP.FillTransparency + (1 - pulse) * 0.4
+                hl.OutlineTransparency = YBAConfig.ItemESP.OutlineTransparency + (1 - pulse) * 0.2
+            end)
+            
+            esp.pulseConnection = pulseConnection
+            
+            return hl
+        end)
+        
+        if success and highlight then
+            esp.highlight = highlight
+        end
+    end
+
+    if YBAConfig.ItemESP.ShowText then
+        local success, billboard = pcall(function()
+            local bg = Instance.new("BillboardGui")
+            bg.AlwaysOnTop = true
+            bg.Size = UDim2.new(0, 200, 0, 50) 
+            bg.StudsOffset = Vector3.new(0, 3, 0) 
+            bg.Parent = item.Object
+
+            local background = Instance.new("Frame", bg)
+            background.Size = UDim2.new(1, 0, 1, 0)
+            background.Position = UDim2.new(0, 0, 0, 0)
+            background.BackgroundColor3 = YBAConfig.ItemESP.TextBackgroundColor
+            background.BackgroundTransparency = YBAConfig.ItemESP.TextBackgroundTransparency
+            background.BorderSizePixel = 0
+            background.ZIndex = 1
+            
+            local corner = Instance.new("UICorner", background)
+            corner.CornerRadius = UDim.new(0, 6) 
+
+            local border = Instance.new("Frame", bg)
+            border.Size = UDim2.new(1, 2, 1, 2)
+            border.Position = UDim2.new(0, -1, 0, -1)
+            border.BackgroundColor3 = itemColor
+            border.BorderSizePixel = 0
+            border.ZIndex = 0
+            
+            local borderCorner = Instance.new("UICorner", border)
+            borderCorner.CornerRadius = UDim.new(0, 8) 
+
+            local tl = Instance.new("TextLabel", bg)
+            tl.Size = UDim2.new(1, -6, 0.6, 0) 
+            tl.Position = UDim2.new(0, 3, 0, 2)
+            tl.BackgroundTransparency = 1
+            tl.Font = YBAConfig.ItemESP.Font
+            tl.TextSize = YBAConfig.ItemESP.TextSize
+            tl.TextColor3 = YBAConfig.ItemESP.TextColor
+            tl.TextXAlignment = Enum.TextXAlignment.Center
+            tl.TextYAlignment = Enum.TextYAlignment.Center
+            tl.Text = string.format("🎯 %s", item.Name)
+            tl.ZIndex = 3
+
+            local distanceLabel = Instance.new("TextLabel", bg)
+            distanceLabel.Size = UDim2.new(1, -6, 0.4, 0) 
+            distanceLabel.Position = UDim2.new(0, 3, 0.6, 0) 
+            distanceLabel.BackgroundTransparency = 1
+            distanceLabel.Font = Enum.Font.Gotham
+            distanceLabel.TextSize = YBAConfig.ItemESP.DistanceTextSize
+            distanceLabel.TextColor3 = YBAConfig.ItemESP.TextColor
+            distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
+            distanceLabel.TextYAlignment = Enum.TextYAlignment.Center
+            distanceLabel.Text = string.format("📏 %dm", math.floor(item.Distance)) 
+            distanceLabel.ZIndex = 3
+            
+            return {
+                billboard = bg, 
+                text = tl, 
+                distanceLabel = distanceLabel,
+                background = background,
+                border = border
+            }
+        end)
+        
+        if success and billboard then
+            esp.billboard = billboard.billboard
+            esp.text = billboard.text
+            esp.distanceLabel = billboard.distanceLabel
+            esp.background = billboard.background
+            esp.border = billboard.border
+        end
+    end
+    
+    itemESPElements[item.Object] = esp
+    return esp
+end
+
+local function removeItemESP(item)
+    local esp = itemESPElements[item.Object]
+    if not esp then return end
+
+    if esp.pulseConnection then
+        esp.pulseConnection:Disconnect()
+        esp.pulseConnection = nil
+    end
+
+    pcall(function()
+        if esp.highlight and esp.highlight.Parent then
+            esp.highlight:Destroy()
+        end
+    end)
+
+    pcall(function()
+        if esp.billboard and esp.billboard.Parent then
+            esp.billboard:Destroy()
+        end
+    end)
+
+    esp.highlight = nil
+    esp.billboard = nil
+    esp.text = nil
+    esp.distanceLabel = nil
+    esp.background = nil
+    esp.border = nil
+    
+    itemESPElements[item.Object] = nil
+end
+
+local function startItemESP()
+    if itemESPEnabled then 
+        return 
+    end
+    itemESPEnabled = true
+    
+    local itemESPLoop = RunService.Heartbeat:Connect(function()
+        if not itemESPEnabled then
+            return
+        end
+        
+        local items = scanForItems()
+        
+        -- Удаляем ESP для предметов, которых больше нет
+        for object, esp in pairs(itemESPElements) do
+            local found = false
+            for _, item in pairs(items) do
+                if item.Object == object then
+                    found = true
+                    break
+                end
+            end
+            
+            if not found then
+                removeItemESP({Object = object})
+            end
+        end
+        
+        -- Создаем/обновляем ESP для найденных предметов
+        for _, item in pairs(items) do
+            if item.Distance <= YBAConfig.ItemESP.MaxDistance then
+                local esp = itemESPElements[item.Object]
+                if not esp then
+                    createItemESP(item)
+                else
+                    -- Обновляем дистанцию
+                    if esp.distanceLabel and esp.distanceLabel.Parent then
+                        esp.distanceLabel.Text = string.format("📏 %dm", math.floor(item.Distance))
+                    end
+                end
+            end
+        end
+    end)
+    
+    table.insert(itemESPConnections, itemESPLoop)
+end
+
+local function stopItemESP()
+    itemESPEnabled = false
+    
+    -- Удаляем все ESP элементы
+    for object, esp in pairs(itemESPElements) do
+        removeItemESP({Object = object})
+    end
+    
+    -- Отключаем все соединения
+    for _, connection in pairs(itemESPConnections) do
+        if connection then
+            pcall(function() connection:Disconnect() end)
+        end
+    end
+    itemESPConnections = {}
+end
+
+-- Autofarm Functions
+local function moveToPosition(targetPosition, speedMultiplier)
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character then return false end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    speedMultiplier = speedMultiplier or 1
+    local baseSpeed = AutofarmConfig.FlightSpeed * speedMultiplier
+    
+    local distance = (targetPosition - humanoidRootPart.Position).Magnitude
+    if distance < 3 then
+        return true
+    end
+    
+    local bv = humanoidRootPart:FindFirstChild("AutofarmBodyVelocity")
+    if not bv then
+        bv = Instance.new("BodyVelocity")
+        bv.Name = "AutofarmBodyVelocity"
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.Parent = humanoidRootPart
+    end
+    
+    local direction = (targetPosition - humanoidRootPart.Position).Unit
+    bv.Velocity = direction * baseSpeed
+    
+    return false
+end
+
+local function startAutofarm()
+    if isAutofarmEnabled then return end
+    
+    isAutofarmEnabled = true
+    AutofarmConfig.Enabled = true
+    
+    if AutofarmConfig.UseNoClipMovement and _G.startNoClip then
+        _G.startNoClip()
+    end
+    
+    if AutofarmConfig.UseFlightMovement and _G.startFly then
+        _G.startFly()
+    end
+    
+    local autofarmLoop = RunService.Heartbeat:Connect(function()
+        if not isAutofarmEnabled then return end
+        
+        local player = Players.LocalPlayer
+        local character = player.Character
+        if not character then return end
+        
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return end
+        
+        -- Поиск предметов для подбора
+        local items = scanForItems()
+        local nearestItem = nil
+        local nearestDistance = math.huge
+        
+        for _, item in pairs(items) do
+            if AutofarmConfig.Items[item.Name] and item.Distance < nearestDistance then
+                nearestItem = item
+                nearestDistance = item.Distance
+            end
+        end
+        
+        if nearestItem then
+            if nearestDistance <= AutofarmConfig.PickupRadius then
+                -- Подбираем предмет
+                local proximityPrompt = nearestItem.Model:FindFirstChildOfClass("ProximityPrompt")
+                if proximityPrompt then
+                    fireproximityprompt(proximityPrompt)
+                    task.wait(AutofarmConfig.PickupDuration)
+                end
+            else
+                -- Двигаемся к предмету
+                moveToPosition(nearestItem.Object.Position)
+            end
+        end
+    end)
+    
+    table.insert(autofarmConnections, autofarmLoop)
+end
+
+local function stopAutofarm()
+    isAutofarmEnabled = false
+    AutofarmConfig.Enabled = false
+    
+    local player = Players.LocalPlayer
+    if player and player.Character then
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            local bv = humanoidRootPart:FindFirstChild("AutofarmBodyVelocity")
+            if bv then
+                bv:Destroy()
+            end
+        end
+    end
+    
+    for _, connection in pairs(autofarmConnections) do
+        if connection then
+            pcall(function() connection:Disconnect() end)
+        end
+    end
+    autofarmConnections = {}
+    
+    if AutofarmConfig.UseNoClipMovement and _G.stopNoClip then
+        _G.stopNoClip()
+    end
+    
+    if AutofarmConfig.UseFlightMovement and _G.stopFly then
+        _G.stopFly()
+    end
+end
+
 -- Экспорт функций для основного файла
 return {
     -- Конфиги
@@ -1324,8 +1770,20 @@ return {
     startUndergroundControl = startUndergroundControl,
     stopUndergroundControl = stopUndergroundControl,
     
+    -- Item ESP функции
+    startItemESP = startItemESP,
+    stopItemESP = stopItemESP,
+    scanForItems = scanForItems,
+    
+    -- Autofarm функции
+    startAutofarm = startAutofarm,
+    stopAutofarm = stopAutofarm,
+    moveToPosition = moveToPosition,
+    
     -- Состояния
     isYBAEnabled = function() return isYBAEnabled end,
     isAntiTimeStopEnabled = function() return isAntiTimeStopEnabled end,
     isUndergroundControlEnabled = function() return isUndergroundControlEnabled end,
+    isItemESPEnabled = function() return itemESPEnabled end,
+    isAutofarmEnabled = function() return isAutofarmEnabled end,
 }
