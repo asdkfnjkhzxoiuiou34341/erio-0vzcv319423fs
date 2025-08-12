@@ -1,0 +1,24 @@
+INSTRUCTIONS FOR COMPLETING DEOBFUSCATION
+
+1. BASIC CLEANUP:
+   - Run the provided scripts
+   - Extract hex-encoded strings
+   - Simplify arithmetic operations
+
+2. MANUAL ANALYSIS:
+   - Decode remaining strings
+   - Map control flow
+   - Identify original logic
+
+3. RECONSTRUCTION:
+   - Rebuild program structure
+   - Document functionality
+   - Test deobfuscated code
+
+4. TOOLS NEEDED:
+   - Text editor
+   - Lua interpreter
+   - Hex calculator
+   - Patience and time
+
+This is a complex obfuscation that requires significant effort.

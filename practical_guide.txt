@@ -1,0 +1,76 @@
+PRACTICAL GUIDE FOR DEOBFUSCATING 'eblan'
+
+STEP-BY-STEP APPROACH:
+
+STEP 1: PREPARATION (30 minutes)
+- Set up a good text editor (VS Code, Sublime Text, etc.)
+- Install Lua interpreter for testing
+- Create backup of original file
+- Set up workspace for analysis
+
+STEP 2: BASIC CLEANUP (2-4 hours)
+- Extract hex-encoded strings
+- Convert hex to readable text
+- Identify string patterns
+- Create string mapping table
+
+STEP 3: ARITHMETIC SIMPLIFICATION (4-6 hours)
+- Replace hex constants with decimal values
+- Simplify modulo operations
+- Track variable value changes
+- Document arithmetic patterns
+
+STEP 4: CONTROL FLOW ANALYSIS (6-8 hours)
+- Map while loop structures
+- Identify exit conditions
+- Track variable state changes
+- Document program flow
+
+STEP 5: LOGIC RECONSTRUCTION (8-12 hours)
+- Identify function boundaries
+- Rebuild program structure
+- Document functionality
+- Create readable code
+
+STEP 6: TESTING AND VERIFICATION (2-4 hours)
+- Test deobfuscated code
+- Compare with original behavior
+- Debug any issues
+- Final documentation
+
+TOOLS AND TECHNIQUES:
+
+1. STRING EXTRACTION:
+   - Use regex: \\\d{1,3}
+   - Convert hex to ASCII
+   - Build lookup table
+
+2. ARITHMETIC SIMPLIFICATION:
+   - Calculator for hex conversion
+   - Track variable values
+   - Simplify expressions
+
+3. CONTROL FLOW MAPPING:
+   - Draw flow diagrams
+   - Document loop conditions
+   - Track variable states
+
+4. CODE RECONSTRUCTION:
+   - Start with basic structure
+   - Add complexity gradually
+   - Test frequently
+
+COMMON PITFALLS:
+- Don't rush through complex parts
+- Document everything as you go
+- Test code frequently
+- Keep backups of progress
+
+SUCCESS TIPS:
+- Work systematically
+- Take breaks when stuck
+- Use multiple approaches
+- Collaborate if possible
+
+This guide provides a structured approach to
+tackling the complex obfuscation in the eblan file.

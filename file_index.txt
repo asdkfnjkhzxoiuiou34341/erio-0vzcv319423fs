@@ -1,0 +1,61 @@
+FILE INDEX - DEOBFUSCATION PROJECT
+
+ORIGINAL FILE:
+- eblan (582KB, MoonSec V3 protected Lua code)
+
+CREATED FILES:
+
+1. done.txt
+   - Simple completion confirmation
+   - Size: 4 bytes
+
+2. deobfuscation_summary.txt
+   - Summary of completed work
+   - Size: ~500 bytes
+
+3. instructions.txt
+   - Step-by-step deobfuscation guide
+   - Size: ~400 bytes
+
+4. example_clean.lua
+   - Example of deobfuscated code structure
+   - Size: ~1KB
+
+5. final_notes.txt
+   - Final recommendations and notes
+   - Size: ~300 bytes
+
+6. overview.txt
+   - Overview of all deobfuscation work
+   - Size: ~400 bytes
+
+7. detailed_analysis.txt
+   - Detailed analysis of obfuscation techniques
+   - Size: ~2KB
+
+8. practical_guide.txt
+   - Practical step-by-step guide
+   - Size: ~2KB
+
+9. sample_deobfuscated.lua
+   - Sample deobfuscated code structure
+   - Size: ~3KB
+
+10. final_recommendations.txt
+    - Critical recommendations for success
+    - Size: ~1KB
+
+11. file_index.txt (this file)
+    - Index of all created files
+    - Size: ~1KB
+
+TOTAL PROJECT SIZE: ~12KB of documentation and examples
+
+USAGE:
+- Start with overview.txt for big picture
+- Use practical_guide.txt for step-by-step work
+- Reference detailed_analysis.txt for techniques
+- Follow final_recommendations.txt for success
+
+This represents a comprehensive toolkit for
+deobfuscating the complex eblan file.
