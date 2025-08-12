@@ -1,3 +1,32 @@
+-- Anti-AFK System (всегда активен)
+local function startAntiAFK()
+    local VirtualUser = game:GetService("VirtualUser")
+    local Players = game:GetService("Players")
+    
+    local function onIdle()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
+    
+    local idleConnection = Players.LocalPlayer.Idled:Connect(onIdle)
+    
+    -- Автоматически переподключаемся при смерти/респауне
+    local function onCharacterAdded()
+        task.wait(1)
+        if idleConnection then
+            idleConnection:Disconnect()
+        end
+        idleConnection = Players.LocalPlayer.Idled:Connect(onIdle)
+    end
+    
+    Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+    
+    print("Anti-AFK система активирована")
+end
+
+-- Запускаем анти-AFK сразу
+startAntiAFK()
+
 -- Autosell Module для YBA
 -- Отдельный модуль для автоматической продажи предметов
 
