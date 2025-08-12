@@ -1,6 +1,6 @@
 local YBAModule = {}
 
--- Конфигурации YBA
+-- Копируем ВСЕ YBA конфигурации из оригинального файла
 local YBAConfig = {
     Enabled = false,
     ToggleKey = nil,
@@ -115,7 +115,7 @@ local AutofarmConfig = {
     }
 }
 
--- Состояния
+-- Копируем ВСЕ переменные состояния
 local isYBAEnabled = false
 local ybaConnections = {}
 local controlledStand = nil
@@ -144,7 +144,7 @@ local itemESPConnections = {}
 local itemESPElements = {}
 local itemESPEnabled = false
 
--- Функции поиска стендов
+-- Функции поиска стендов (копируем ВСЕ из оригинального файла)
 local function findStands()
     local stands = {}
     local player = game.Players.LocalPlayer
@@ -234,7 +234,7 @@ local function findStands()
     return stands
 end
 
--- Функции управления стендом
+-- Функции управления стендом (копируем ВСЕ из оригинального файла)
 local function freezePlayer()
     local player = game.Players.LocalPlayer
     local char = player.Character
@@ -269,11 +269,11 @@ end
 
 local function unfreezePlayer()
     local player = game.Players.LocalPlayer
-    local char = player.Character
-    if not char then return end
+    local character = player.Character
+    if not character then return end
     
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChild("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
     
     if root then
         local bv = root:FindFirstChild("BodyVelocity")
@@ -295,7 +295,7 @@ local function unfreezePlayer()
     end
 end
 
--- Функции YBA
+-- Функции YBA (копируем ВСЕ из оригинального файла)
 local function startYBA()
     if isYBAEnabled then 
         print("YBA: Уже активирован!")
@@ -346,7 +346,7 @@ local function stopYBA()
     print("Stand Range Hack деактивирован")
 end
 
--- Функции подземного полета
+-- Функции подземного полета (копируем ВСЕ из оригинального файла)
 local function startUndergroundControl()
     print("=== ЗАПУСК ПОДЗЕМНОГО ПОЛЕТА ===")
     
@@ -517,7 +517,7 @@ local function stopUndergroundControl()
     print("Полет под землей за стендом отключен!")
 end
 
--- Функции Anti Time Stop
+-- Функции Anti Time Stop (копируем ВСЕ из оригинального файла)
 local function startAntiTimeStop()
     local plr = game.Players.LocalPlayer
     local char = plr.Character
@@ -624,7 +624,7 @@ local function stopAntiTimeStop()
     print("Anti Time Stop disabled")
 end
 
--- Функции Item ESP
+-- Функции Item ESP (копируем ВСЕ из оригинального файла)
 local function startItemESP()
     if itemESPEnabled then return end
     
@@ -682,7 +682,7 @@ local function stopItemESP()
     itemESPConnections = {}
 end
 
--- Функции Autofarm
+-- Функции Autofarm (копируем ВСЕ из оригинального файла)
 local function findAutofarmItems()
     local items = {}
     local player = game.Players.LocalPlayer

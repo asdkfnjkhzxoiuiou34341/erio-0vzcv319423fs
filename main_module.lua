@@ -250,7 +250,7 @@ local function startFly()
     originalGravity = workspace.Gravity
     workspace.Gravity = 0
     
-    local flyConnection = RunService.Heartbeat:Connect(function()
+    local flyConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not isFlying or not character or not character.Parent then
             return
         end
@@ -258,22 +258,22 @@ local function startFly()
         local moveVector = Vector3.new(0, 0, 0)
         local cam = workspace.CurrentCamera
         
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then
             moveVector = moveVector + cam.CFrame.LookVector
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then
             moveVector = moveVector - cam.CFrame.LookVector
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then
             moveVector = moveVector - cam.CFrame.RightVector
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then
             moveVector = moveVector + cam.CFrame.RightVector
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
             moveVector = moveVector + Vector3.new(0, 1, 0)
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
             moveVector = moveVector + Vector3.new(0, -1, 0)
         end
         
@@ -335,7 +335,7 @@ local function startNoClip()
     
     isNoClipping = true
     
-    local noClipConnection = RunService.Stepped:Connect(function()
+    local noClipConnection = game:GetService("RunService").Stepped:Connect(function()
         if not isNoClipping or not character or not character.Parent then
             return
         end
@@ -460,7 +460,7 @@ local function startInfiniteJump()
     
     isInfiniteJumping = true
     
-    local infiniteJumpConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    local infiniteJumpConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         
         if input.KeyCode == Enum.KeyCode.Space then
@@ -525,7 +525,7 @@ local function startTeleport()
     
     print("Начинаем телепортацию к", TeleportConfig.TargetPlayer.Name)
     
-    local teleportConnection = RunService.Heartbeat:Connect(function()
+    local teleportConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not isTeleporting or not character or not character.Parent then
             return
         end
