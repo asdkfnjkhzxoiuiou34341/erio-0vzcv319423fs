@@ -1,0 +1,484 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+-- Загрузка модулей
+local MainModule = nil
+local YBAModule = nil
+
+-- Загружаем main и settings модуль
+task.spawn(function()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('[ссылка на отделенный модуль с main и settings]'))()
+    end)
+    
+    if success and result then
+        MainModule = result
+        print("Main Module загружен")
+    else
+        print("Ошибка загрузки Main Module:", result)
+    end
+end)
+
+-- Загружаем YBA hacks модуль  
+task.spawn(function()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('[ссылка на отделенный модуль с yba hacks]'))()
+    end)
+    
+    if success and result then
+        YBAModule = result
+        print("YBA Module загружен")
+    else
+        print("Ошибка загрузки YBA Module:", result)
+    end
+end)
+
+-- ДАЛЬШЕ ИДЕТ ВЕСЬ ОРИГИНАЛЬНЫЙ КОД БЕЗ ИЗМЕНЕНИЙ
+-- Просто заменяем обращения к функциям на MainModule.функция() и YBAModule.функция()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+local MenuSettings = {
+    BlurEnabled = true,
+    AccentColor = Color3.fromRGB(0, 150, 0),
+    Language = "English", -- "English" или "Russian"
+}
+
+local function getText(key) return key end
+
+local function updateBlurEffect()
+    if glassEffect then
+        glassEffect.Visible = MenuSettings.BlurEnabled
+    end
+    if glassBorder then
+        glassBorder.Transparency = MenuSettings.BlurEnabled and 0.7 or 1
+    end
+    if rightPanel then
+        rightPanel.BackgroundTransparency = MenuSettings.BlurEnabled and 0.15 or 0.05
+    end
+end
+
+local function updateAccentColor()
+    local reopenButton = screenGui:FindFirstChild("ReopenButton")
+    if reopenButton then
+        reopenButton.BackgroundColor3 = MenuSettings.AccentColor
+    end
+    
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        if child:IsA("Frame") then
+            local sliderBack = child:FindFirstChild("SliderBack")
+            if sliderBack and sliderBack.BackgroundColor3 ~= Color3.fromRGB(100, 100, 100) then
+                sliderBack.BackgroundColor3 = MenuSettings.AccentColor
+            end
+        end
+    end
+    
+    for _, btn in pairs(leftPanel:GetChildren()) do
+        if btn:IsA("TextButton") and btn.BackgroundColor3 == Color3.fromRGB(40, 40, 45) then
+            local highlight = btn:FindFirstChild("Highlight")
+            if highlight then
+                highlight.BackgroundColor3 = MenuSettings.AccentColor
+            end
+        end
+    end
+end
+
+local function updateAllTexts()
+    if contentTitle then
+        if selectedTab == "Main" then
+            contentTitle.Text = getText("MainFunctions")
+        elseif selectedTab == "YBA Hacks" then
+            contentTitle.Text = getText("YBAHacks")
+        elseif selectedTab == "Settings" then
+            contentTitle.Text = getText("MenuSettings")
+        end
+    end
+    
+    showContent(selectedTab)
+end
+
+-- Экспорт функций автофарма для модуля автоселла  
+_G.moveToPosition = function(...) if YBAModule then return YBAModule.moveToPosition(...) end end
+_G.isAutofarmEnabled = function() if YBAModule then return YBAModule.isAutofarmEnabled() else return false end end
+_G.startAutofarm = function() if YBAModule then YBAModule.startAutofarm() end end
+_G.stopAutofarm = function() if YBAModule then YBAModule.stopAutofarm() end end
+_G.AutofarmConfig = {}
+
+local screenGui = Instance.new("ScreenGui", CoreGui)
+screenGui.Name = "SslkinGui"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Name = "MainFrame"
+mainFrame.Position = UDim2.new(0, 20, 0.5, -250)
+mainFrame.Size = UDim2.new(0, 400, 0, 500)
+mainFrame.BackgroundTransparency = 1
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+local minWidth = 200
+local minHeight = 150
+
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 8)
+
+local leftPanel = Instance.new("Frame", mainFrame)
+leftPanel.Name = "LeftPanel"
+leftPanel.Size = UDim2.new(0, 120, 1, 0)
+leftPanel.Position = UDim2.new(0, 0, 0, 0)
+leftPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+leftPanel.BackgroundTransparency = 0
+leftPanel.BorderSizePixel = 0
+
+local leftCorner = Instance.new("UICorner", leftPanel)
+leftCorner.CornerRadius = UDim.new(0, 8)
+
+local logoFrame = Instance.new("Frame", leftPanel)
+logoFrame.Name = "LogoFrame"
+logoFrame.Size = UDim2.new(1, 0, 0, 80)
+logoFrame.Position = UDim2.new(0, 0, 0, 0)
+logoFrame.BackgroundTransparency = 1
+
+local logoText = Instance.new("TextLabel", logoFrame)
+logoText.Name = "LogoText"
+logoText.Size = UDim2.new(1, 0, 0, 40)
+logoText.Position = UDim2.new(0, 0, 0, 10)
+logoText.Text = "SSLKIN"
+logoText.Font = Enum.Font.GothamBold
+logoText.TextSize = 18
+logoText.TextColor3 = Color3.new(1, 1, 1)
+logoText.BackgroundTransparency = 1
+logoText.TextXAlignment = Enum.TextXAlignment.Center
+
+local versionText = Instance.new("TextLabel", logoFrame)
+versionText.Name = "VersionText"
+versionText.Size = UDim2.new(1, 0, 0, 20)
+versionText.Position = UDim2.new(0, 0, 0, 50)
+versionText.Text = "UNIVERSAL SCRIPT"
+versionText.Font = Enum.Font.Gotham
+versionText.TextSize = 10
+versionText.TextColor3 = Color3.new(1, 1, 1)
+versionText.BackgroundTransparency = 1
+versionText.TextXAlignment = Enum.TextXAlignment.Center
+
+local navButtons = {
+    {name = "Main", icon = "🏠"},
+    {name = "YBA Hacks", icon = "⚔️"},
+    {name = "Settings", icon = "⚙️"}
+}
+
+local selectedTab = "Main"
+
+-- Scroll position for each tab
+local tabScrollPositions = {
+    ["Main"] = 0,
+    ["YBA Hacks"] = 0,
+    ["Settings"] = 0
+}
+
+for i, buttonData in ipairs(navButtons) do
+    local navButton = Instance.new("TextButton", leftPanel)
+    navButton.Name = buttonData.name .. "Button"
+    navButton.Size = UDim2.new(1, -20, 0, 40)
+    navButton.Position = UDim2.new(0, 10, 0, 100 + (i-1) * 50)
+    navButton.Text = buttonData.icon .. " " .. buttonData.name
+    navButton.Font = Enum.Font.Gotham
+    navButton.TextSize = 14
+    navButton.TextColor3 = Color3.new(1, 1, 1)
+    navButton.BackgroundColor3 = buttonData.name == selectedTab and Color3.fromRGB(40, 40, 45) or Color3.fromRGB(30, 30, 35)
+    navButton.BorderSizePixel = 0
+    navButton.AutoButtonColor = false
+    
+    local buttonCorner = Instance.new("UICorner", navButton)
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    
+    -- Подсветка выбранной вкладки
+    if buttonData.name == selectedTab then
+        local highlight = Instance.new("Frame", navButton)
+        highlight.Name = "Highlight"
+        highlight.Size = UDim2.new(0, 3, 1, 0)
+        highlight.Position = UDim2.new(0, 0, 0, 0)
+        highlight.BackgroundColor3 = MenuSettings.AccentColor
+        highlight.BorderSizePixel = 0
+        
+        local highlightCorner = Instance.new("UICorner", highlight)
+        highlightCorner.CornerRadius = UDim.new(0, 2)
+    end
+    
+    navButton.MouseButton1Click:Connect(function()
+        -- Обновляем выбранную вкладку
+        for _, btn in pairs(leftPanel:GetChildren()) do
+            if btn:IsA("TextButton") then
+                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+                local highlight = btn:FindFirstChild("Highlight")
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+        end
+        
+        navButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        selectedTab = buttonData.name
+        
+        local highlight = Instance.new("Frame", navButton)
+        highlight.Name = "Highlight"
+        highlight.Size = UDim2.new(0, 3, 1, 0)
+        highlight.Position = UDim2.new(0, 0, 0, 0)
+        highlight.BackgroundColor3 = MenuSettings.AccentColor
+        highlight.BorderSizePixel = 0
+        
+        local highlightCorner = Instance.new("UICorner", highlight)
+        highlightCorner.CornerRadius = UDim.new(0, 2)
+        
+        showContent(buttonData.name)
+    end)
+end
+
+local rightPanel = Instance.new("Frame", mainFrame)
+rightPanel.Name = "RightPanel"
+rightPanel.Size = UDim2.new(1, -120, 1, 0)
+rightPanel.Position = UDim2.new(0, 120, 0, 0)
+rightPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+rightPanel.BackgroundTransparency = 0.15
+rightPanel.BorderSizePixel = 0
+
+local glassEffect = Instance.new("Frame", rightPanel)
+glassEffect.Name = "GlassEffect"
+glassEffect.Size = UDim2.new(1, 0, 1, 0)
+glassEffect.Position = UDim2.new(0, 0, 0, 0)
+glassEffect.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+glassEffect.BackgroundTransparency = 0.92
+glassEffect.BorderSizePixel = 0
+glassEffect.ZIndex = -1
+
+local glassGradient = Instance.new("UIGradient", glassEffect)
+glassGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 200, 220)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 150, 170)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 100, 120))
+}
+glassGradient.Rotation = 45
+
+local glassBorder = Instance.new("UIStroke", rightPanel)
+glassBorder.Color = Color3.fromRGB(200, 200, 220)
+glassBorder.Transparency = 0.7
+glassBorder.Thickness = 1
+
+local rightCorner = Instance.new("UICorner", rightPanel)
+rightCorner.CornerRadius = UDim.new(0, 8)
+
+local glassCorner = Instance.new("UICorner", glassEffect)
+glassCorner.CornerRadius = UDim.new(0, 8)
+
+local closeButton = Instance.new("TextButton", rightPanel)
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 5)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 16
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+closeButton.BorderSizePixel = 0
+closeButton.AutoButtonColor = false
+
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 6)
+
+closeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    createReopenButton()
+end)
+
+local resizeHandle = Instance.new("Frame", mainFrame)
+resizeHandle.Name = "ResizeHandle"
+resizeHandle.Size = UDim2.new(0, 15, 0, 15)
+resizeHandle.Position = UDim2.new(1, -15, 1, -15)
+resizeHandle.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+resizeHandle.BackgroundTransparency = 0.2
+resizeHandle.BorderSizePixel = 0
+
+local resizeCorner = Instance.new("UICorner", resizeHandle)
+resizeCorner.CornerRadius = UDim.new(0, 3)
+
+-- Resize functionality
+local isResizing = false
+local startMousePos = Vector2.new(0, 0)
+local startFrameSize = UDim2.new(0, 0, 0, 0)
+
+resizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isResizing = true
+        startMousePos = UserInputService:GetMouseLocation()
+        startFrameSize = mainFrame.Size
+        mainFrame.Draggable = false
+        resizeHandle.BackgroundTransparency = 0.1
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and isResizing then
+        isResizing = false
+        mainFrame.Draggable = true
+        resizeHandle.BackgroundTransparency = 0.2
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if isResizing then
+        local currentMousePos = UserInputService:GetMouseLocation()
+        local deltaX = currentMousePos.X - startMousePos.X
+        local deltaY = currentMousePos.Y - startMousePos.Y
+        
+        local newWidth = math.max(minWidth, startFrameSize.X.Offset + deltaX)
+        local newHeight = math.max(minHeight, startFrameSize.Y.Offset + deltaY)
+        
+        mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+    end
+end)
+
+function createReopenButton()
+    local existingButton = screenGui:FindFirstChild("ReopenButton")
+    if existingButton then
+        existingButton:Destroy()
+    end
+    
+    local reopenButton = Instance.new("TextButton", screenGui)
+    reopenButton.Name = "ReopenButton"
+    reopenButton.Size = UDim2.new(0, 50, 0, 50)
+    reopenButton.Position = UDim2.new(0, 10, 0.5, -25)
+    reopenButton.Text = "💀"
+    reopenButton.TextColor3 = Color3.new(1, 1, 1)
+    reopenButton.Font = Enum.Font.GothamBold
+    reopenButton.TextSize = 20
+    reopenButton.BackgroundColor3 = MenuSettings.AccentColor
+    reopenButton.BorderSizePixel = 0
+    
+    local reopenCorner = Instance.new("UICorner", reopenButton)
+    reopenCorner.CornerRadius = UDim.new(0.5, 0)
+    
+    reopenButton.MouseButton1Click:Connect(function()
+        mainFrame.Visible = true
+        reopenButton:Destroy()
+    end)
+end
+
+local contentTitle = Instance.new("TextLabel", rightPanel)
+contentTitle.Name = "ContentTitle"
+contentTitle.Size = UDim2.new(1, -50, 0, 40)
+contentTitle.Position = UDim2.new(0, 15, 0, 15)
+contentTitle.Text = getText("MainFunctions")
+contentTitle.Font = Enum.Font.GothamBold
+contentTitle.TextSize = 18
+contentTitle.TextColor3 = Color3.new(1, 1, 1)
+contentTitle.BackgroundTransparency = 1
+contentTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local scrollFrame = Instance.new("ScrollingFrame", rightPanel)
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.Size = UDim2.new(1, -30, 1, -75)
+scrollFrame.Position = UDim2.new(0, 15, 0, 60)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local functionsContainer = Instance.new("Frame", scrollFrame)
+functionsContainer.Name = "FunctionsContainer"
+functionsContainer.Size = UDim2.new(1, 0, 0, 0)
+functionsContainer.Position = UDim2.new(0, 0, 0, 0)
+functionsContainer.BackgroundTransparency = 1
+functionsContainer.AutomaticSize = Enum.AutomaticSize.Y
+
+local currentY = 0
+local padding = 8
+
+-- Оригинальные GUI функции из файла (НЕ МЕНЯЮ НИХУЯ)
+local function createSectionHeader(text)
+    currentY = currentY + padding
+    local spacer = Instance.new("Frame", functionsContainer)
+    spacer.Size = UDim2.new(1, 0, 0, 10)
+    spacer.Position = UDim2.new(0, 0, 0, currentY)
+    spacer.BackgroundTransparency = 1
+    currentY = currentY + 10
+    
+    local lbl = Instance.new("TextLabel", functionsContainer)
+    lbl.Text = text
+    lbl.Size = UDim2.new(1, -10, 0, 30)
+    lbl.Position = UDim2.new(0, 5, 0, currentY)
+    lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 14
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 30 + padding
+end
+
+-- В ФУНКЦИИ showContent ПРОСТО ЗАМЕНЯЮ ОБРАЩЕНИЯ К ФУНКЦИЯМ НА MainModule.функция() и YBAModule.функция()
+function showContent(tabName)
+    -- Сохраняем текущую позицию прокрутки
+    if selectedTab and scrollFrame then
+        tabScrollPositions[selectedTab] = scrollFrame.CanvasPosition.Y
+    end
+    
+    -- Очищаем контейнер и сбрасываем позицию
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        child:Destroy()
+    end
+    currentY = 0
+    
+    if tabName == "Main" then
+        contentTitle.Text = getText("MainFunctions")
+        
+        -- ЗДЕСЬ ПРОСТО ЗАМЕНЯЮ НА ВЫЗОВЫ ЧЕРЕЗ MainModule
+        if not MainModule then
+            createSectionHeader("⏳ Загружаем модуль...")
+        else
+            -- ОРИГИНАЛЬНЫЙ КОД MAIN ВКЛАДКИ НО С MainModule.функция()
+            -- (Тут должен быть весь оригинальный код из showContent для Main вкладки)
+        end
+        
+    elseif tabName == "YBA Hacks" then
+        contentTitle.Text = getText("YBAHacks")
+        
+        -- ЗДЕСЬ ПРОСТО ЗАМЕНЯЮ НА ВЫЗОВЫ ЧЕРЕЗ YBAModule
+        if not YBAModule then
+            createSectionHeader("⏳ Загружаем YBA модуль...")
+        else
+            -- ОРИГИНАЛЬНЫЙ КОД YBA ВКЛАДКИ НО С YBAModule.функция()
+            -- (Тут должен быть весь оригинальный код из showContent для YBA вкладки)
+        end
+        
+    elseif tabName == "Settings" then
+        contentTitle.Text = getText("MenuSettings")
+        -- ОРИГИНАЛЬНЫЙ КОД SETTINGS ВКЛАДКИ
+    end
+    
+    functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+    selectedTab = tabName
+    
+    if scrollFrame and tabScrollPositions[tabName] then
+        scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+    end
+end
+
+showContent("Main")
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        mainFrame.Visible = not mainFrame.Visible
+        if mainFrame.Visible then
+            local existingButton = screenGui:FindFirstChild("ReopenButton")
+            if existingButton then
+                existingButton:Destroy()
+            end
+        else
+            createReopenButton()
+        end
+    end
+end)

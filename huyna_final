@@ -1,0 +1,2098 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+-- АВТОЗАГРУЗКА МОДУЛЕЙ
+local MainModule = nil
+local YBAModule = nil
+
+-- Загружаем main и settings модуль
+task.spawn(function()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('[ссылка на отделенный модуль с main и settings]'))()
+    end)
+    
+    if success and result then
+        MainModule = result
+        print("✅ Main Module загружен")
+        
+        -- Экспортируем функции в _G для совместимости
+        _G.startNoClip = MainModule.startNoClip
+        _G.stopNoClip = MainModule.stopNoClip  
+        _G.startFly = MainModule.startFly
+        _G.stopFly = MainModule.stopFly
+        _G.MovementConfig = MainModule.MovementConfig
+        _G.isNoClipping = MainModule.isNoClipping
+        _G.isFlying = MainModule.isFlying
+    else
+        warn("❌ Ошибка загрузки Main Module:", result)
+    end
+end)
+
+-- Загружаем YBA hacks модуль  
+task.spawn(function()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('[ссылка на отделенный модуль с yba hacks]'))()
+    end)
+    
+    if success and result then
+        YBAModule = result
+        print("✅ YBA Module загружен")
+        
+        -- Экспортируем функции в _G для совместимости
+        _G.moveToPosition = YBAModule.moveToPosition
+        _G.isAutofarmEnabled = YBAModule.isAutofarmEnabled
+        _G.startAutofarm = YBAModule.startAutofarm
+        _G.stopAutofarm = YBAModule.stopAutofarm
+        _G.AutofarmConfig = YBAModule.AutofarmConfig
+    else
+        warn("❌ Ошибка загрузки YBA Module:", result)
+    end
+end)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+
+-- Конфиги теперь в модулях
+local Config = {}
+local MovementConfig = {}
+local TeleportConfig = {}
+local YBAConfig = {}
+local AntiTimeStopConfig = {}
+local AutofarmConfig = {}
+local MenuSettings = {}
+
+-- Ждем загрузки модулей и копируем конфиги
+task.spawn(function()
+    while not MainModule or not YBAModule do
+        task.wait(0.1)
+    end
+    
+    Config = MainModule.Config
+    MovementConfig = MainModule.MovementConfig
+    TeleportConfig = MainModule.TeleportConfig
+    MenuSettings = MainModule.MenuSettings
+    
+    YBAConfig = YBAModule.YBAConfig
+    AntiTimeStopConfig = YBAModule.AntiTimeStopConfig
+    AutofarmConfig = YBAModule.AutofarmConfig
+end)
+
+
+
+local function updateBlurEffect()
+    if glassEffect then
+        glassEffect.Visible = MenuSettings.BlurEnabled
+    end
+    if glassBorder then
+        glassBorder.Transparency = MenuSettings.BlurEnabled and 0.7 or 1
+    end
+    if rightPanel then
+        rightPanel.BackgroundTransparency = MenuSettings.BlurEnabled and 0.15 or 0.05
+    end
+end
+
+local function updateAccentColor()
+    local reopenButton = screenGui:FindFirstChild("ReopenButton")
+    if reopenButton then
+        reopenButton.BackgroundColor3 = MenuSettings.AccentColor
+    end
+    
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        if child:IsA("Frame") then
+            local sliderBack = child:FindFirstChild("SliderBack")
+            if sliderBack and sliderBack.BackgroundColor3 ~= Color3.fromRGB(100, 100, 100) then
+                sliderBack.BackgroundColor3 = MenuSettings.AccentColor
+            end
+        end
+    end
+    
+    for _, btn in pairs(leftPanel:GetChildren()) do
+        if btn:IsA("TextButton") and btn.BackgroundColor3 == Color3.fromRGB(40, 40, 45) then
+            local highlight = btn:FindFirstChild("Highlight")
+            if highlight then
+                highlight.BackgroundColor3 = MenuSettings.AccentColor
+            end
+        end
+    end
+end
+
+local function updateAllTexts()
+    if contentTitle then
+        if selectedTab == "Main" then
+            contentTitle.Text = getText("MainFunctions")
+        elseif selectedTab == "YBA Hacks" then
+            contentTitle.Text = getText("YBAHacks")
+        elseif selectedTab == "Settings" then
+            contentTitle.Text = getText("MenuSettings")
+        end
+    end
+    
+    showContent(selectedTab)
+end
+local YBAFreeCamera = {} do
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+    local Camera = workspace.CurrentCamera
+
+    local fcRunning = false
+    local cameraPos = Vector3.new()
+    local cameraRot = Vector2.new()
+    local targetStand = nil
+    local originalCameraCFrame = nil
+    local originalCameraType = nil
+    local cameraDistance = 12
+    local cameraHeight = 8
+    local renderConnection = nil
+    local inputConnections = {}
+    local lastDebugTime = 0
+
+    local NAV_SPEED = 1
+
+    local input = {
+        W = false, A = false, S = false, D = false,
+        Space = false, LeftControl = false,
+        LeftShift = false, -- Добавляем Shift для шифтлока
+        MouseDelta = Vector2.new(),
+        MouseWheel = 0
+    }
+
+    local function startInput()
+        -- Очищаем старые соединения
+        for _, connection in pairs(inputConnections) do
+            if connection then connection:Disconnect() end
+        end
+        inputConnections = {}
+
+        -- Простое отслеживание ввода через UserInputService
+        table.insert(inputConnections, UserInputService.InputBegan:Connect(function(inputObj, gameProcessed)
+            -- Игнорируем ввод если игрок в чате/меню
+            if gameProcessed then return end
+            local keyName = inputObj.KeyCode.Name
+            if input[keyName] ~= nil then
+                input[keyName] = true
+                print("YBA Input: Нажата клавиша", keyName)
+            end
+        end))
+
+        table.insert(inputConnections, UserInputService.InputEnded:Connect(function(inputObj, gameProcessed)
+            -- Игнорируем ввод если игрок в чате/меню
+            if gameProcessed then return end
+            local keyName = inputObj.KeyCode.Name
+            if input[keyName] ~= nil then
+                input[keyName] = false
+                print("YBA Input: Отпущена клавиша", keyName)
+            end
+        end))
+
+        table.insert(inputConnections, UserInputService.InputChanged:Connect(function(inputObj, gameProcessed)
+            -- НЕ игнорируем gameProcessed для мыши
+            if inputObj.UserInputType == Enum.UserInputType.MouseMovement then
+                -- ИСПРАВЛЕНО: инвертируем ось X для горизонтального поворота
+                local sensitivity = 0.003
+                input.MouseDelta = Vector2.new(inputObj.Delta.y * sensitivity, -inputObj.Delta.x * sensitivity)
+                -- print("YBA Input: Движение мыши", input.MouseDelta) -- Слишком много сообщений
+            elseif inputObj.UserInputType == Enum.UserInputType.MouseWheel then
+                -- ИСПРАВЛЕНО: проверяем что GUI не активно и не обработано игрой
+                if not gameProcessed then
+                    input.MouseWheel = -inputObj.Position.Z
+                    print("YBA Input: Колесо мыши", input.MouseWheel)
+                end
+            end
+        end))
+    end
+
+    local function stopInput()
+        for _, connection in pairs(inputConnections) do
+            if connection then connection:Disconnect() end
+        end
+        inputConnections = {}
+        
+        -- Сброс всех входов
+        for k in pairs(input) do
+            if typeof(input[k]) == "boolean" then 
+                input[k] = false 
+            elseif typeof(input[k]) == "number" then 
+                input[k] = 0 
+            end
+        end
+        input.MouseDelta = Vector2.new()
+        input.MouseWheel = 0
+    end
+
+    local function stepFreecam(dt)
+        if not targetStand or not targetStand.Root or not targetStand.Root.Parent then
+            print("YBA: Стенд потерян, останавливаем управление")
+            YBAFreeCamera.Stop()
+            return
+        end
+
+        local standRoot = targetStand.Root
+        local standPosition = standRoot.Position
+        
+        -- Отладочная информация (выводим каждые 5 секунд)
+        if tick() - lastDebugTime > 5 then
+            print("YBA Debug: Камера работает, позиция стенда:", standPosition)
+            print("YBA Debug: Состояние ввода - W:", input.W, "A:", input.A, "S:", input.S, "D:", input.D, "Shift:", input.LeftShift)
+            lastDebugTime = tick()
+        end
+
+        -- Движение стенда через прямую проверку клавиш (обход блокировки YBA)
+        local moveX = 0
+        local moveZ = 0 
+        local moveY = 0
+        
+        -- Улучшенная проверка, что игрок не в чате/меню
+        local gameGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+        local chatInFocus = false
+        
+        -- Проверяем основной чат
+        if gameGui then
+            local chatGui = gameGui:FindFirstChild("Chat")
+            if chatGui and chatGui:FindFirstChild("Frame") and chatGui.Frame:FindFirstChild("ChatBarParentFrame") then
+                local chatBar = chatGui.Frame.ChatBarParentFrame:FindFirstChild("Frame")
+                if chatBar and chatBar:FindFirstChild("BoxFrame") and chatBar.BoxFrame:FindFirstChild("Frame") and chatBar.BoxFrame.Frame:FindFirstChild("ChatBar") then
+                    chatInFocus = chatBar.BoxFrame.Frame.ChatBar:IsFocused()
+                end
+            end
+            
+            -- Дополнительная проверка - любой TextBox в фокусе
+            if not chatInFocus then
+                local function checkTextBoxFocus(parent)
+                    for _, child in pairs(parent:GetChildren()) do
+                        if child:IsA("TextBox") and child:IsFocused() then
+                            return true
+                        elseif child:IsA("GuiObject") then
+                            if checkTextBoxFocus(child) then
+                                return true
+                            end
+                        end
+                    end
+                    return false
+                end
+                chatInFocus = checkTextBoxFocus(gameGui)
+            end
+        end
+        
+        -- Прямая проверка клавиш только если не в чате и ввод не обрабатывается игрой
+        if not chatInFocus and not isInputBeingProcessedByGame then
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveX = moveX + 1
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveX = moveX - 1
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveZ = moveZ + 1
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveZ = moveZ - 1
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveY = moveY + 1
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                moveY = moveY - 1
+            end
+        else
+            -- Отладка: показываем почему ввод заблокирован
+            if chatInFocus or isInputBeingProcessedByGame then
+                -- Выводим сообщение только при нажатии Space для избежания спама
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    print("YBA: Ввод заблокирован - чат в фокусе:", chatInFocus, "gameProcessed:", isInputBeingProcessedByGame)
+                end
+            end
+        end
+        
+        -- ВСЕГДА проверяем Shift для шифтлока (каждый кадр)
+        input.LeftShift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+        
+        local move = Vector3.new(moveX, moveY, moveZ)
+        
+        -- Отладка движения
+        if move.Magnitude > 0 then
+            print("YBA: Движение детектировано:", moveX, moveY, moveZ)
+        end
+
+        local bv = standRoot:FindFirstChild("BodyVelocity")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.MaxForce = Vector3.new(4000, 4000, 4000)
+            bv.Velocity = Vector3.new(0, 0, 0)
+            bv.Parent = standRoot
+        end
+        
+        -- Добавляем BodyAngularVelocity для плавного поворота
+        local bav = standRoot:FindFirstChild("BodyAngularVelocity")
+        if not bav then
+            bav = Instance.new("BodyAngularVelocity")
+            bav.MaxTorque = Vector3.new(0, 4000, 0) -- Только поворот по Y
+            bav.AngularVelocity = Vector3.new(0, 0, 0)
+            bav.Parent = standRoot
+        end
+        
+        if move.Magnitude > 0 then
+            local standSpeed = YBAConfig.UndergroundControl.FlightSpeed or 20
+            local cameraCFrame = CFrame.new(standPosition) * CFrame.Angles(0, cameraRot.Y, 0)
+            local worldMove = cameraCFrame:VectorToWorldSpace(move)
+            bv.Velocity = worldMove * standSpeed
+            
+            -- УБРАНО: автоматический поворот стенда при движении
+        else
+            bv.Velocity = Vector3.new(0, 0, 0)
+        end
+
+        -- Обработка вращения мыши
+        if input.MouseDelta.Magnitude > 0 then
+            cameraRot = cameraRot + input.MouseDelta
+            cameraRot = Vector2.new(
+                math.clamp(cameraRot.X, -math.rad(80), math.rad(80)), 
+                cameraRot.Y % (2 * math.pi)
+            )
+            
+            -- ИСПРАВЛЕНО: Синхронизируем поворот игрока с камерой стенда
+            local player = Players.LocalPlayer
+            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local playerRoot = player.Character.HumanoidRootPart
+                local targetPlayerCFrame = CFrame.new(playerRoot.Position) * CFrame.Angles(0, cameraRot.Y, 0)
+                playerRoot.CFrame = targetPlayerCFrame
+            end
+            
+            input.MouseDelta = Vector2.new()
+        end
+        
+        -- ИСПРАВЛЕНО: Стенд всегда копирует направление камеры (не только при Shift)
+        local currentPos = standRoot.Position
+        local currentCFrame = standRoot.CFrame
+        local targetCFrame = CFrame.new(currentPos) * CFrame.Angles(0, cameraRot.Y, 0)
+        -- Плавный поворот для естественности
+        standRoot.CFrame = currentCFrame:Lerp(targetCFrame, 0.2)
+        
+        -- Дополнительно: если зажат Shift - ускоряем поворот стенда
+        if input.LeftShift then
+            standRoot.CFrame = currentCFrame:Lerp(targetCFrame, 0.5)
+        end
+
+        -- Обработка колеса мыши для зума
+        if input.MouseWheel ~= 0 then
+            cameraDistance = math.clamp(cameraDistance + input.MouseWheel * 2, 5, 30)
+            input.MouseWheel = 0
+        end
+
+        -- ИСПРАВЛЕНО: позиционирование камеры без влияния зума на угол наклона
+        local horizontalDistance = cameraDistance
+        local verticalOffset = cameraHeight
+        
+        -- Применяем поворот камеры для наклона
+        local pitchOffset = math.sin(cameraRot.X) * cameraDistance
+        local adjustedHorizontalDistance = math.cos(cameraRot.X) * cameraDistance
+        
+        local cameraOffset = Vector3.new(
+            math.sin(cameraRot.Y) * adjustedHorizontalDistance,
+            verticalOffset + pitchOffset,
+            math.cos(cameraRot.Y) * adjustedHorizontalDistance
+        )
+        
+        local cameraPosition = standPosition + cameraOffset
+        local newCameraCFrame = CFrame.lookAt(cameraPosition, standPosition)
+        
+        -- Осторожно устанавливаем только CFrame камеры (не тип)
+        Camera.CFrame = newCameraCFrame
+        
+        -- Мягко отключаем управление камерой игроком
+        local player = Players.LocalPlayer
+        if player and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.AutoRotate = false
+                -- НЕ включаем PlatformStand чтобы не триггерить античит
+            end
+        end
+    end
+
+    function YBAFreeCamera.Start(stand)
+        if fcRunning then 
+            YBAFreeCamera.Stop() 
+        end
+        
+        if not stand or not stand.Root then
+            print("YBA: Ошибка - стенд не найден")
+            return false
+        end
+        
+        print("YBA: Запуск управления стендом: " .. stand.Name)
+        
+        targetStand = stand
+        originalCameraCFrame = Camera.CFrame
+        originalCameraType = Camera.CameraType
+        
+        -- Очищаем любые существующие Body объекты
+        for _, bodyObj in pairs(stand.Root:GetChildren()) do
+            if bodyObj:IsA("BodyVelocity") or bodyObj:IsA("BodyPosition") or bodyObj:IsA("BodyGyro") then
+                bodyObj:Destroy()
+            end
+        end
+        
+        -- Сброс параметров камеры и синхронизация с направлением игрока
+        cameraDistance = YBAConfig.CameraDistance or 12
+        cameraHeight = YBAConfig.CameraHeight or 8
+        
+        -- ИСПРАВЛЕНО: Инициализируем камеру в направлении взгляда игрока
+        local player = Players.LocalPlayer
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local playerCFrame = player.Character.HumanoidRootPart.CFrame
+            local playerLookDirection = playerCFrame.LookVector
+            local playerYRotation = math.atan2(playerLookDirection.X, playerLookDirection.Z)
+            cameraRot = Vector2.new(0, playerYRotation)
+            print("YBA: Синхронизация с направлением игрока, угол:", math.deg(playerYRotation))
+        else
+            cameraRot = Vector2.new(0, 0)
+        end
+        
+        -- НЕ переключаем тип камеры чтобы обойти античит YBA
+        print("YBA: Сохраняем оригинальный тип камеры для обхода античита")
+        print("YBA: Текущий тип камеры:", Camera.CameraType)
+        
+        -- Устанавливаем начальную позицию камеры за стендом с задержкой
+        task.wait(0.1) -- Небольшая задержка чтобы не триггерить античит
+        local standPosition = stand.Root.Position
+        
+        -- ИСПРАВЛЕНО: Позиционируем стенд в направлении взгляда игрока
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local playerCFrame = player.Character.HumanoidRootPart.CFrame
+            stand.Root.CFrame = CFrame.new(standPosition, standPosition + playerCFrame.LookVector)
+            print("YBA: Стенд повернут в направлении игрока")
+        end
+        
+        -- Позиционируем камеру с учетом поворота стенда
+        local horizontalDistance = math.cos(cameraRot.X) * cameraDistance
+        local verticalOffset = math.sin(cameraRot.X) * cameraDistance
+        local cameraOffset = Vector3.new(
+            math.sin(cameraRot.Y) * horizontalDistance,
+            verticalOffset + cameraHeight,
+            math.cos(cameraRot.Y) * horizontalDistance
+        )
+        local initialCameraPosition = standPosition + cameraOffset
+        Camera.CFrame = CFrame.lookAt(initialCameraPosition, standPosition)
+        print("YBA: Установлена начальная позиция камеры:", initialCameraPosition)
+        
+        -- Запускаем ввод и рендер
+        print("YBA: Запускаем систему ввода...")
+        startInput()
+        print("YBA: Подключаем рендер...")
+        -- Используем RenderStepped вместо Heartbeat для меньшей частоты
+        renderConnection = RunService.RenderStepped:Connect(stepFreecam)
+        fcRunning = true
+        
+        print("YBA: Управление стендом успешно активировано!")
+        print("YBA: fcRunning =", fcRunning)
+        print("YBA: renderConnection =", renderConnection ~= nil)
+        return true
+    end
+
+    function YBAFreeCamera.Stop()
+        if not fcRunning then return end
+        
+        print("YBA: Отключение управления стендом")
+        
+        -- Останавливаем ввод и рендер
+        stopInput()
+        if renderConnection then
+            renderConnection:Disconnect()
+            renderConnection = nil
+        end
+        
+        -- Восстанавливаем камеру
+        if originalCameraType then
+            Camera.CameraType = originalCameraType
+        else
+            Camera.CameraType = Enum.CameraType.Custom
+        end
+        
+        if originalCameraCFrame then
+            Camera.CFrame = originalCameraCFrame
+        end
+
+        -- Очищаем Body объекты стенда
+        if targetStand and targetStand.Root and targetStand.Root.Parent then
+            for _, bodyObj in pairs(targetStand.Root:GetChildren()) do
+                if bodyObj:IsA("BodyVelocity") or bodyObj:IsA("BodyPosition") or bodyObj:IsA("BodyGyro") then
+                    bodyObj:Destroy()
+                end
+            end
+            -- Останавливаем стенд
+            targetStand.Root.Velocity = Vector3.new(0, 0, 0)
+            if targetStand.Root.AssemblyLinearVelocity then
+                targetStand.Root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+
+        -- Восстанавливаем управление игроком
+        local player = Players.LocalPlayer
+        if player and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.AutoRotate = true
+                -- PlatformStand не трогаем так как не включали
+            end
+        end
+        
+        -- Сбрасываем переменные
+        targetStand = nil
+        originalCameraCFrame = nil
+        originalCameraType = nil
+        fcRunning = false
+        
+        print("YBA: Управление стендом успешно отключено")
+    end
+
+    function YBAFreeCamera.Toggle(stand)
+        if fcRunning then
+            YBAFreeCamera.Stop()
+            return false
+        else
+            return YBAFreeCamera.Start(stand)
+        end
+    end
+end
+
+local screenGui = Instance.new("ScreenGui", CoreGui)
+screenGui.Name = "SslkinGui"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Name = "MainFrame"
+mainFrame.Position = UDim2.new(0, 20, 0.5, -250)
+mainFrame.Size = UDim2.new(0, 400, 0, 500)
+mainFrame.BackgroundTransparency = 1
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+local minWidth = 200
+local minHeight = 150
+
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 8)
+
+local leftPanel = Instance.new("Frame", mainFrame)
+leftPanel.Name = "LeftPanel"
+leftPanel.Size = UDim2.new(0, 120, 1, 0)
+leftPanel.Position = UDim2.new(0, 0, 0, 0)
+leftPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+leftPanel.BackgroundTransparency = 0
+leftPanel.BorderSizePixel = 0
+
+local leftCorner = Instance.new("UICorner", leftPanel)
+leftCorner.CornerRadius = UDim.new(0, 8)
+
+local logoFrame = Instance.new("Frame", leftPanel)
+logoFrame.Name = "LogoFrame"
+logoFrame.Size = UDim2.new(1, 0, 0, 80)
+logoFrame.Position = UDim2.new(0, 0, 0, 0)
+logoFrame.BackgroundTransparency = 1
+
+local logoText = Instance.new("TextLabel", logoFrame)
+logoText.Name = "LogoText"
+logoText.Size = UDim2.new(1, 0, 0, 40)
+logoText.Position = UDim2.new(0, 0, 0, 10)
+logoText.Text = "SSLKIN"
+logoText.Font = Enum.Font.GothamBold
+logoText.TextSize = 18
+logoText.TextColor3 = Color3.new(1, 1, 1)
+logoText.BackgroundTransparency = 1
+logoText.TextXAlignment = Enum.TextXAlignment.Center
+
+local versionText = Instance.new("TextLabel", logoFrame)
+versionText.Name = "VersionText"
+versionText.Size = UDim2.new(1, 0, 0, 20)
+versionText.Position = UDim2.new(0, 0, 0, 50)
+versionText.Text = "UNIVERSAL SCRIPT"
+versionText.Font = Enum.Font.Gotham
+versionText.TextSize = 10
+versionText.TextColor3 = Color3.new(1, 1, 1)
+versionText.BackgroundTransparency = 1
+versionText.TextXAlignment = Enum.TextXAlignment.Center
+
+local navButtons = {
+    {name = "Main", icon = "🏠"},
+    {name = "YBA Hacks", icon = "⚔️"},
+    {name = "Settings", icon = "⚙️"}
+}
+
+local selectedTab = "Main"
+
+-- Scroll position for each tab
+local tabScrollPositions = {
+    ["Main"] = 0,
+    ["YBA Hacks"] = 0,
+    ["Settings"] = 0
+}
+
+for i, buttonData in ipairs(navButtons) do
+    local navButton = Instance.new("TextButton", leftPanel)
+    navButton.Name = buttonData.name .. "Button"
+    navButton.Size = UDim2.new(1, -20, 0, 40)
+    navButton.Position = UDim2.new(0, 10, 0, 100 + (i-1) * 50)
+    navButton.Text = buttonData.icon .. " " .. buttonData.name
+    navButton.Font = Enum.Font.Gotham
+    navButton.TextSize = 14
+    navButton.TextColor3 = Color3.new(1, 1, 1)
+    navButton.BackgroundColor3 = buttonData.name == selectedTab and Color3.fromRGB(40, 40, 45) or Color3.fromRGB(30, 30, 35)
+    navButton.BorderSizePixel = 0
+    navButton.AutoButtonColor = false
+    
+    local buttonCorner = Instance.new("UICorner", navButton)
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    
+    -- Подсветка выбранной вкладки
+    if buttonData.name == selectedTab then
+        local highlight = Instance.new("Frame", navButton)
+        highlight.Name = "Highlight"
+        highlight.Size = UDim2.new(0, 3, 1, 0)
+        highlight.Position = UDim2.new(0, 0, 0, 0)
+        highlight.BackgroundColor3 = MenuSettings.AccentColor
+        highlight.BorderSizePixel = 0
+        
+        local highlightCorner = Instance.new("UICorner", highlight)
+        highlightCorner.CornerRadius = UDim.new(0, 2)
+    end
+    
+    navButton.MouseButton1Click:Connect(function()
+        -- Обновляем выбранную вкладку
+        for _, btn in pairs(leftPanel:GetChildren()) do
+            if btn:IsA("TextButton") then
+                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+                local highlight = btn:FindFirstChild("Highlight")
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+        end
+        
+        navButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        selectedTab = buttonData.name
+        
+        local highlight = Instance.new("Frame", navButton)
+        highlight.Name = "Highlight"
+        highlight.Size = UDim2.new(0, 3, 1, 0)
+        highlight.Position = UDim2.new(0, 0, 0, 0)
+        highlight.BackgroundColor3 = MenuSettings.AccentColor
+        highlight.BorderSizePixel = 0
+        
+        local highlightCorner = Instance.new("UICorner", highlight)
+        highlightCorner.CornerRadius = UDim.new(0, 2)
+        
+        showContent(buttonData.name)
+    end)
+end
+
+local rightPanel = Instance.new("Frame", mainFrame)
+rightPanel.Name = "RightPanel"
+rightPanel.Size = UDim2.new(1, -120, 1, 0)
+rightPanel.Position = UDim2.new(0, 120, 0, 0)
+rightPanel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+rightPanel.BackgroundTransparency = 0.15
+rightPanel.BorderSizePixel = 0
+
+local glassEffect = Instance.new("Frame", rightPanel)
+glassEffect.Name = "GlassEffect"
+glassEffect.Size = UDim2.new(1, 0, 1, 0)
+glassEffect.Position = UDim2.new(0, 0, 0, 0)
+glassEffect.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+glassEffect.BackgroundTransparency = 0.92
+glassEffect.BorderSizePixel = 0
+glassEffect.ZIndex = -1
+
+local glassGradient = Instance.new("UIGradient", glassEffect)
+glassGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 200, 220)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 150, 170)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 100, 120))
+}
+glassGradient.Rotation = 45
+
+local glassBorder = Instance.new("UIStroke", rightPanel)
+glassBorder.Color = Color3.fromRGB(200, 200, 220)
+glassBorder.Transparency = 0.7
+glassBorder.Thickness = 1
+
+local rightCorner = Instance.new("UICorner", rightPanel)
+rightCorner.CornerRadius = UDim.new(0, 8)
+
+local glassCorner = Instance.new("UICorner", glassEffect)
+glassCorner.CornerRadius = UDim.new(0, 8)
+
+local closeButton = Instance.new("TextButton", rightPanel)
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 5)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 16
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+closeButton.BorderSizePixel = 0
+closeButton.AutoButtonColor = false
+
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 6)
+
+closeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    createReopenButton()
+end)
+
+local resizeHandle = Instance.new("Frame", mainFrame)
+resizeHandle.Name = "ResizeHandle"
+resizeHandle.Size = UDim2.new(0, 15, 0, 15)
+resizeHandle.Position = UDim2.new(1, -15, 1, -15)
+resizeHandle.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+resizeHandle.BackgroundTransparency = 0.2
+resizeHandle.BorderSizePixel = 0
+resizeHandle.ZIndex = 15
+
+local line1 = Instance.new("Frame", resizeHandle)
+line1.Size = UDim2.new(0, 2, 0, 10)
+line1.Position = UDim2.new(0, 8, 0, 2)
+line1.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
+line1.BorderSizePixel = 0
+line1.Rotation = 45
+
+local line2 = Instance.new("Frame", resizeHandle)
+line2.Size = UDim2.new(0, 2, 0, 6)
+line2.Position = UDim2.new(0, 5, 0, 6)
+line2.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
+line2.BorderSizePixel = 0
+line2.Rotation = 45
+
+local line3 = Instance.new("Frame", resizeHandle)
+line3.Size = UDim2.new(0, 2, 0, 2)
+line3.Position = UDim2.new(0, 2, 0, 10)
+line3.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
+line3.BorderSizePixel = 0
+line3.Rotation = 45
+
+-- Функция изменения размера (свободное изменение как в Windows)
+local isResizing = false
+local startMousePos = Vector2.new(0, 0)
+local startFrameSize = UDim2.new(0, 400, 0, 500)
+
+resizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isResizing = true
+        startMousePos = UserInputService:GetMouseLocation()
+        startFrameSize = mainFrame.Size
+        
+        -- Отключаем перетаскивание основного фрейма
+        mainFrame.Draggable = false
+        
+        -- Меняем визуал handle при использовании
+        resizeHandle.BackgroundTransparency = 0.1
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and isResizing then
+        isResizing = false
+        mainFrame.Draggable = true
+        resizeHandle.BackgroundTransparency = 0.2
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if isResizing then
+        local currentMousePos = UserInputService:GetMouseLocation()
+        local deltaX = currentMousePos.X - startMousePos.X
+        local deltaY = currentMousePos.Y - startMousePos.Y
+        
+        -- Свободное изменение размера (как в Windows)
+        local newWidth = math.max(minWidth, startFrameSize.X.Offset + deltaX)
+        local newHeight = math.max(minHeight, startFrameSize.Y.Offset + deltaY)
+        
+        mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+    end
+end)
+function createReopenButton()
+    local existingButton = screenGui:FindFirstChild("ReopenButton")
+    if existingButton then
+        existingButton:Destroy()
+    end
+    
+    local reopenButton = Instance.new("TextButton", screenGui)
+    reopenButton.Name = "ReopenButton"
+    reopenButton.Size = UDim2.new(0, 50, 0, 50)
+    reopenButton.Position = UDim2.new(1, -70, 0, 20)
+    reopenButton.Text = "🔧"
+    reopenButton.Font = Enum.Font.GothamBold
+    reopenButton.TextSize = 20
+    reopenButton.TextColor3 = Color3.new(1, 1, 1)
+    reopenButton.BackgroundColor3 = MenuSettings.AccentColor
+    reopenButton.BorderSizePixel = 0
+    reopenButton.AutoButtonColor = false
+    
+    local reopenCorner = Instance.new("UICorner", reopenButton)
+    reopenCorner.CornerRadius = UDim.new(0.5, 0)
+    
+    reopenButton.MouseButton1Click:Connect(function()
+        mainFrame.Visible = true
+        reopenButton:Destroy()
+    end)
+end
+
+local contentTitle = Instance.new("TextLabel", rightPanel)
+contentTitle.Name = "ContentTitle"
+contentTitle.Size = UDim2.new(1, -20, 0, 40)
+contentTitle.Position = UDim2.new(0, 10, 0, 10)
+contentTitle.Text = "MAIN FUNCTIONS"
+contentTitle.Font = Enum.Font.GothamBold
+contentTitle.TextSize = 18
+contentTitle.TextColor3 = Color3.new(1, 1, 1)
+contentTitle.BackgroundTransparency = 1
+contentTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+local scrollFrame = Instance.new("ScrollingFrame", rightPanel)
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.Size = UDim2.new(1, -20, 1, -100)
+scrollFrame.Position = UDim2.new(0, 10, 0, 60)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local functionsContainer = Instance.new("Frame", scrollFrame)
+functionsContainer.Name = "FunctionsContainer"
+functionsContainer.Size = UDim2.new(1, 0, 0, 0)
+functionsContainer.Position = UDim2.new(0, 0, 0, 0)
+functionsContainer.BackgroundTransparency = 1
+functionsContainer.AutomaticSize = Enum.AutomaticSize.Y
+
+local currentY = 0
+local padding = 8
+
+local function createSectionHeader(text)
+    currentY = currentY + padding
+    local spacer = Instance.new("Frame", functionsContainer)
+    spacer.Size = UDim2.new(1, 0, 0, 10)
+    spacer.Position = UDim2.new(0, 0, 0, currentY)
+    spacer.BackgroundTransparency = 1
+    currentY = currentY + 10
+    
+    local lbl = Instance.new("TextLabel", functionsContainer)
+    lbl.Text = text
+    lbl.Size = UDim2.new(1, -10, 0, 30)
+    lbl.Position = UDim2.new(0, 5, 0, currentY)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 16
+    lbl.TextColor3 = Color3.fromRGB(255,255,255)
+    lbl.BackgroundTransparency = 1
+    currentY = currentY + 30 + padding
+    return lbl
+end
+
+local function createToggle(label, default, callback)
+    local btn = Instance.new("TextButton", functionsContainer)
+    btn.Size = UDim2.new(1, -10, 0, 28)
+    btn.Position = UDim2.new(0, 5, 0, currentY)
+    btn.Text = label .. ": " .. (default and "ON" or "OFF")
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+
+    btn.MouseButton1Click:Connect(function()
+        default = not default
+        btn.Text = label .. ": " .. (default and "ON" or "OFF")
+        callback(default)
+    end)
+    
+    currentY = currentY + 28 + padding
+    return btn
+end
+
+local function createToggleSlider(label, default, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 40)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label
+    lbl.Size = UDim2.new(0.7, 0, 1, 0)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Ползунок фон
+    local sliderBack = Instance.new("Frame", container)
+    sliderBack.Position = UDim2.new(0.7, 5, 0.3, 0)
+    sliderBack.Size = UDim2.new(0, 50, 0, 20)
+    sliderBack.BackgroundColor3 = default and MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
+    sliderBack.BorderSizePixel = 0
+    sliderBack.Name = "SliderBack" -- Добавляем имя для поиска
+    Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(1, 0)
+
+    -- Ползунок кружок
+    local sliderKnob = Instance.new("Frame", sliderBack)
+    sliderKnob.Size = UDim2.new(0, 16, 0, 16)
+    sliderKnob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    sliderKnob.BackgroundColor3 = Color3.new(1, 1, 1)
+    sliderKnob.BorderSizePixel = 0
+    Instance.new("UICorner", sliderKnob).CornerRadius = UDim.new(1, 0)
+
+    -- Анимация и клик
+    local isEnabled = default
+    sliderBack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isEnabled = not isEnabled
+            
+            -- Анимация
+            local targetPos = isEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+            local targetColor = isEnabled and MenuSettings.AccentColor or Color3.fromRGB(100, 100, 100)
+            
+            local tween1 = TweenService:Create(sliderKnob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = targetPos})
+            local tween2 = TweenService:Create(sliderBack, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = targetColor})
+            
+            tween1:Play()
+            tween2:Play()
+            
+            callback(isEnabled)
+        end
+    end)
+    
+    currentY = currentY + 40 + padding
+    return container
+end
+
+local function createSlider(label, min, max, value, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 36)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label .. ": " .. math.floor(value)
+    lbl.Size = UDim2.new(1, 0, 0.5, 0)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 13
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+
+    local sliderBack = Instance.new("Frame", container)
+    sliderBack.Position = UDim2.new(0,0,0.5,4)
+    sliderBack.Size = UDim2.new(1, 0, 0, 6)
+    sliderBack.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    Instance.new("UICorner", sliderBack).CornerRadius = UDim.new(1,0)
+
+    local sliderFill = Instance.new("Frame", sliderBack)
+    sliderFill.Size = UDim2.new((math.floor(value) - min) / (max - min), 0, 1, 0)
+    sliderFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1,0)
+
+    local dragging = false
+    sliderBack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local pos = UserInputService:GetMouseLocation().X
+            local abs = sliderBack.AbsolutePosition.X
+            local width = sliderBack.AbsoluteSize.X
+            local pct = math.clamp((pos - abs) / width, 0, 1)
+            local newVal = math.floor(min + (max - min) * pct)
+            sliderFill.Size = UDim2.new(pct, 0, 1, 0)
+            lbl.Text = label .. ": " .. newVal
+            callback(newVal)
+        end
+    end)
+    
+    currentY = currentY + 36 + padding
+end
+
+local function createColorPicker(labelText, currentColor, callback)
+    local lbl = Instance.new("TextLabel", functionsContainer)
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, -10, 0, 20)
+    lbl.Position = UDim2.new(0, 5, 0, currentY)
+    lbl.Font = Enum.Font.SourceSans
+    lbl.TextSize = 14
+    currentY = currentY + 20 + padding
+
+    local colors = {
+        Color3.fromRGB(255, 255, 255),
+        Color3.fromRGB(255, 0, 0),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 0, 255),
+        Color3.fromRGB(255, 255, 0),
+        Color3.fromRGB(255, 0, 255),
+        Color3.fromRGB(0, 255, 255),
+        Color3.fromRGB(128, 128, 128),
+        Color3.fromRGB(255, 165, 0),
+    }
+
+    local row = Instance.new("Frame", functionsContainer)
+    row.Size = UDim2.new(1, -10, 0, 28)
+    row.Position = UDim2.new(0, 5, 0, currentY)
+    row.BackgroundTransparency = 1
+
+    local layout = Instance.new("UIListLayout", row)
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.Padding = UDim.new(0, 4)
+
+    for _, clr in pairs(colors) do
+        local btn = Instance.new("TextButton", row)
+        btn.Size = UDim2.new(0, 24, 0, 24)
+        btn.BackgroundColor3 = clr
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.MouseButton1Click:Connect(function()
+            callback(clr)
+        end)
+    end
+    
+    currentY = currentY + 28 + padding
+end
+
+local function createSpeedInput(label, currentSpeed, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 36)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label .. ": " .. currentSpeed
+    lbl.Size = UDim2.new(0.7, 0, 0.5, 0)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 13
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+
+    local inputBox = Instance.new("TextBox", container)
+    inputBox.Position = UDim2.new(0.7, 5, 0.25, 0)
+    inputBox.Size = UDim2.new(0.3, -5, 0.5, 0)
+    inputBox.Text = tostring(currentSpeed)
+    inputBox.Font = Enum.Font.Gotham
+    inputBox.TextSize = 12
+    inputBox.TextColor3 = Color3.new(1,1,1)
+    inputBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    inputBox.PlaceholderText = "Speed"
+    Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,4)
+
+    inputBox.FocusLost:Connect(function()
+        local newSpeed = tonumber(inputBox.Text)
+        if newSpeed and newSpeed > 0 then
+            callback(newSpeed)
+            lbl.Text = label .. ": " .. newSpeed
+        else
+            inputBox.Text = tostring(currentSpeed)
+        end
+    end)
+
+    currentY = currentY + 36 + padding
+    return lbl, inputBox
+end
+
+local function createKeyBindButton(name, currentKey, callback)
+    local btn = Instance.new("TextButton", functionsContainer)
+    btn.Size = UDim2.new(1, -10, 0, 24)
+    btn.Position = UDim2.new(0, 5, 0, currentY)
+    btn.Text = name .. " Hotkey: [" .. (currentKey and tostring(currentKey.Name) or "None") .. "]"
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 13
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+
+    btn.MouseButton1Click:Connect(function()
+        btn.Text = name .. " Hotkey: [Press any key]"
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gp)
+            if not gp and input.UserInputType == Enum.UserInputType.Keyboard then
+                conn:Disconnect()
+                callback(input.KeyCode)
+                btn.Text = name .. " Hotkey: [" .. tostring(input.KeyCode.Name) .. "]"
+            end
+        end)
+    end)
+    
+    currentY = currentY + 24 + padding
+end
+
+local function createDivider()
+    local divider = Instance.new("Frame", functionsContainer)
+    divider.Size = UDim2.new(1, -10, 0, 2)
+    divider.Position = UDim2.new(0, 5, 0, currentY)
+    divider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    divider.BorderSizePixel = 0
+    currentY = currentY + 2 + padding
+end
+
+local function createButton(label, callback)
+    local btn = Instance.new("TextButton", functionsContainer)
+    btn.Size = UDim2.new(1, -10, 0, 28)
+    btn.Position = UDim2.new(0, 5, 0, currentY)
+    btn.Text = label
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 14
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+    
+    btn.MouseButton1Click:Connect(function()
+        callback()
+    end)
+    
+    currentY = currentY + 28 + padding
+    return btn
+end
+
+local function createDropdown(label, options, currentValue, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 50)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Text = label
+    lbl.Size = UDim2.new(1, 0, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.BackgroundTransparency = 1
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local dropdown = Instance.new("TextButton", container)
+    dropdown.Size = UDim2.new(1, 0, 0, 25)
+    dropdown.Position = UDim2.new(0, 0, 0, 25)
+    dropdown.Text = currentValue .. " ▼"
+    dropdown.Font = Enum.Font.Gotham
+    dropdown.TextSize = 12
+    dropdown.TextColor3 = Color3.new(1,1,1)
+    dropdown.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    dropdown.AutoButtonColor = false
+    Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0,4)
+
+    local isOpen = false
+    local optionsFrame = Instance.new("Frame", container)
+    optionsFrame.Size = UDim2.new(1, 0, 0, #options * 25)
+    optionsFrame.Position = UDim2.new(0, 0, 0, 50)
+    optionsFrame.BackgroundColor3 = Color3.fromRGB(45,45,45)
+    optionsFrame.BorderSizePixel = 0
+    optionsFrame.Visible = false
+    optionsFrame.ZIndex = 20
+    Instance.new("UICorner", optionsFrame).CornerRadius = UDim.new(0,4)
+
+    for i, option in ipairs(options) do
+        local optionBtn = Instance.new("TextButton", optionsFrame)
+        optionBtn.Size = UDim2.new(1, 0, 0, 25)
+        optionBtn.Position = UDim2.new(0, 0, 0, (i-1) * 25)
+        optionBtn.Text = option
+        optionBtn.Font = Enum.Font.Gotham
+        optionBtn.TextSize = 12
+        optionBtn.TextColor3 = Color3.new(1,1,1)
+        optionBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+        optionBtn.AutoButtonColor = false
+        optionBtn.BorderSizePixel = 0
+        optionBtn.ZIndex = 21
+
+        optionBtn.MouseButton1Click:Connect(function()
+            dropdown.Text = option .. " ▼"
+            optionsFrame.Visible = false
+            isOpen = false
+            callback(option)
+        end)
+
+        optionBtn.MouseEnter:Connect(function()
+            optionBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+        end)
+
+        optionBtn.MouseLeave:Connect(function()
+            optionBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+        end)
+    end
+
+    dropdown.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        optionsFrame.Visible = isOpen
+        dropdown.Text = currentValue .. (isOpen and " ▲" or " ▼")
+    end)
+
+    currentY = currentY + 50 + padding + (isOpen and (#options * 25) or 0)
+    return container
+end
+-- Функция для показа контента
+function showContent(tabName)
+    -- Сохраняем текущую позицию прокрутки
+    if selectedTab and scrollFrame then
+        tabScrollPositions[selectedTab] = scrollFrame.CanvasPosition.Y
+    end
+    
+    -- Очищаем контейнер и сбрасываем позицию
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        child:Destroy()
+    end
+    currentY = 0
+    
+    if tabName == "Main" then
+        contentTitle.Text = getText("MainFunctions")
+        
+        -- Hotkeys
+        createKeyBindButton("ESP", Config.ESP.ToggleKey, function(newKey)
+            Config.ESP.ToggleKey = newKey
+        end)
+        
+        createKeyBindButton("Aimbot", Config.Aimbot.ToggleKey, function(newKey)
+            Config.Aimbot.ToggleKey = newKey
+        end)
+        
+        createKeyBindButton("Fly", MovementConfig.Fly.ToggleKey, function(newKey)
+            MovementConfig.Fly.ToggleKey = newKey
+        end)
+        
+        createKeyBindButton("NoClip", MovementConfig.NoClip.ToggleKey, function(newKey)
+            MovementConfig.NoClip.ToggleKey = newKey
+        end)
+        
+        createKeyBindButton("SpeedHack", MovementConfig.Speed.ToggleKey, function(newKey)
+            MovementConfig.Speed.ToggleKey = newKey
+        end)
+        
+        createKeyBindButton("Teleport", TeleportConfig.ToggleKey, function(newKey)
+            TeleportConfig.ToggleKey = newKey
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🔷ESP Settings")
+        createToggleSlider(getText("ESP"), Config.ESP.Enabled, function(v) Config.ESP.Enabled = v end)
+        createToggleSlider(getText("TeamCheck"), Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
+        createToggleSlider(getText("ShowOutline"), Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
+        createToggleSlider(getText("ShowLines"), Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
+        createToggleSlider(getText("RainbowColors"), Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
+        
+        createColorPicker("Fill Color", Config.ESP.FillColor, function(c) Config.ESP.FillColor = c end)
+        createColorPicker("Outline Color", Config.ESP.OutlineColor, function(c) Config.ESP.OutlineColor = c end)
+        createColorPicker("Text Color", Config.ESP.TextColor, function(c) Config.ESP.TextColor = c end)
+        createSlider("Fill Transparency", 0, 1, Config.ESP.FillTransparency, function(v) Config.ESP.FillTransparency = v end)
+        createSlider("Outline Transparency", 0, 1, Config.ESP.OutlineTransparency, function(v) Config.ESP.OutlineTransparency = v end)
+        
+        createDivider()
+        
+        createSectionHeader("🔷Aimbot Settings")
+        createToggleSlider(getText("Aimbot"), Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
+        createToggleSlider(getText("TeamCheck"), Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
+        createToggleSlider(getText("VisibilityCheck"), Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
+        createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
+        createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
+        createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
+        
+        createDivider()
+        
+        createSectionHeader("🟨 Fly Settings")
+        createToggleSlider("Fly", MovementConfig.Fly.Enabled, function(v)
+            MovementConfig.Fly.Enabled = v
+            if v then 
+                if MainModule then MainModule.startFly() end
+            else 
+                if MainModule then MainModule.stopFly() end
+            end
+        end)
+        
+        createSlider("Fly Speed", 0.1, 10, MovementConfig.Fly.Speed, function(v)
+            MovementConfig.Fly.Speed = v
+        end)
+        
+        createSpeedInput("Custom Fly Speed", MovementConfig.Fly.Speed, function(v)
+            MovementConfig.Fly.Speed = v
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🟪 NoClip Settings")
+        local noClipStatusLabel = Instance.new("TextLabel", functionsContainer)
+        noClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
+        noClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
+        noClipStatusLabel.Text = "NoClip Status: OFF"
+        noClipStatusLabel.Font = Enum.Font.GothamBold
+        noClipStatusLabel.TextSize = 12
+        noClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
+        noClipStatusLabel.BackgroundTransparency = 1
+        noClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 20 + padding
+        
+        local forceNoClipToggle = createToggleSlider("Force NoClip", MainModule and MainModule.isNoClipping() or false, function(v)
+            if v then
+                if MainModule then MainModule.startNoClip() end
+                noClipStatusLabel.Text = "NoClip Status: ON"
+                noClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
+            else
+                if MainModule then MainModule.stopNoClip() end
+                noClipStatusLabel.Text = "NoClip Status: OFF"
+                noClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
+            end
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🟦 SpeedHack Settings")
+        createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
+            MovementConfig.Speed.Enabled = v
+            if v then 
+                if MainModule then MainModule.startSpeedHack() end
+            else 
+                if MainModule then MainModule.stopSpeedHack() end
+            end
+        end)
+        
+        createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
+            MovementConfig.Speed.UseJumpPower = v
+            if MovementConfig.Speed.Enabled then
+                if MainModule then 
+                    MainModule.stopSpeedHack()
+                    MainModule.startSpeedHack()
+                end
+            end
+        end)
+        
+        createSlider("SpeedHack Speed", 0.1, 10, MovementConfig.Speed.Speed, function(v)
+            MovementConfig.Speed.Speed = v
+            if MovementConfig.Speed.Enabled then
+                local char = Players.LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = v * 16
+                    if MovementConfig.Speed.UseJumpPower then
+                        hum.JumpPower = v * 50
+                    end
+                end
+            end
+        end)
+        
+        createSpeedInput("Custom SpeedHack Speed", MovementConfig.Speed.Speed, function(v)
+            MovementConfig.Speed.Speed = v
+            if MovementConfig.Speed.Enabled then
+                local char = Players.LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = v * 16
+                    if MovementConfig.Speed.UseJumpPower then
+                        hum.JumpPower = v * 50
+                    end
+                end
+            end
+        end)
+        
+        createDivider()
+        
+        -- Jump Settings
+        createSectionHeader("🦘 Jump Settings")
+        createToggleSlider(getText("LongJump"), MovementConfig.LongJump.Enabled, function(v)
+            MovementConfig.LongJump.Enabled = v
+            if v then startLongJump() else stopLongJump() end
+        end)
+        
+        createSlider("Long Jump Power", 50, 500, MovementConfig.LongJump.JumpPower, function(v)
+            MovementConfig.LongJump.JumpPower = v
+            if MovementConfig.LongJump.Enabled then
+                local char = Players.LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.JumpPower = v
+                end
+            end
+        end)
+        
+        createToggleSlider(getText("InfiniteJump"), MovementConfig.InfiniteJump.Enabled, function(v)
+            MovementConfig.InfiniteJump.Enabled = v
+            if v then startInfiniteJump() else stopInfiniteJump() end
+        end)
+        
+        createSlider("Infinite Jump Power", 20, 150, MovementConfig.InfiniteJump.JumpPower, function(v)
+            MovementConfig.InfiniteJump.JumpPower = v
+        end)
+        
+        createDivider()
+        
+        -- Teleport Settings
+        createSectionHeader("🟩 Teleport Settings")
+        
+        local selectedPlayerLabel = Instance.new("TextLabel", functionsContainer)
+        selectedPlayerLabel.Size = UDim2.new(1, -10, 0, 24)
+        selectedPlayerLabel.Position = UDim2.new(0, 5, 0, currentY)
+        selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. (TeleportConfig.SelectedPlayerName or "None")
+        selectedPlayerLabel.Font = Enum.Font.GothamBold
+        selectedPlayerLabel.TextSize = 14
+        selectedPlayerLabel.TextColor3 = Color3.new(1,1,1)
+        selectedPlayerLabel.BackgroundTransparency = 1
+        selectedPlayerLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 24 + padding
+        
+        teleportBtn = Instance.new("TextButton", functionsContainer)
+        teleportBtn.Size = UDim2.new(1, -10, 0, 28)
+        teleportBtn.Position = UDim2.new(0, 5, 0, currentY)
+        teleportBtn.Text = getText("StartTeleport")
+        teleportBtn.Font = Enum.Font.GothamBold
+        teleportBtn.TextSize = 14
+        teleportBtn.TextColor3 = Color3.new(1,1,1)
+        teleportBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
+        teleportBtn.AutoButtonColor = false
+        Instance.new("UICorner", teleportBtn).CornerRadius = UDim.new(0,6)
+        currentY = currentY + 28 + padding
+        
+        teleportBtn.MouseButton1Click:Connect(function()
+            if not TeleportConfig.TargetPlayer then
+                teleportBtn.Text = "Select player first!"
+                task.wait(2)
+                teleportBtn.Text = "START TELEPORT"
+                return
+            end
+            
+            if TeleportConfig.Enabled then
+                stopTeleport()
+                TeleportConfig.Enabled = false
+                teleportBtn.Text = getText("StartTeleport")
+                teleportBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
+            else
+                startTeleport()
+                TeleportConfig.Enabled = true
+                teleportBtn.Text = getText("StopTeleport")
+                teleportBtn.BackgroundColor3 = Color3.fromRGB(150,0,0)
+            end
+        end)
+        
+        local playerListLabel = Instance.new("TextLabel", functionsContainer)
+        playerListLabel.Size = UDim2.new(1, -10, 0, 20)
+        playerListLabel.Position = UDim2.new(0, 5, 0, currentY)
+        playerListLabel.Text = getText("SelectPlayerForTeleport") .. ":"
+        playerListLabel.Font = Enum.Font.GothamBold
+        playerListLabel.TextSize = 12
+        playerListLabel.TextColor3 = Color3.new(1,1,1)
+        playerListLabel.BackgroundTransparency = 1
+        playerListLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 20 + padding
+        
+        local playerButtons = {}
+        local playerListStartY = currentY
+        
+        local function createPlayerList()
+            for _, btn in pairs(playerButtons) do
+                if btn and btn.Parent then
+                    btn:Destroy()
+                end
+            end
+            playerButtons = {}
+            
+            currentY = playerListStartY
+            
+            local allPlayers = Players:GetPlayers()
+            local playerList = {}
+            
+            for _, player in ipairs(allPlayers) do
+                if player ~= Players.LocalPlayer then
+                    table.insert(playerList, player)
+                end
+            end
+            
+            table.sort(playerList, function(a, b)
+                return string.lower(a.Name) < string.lower(b.Name)
+            end)
+            
+            for _, player in ipairs(playerList) do
+                local playerBtn = Instance.new("TextButton", functionsContainer)
+                playerBtn.Size = UDim2.new(1, -10, 0, 24)
+                playerBtn.Position = UDim2.new(0, 5, 0, currentY)
+                playerBtn.Text = player.Name
+                playerBtn.Font = Enum.Font.Gotham
+                playerBtn.TextSize = 12
+                playerBtn.TextColor3 = Color3.new(1,1,1)
+                playerBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+                playerBtn.AutoButtonColor = false
+                Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0,4)
+                currentY = currentY + 24 + padding
+                
+                table.insert(playerButtons, playerBtn)
+                
+                playerBtn.MouseButton1Click:Connect(function()
+                    TeleportConfig.TargetPlayer = player
+                    TeleportConfig.SelectedPlayerName = player.Name
+                    selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. player.Name
+                    
+                    for _, child in pairs(functionsContainer:GetChildren()) do
+                        if child:IsA("TextButton") and child.Text == player.Name then
+                            child.BackgroundColor3 = Color3.fromRGB(0,255,0)
+                        elseif child:IsA("TextButton") and child.Text ~= "START TELEPORT" and child.Text ~= "STOP TELEPORT" and child.Text ~= player.Name then
+                            child.BackgroundColor3 = Color3.fromRGB(40,40,40)
+                        end
+                    end
+                end)
+            end
+        end
+        
+        createPlayerList()
+        
+        spawn(function()
+            while true do
+                task.wait(2)
+                if selectedTab == "Main" then
+                    createPlayerList()
+                end
+            end
+        end)
+        
+    elseif tabName == "YBA Hacks" then
+        contentTitle.Text = getText("YBAHacks")
+        
+        -- 🎯 STAND RANGE заголовок как в Player ESP
+        createSectionHeader("🎯 STAND RANGE")
+        
+        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
+            YBAConfig.Enabled = v
+            if v then 
+                if YBAModule then YBAModule.startYBA() end
+            else 
+                if YBAModule then YBAModule.stopYBA() end 
+            end
+        end)
+        
+        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), YBAModule and YBAModule.isUndergroundControlEnabled() or false, function(v)
+            if v then
+                if startUndergroundControl then
+                    if YBAModule then YBAModule.startUndergroundControl() end
+                end
+            else
+                if YBAModule then 
+                    YBAModule.stopUndergroundControl()
+                end
+            end
+        end)
+        
+        local ybaNoClipStatusLabel = Instance.new("TextLabel", functionsContainer)
+        ybaNoClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
+        ybaNoClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
+        ybaNoClipStatusLabel.Text = "NoClip Status: " .. ((MainModule and MainModule.isNoClipping()) and "ON" or "OFF")
+        ybaNoClipStatusLabel.Font = Enum.Font.GothamBold
+        ybaNoClipStatusLabel.TextSize = 12
+        ybaNoClipStatusLabel.TextColor3 = (MainModule and MainModule.isNoClipping()) and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
+        ybaNoClipStatusLabel.BackgroundTransparency = 1
+        ybaNoClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 20 + padding
+        
+        local ybaNoClipToggle = createToggleSlider(getText("ForceNoClip"), MainModule and MainModule.isNoClipping() or false, function(v)
+            if v then
+                if MainModule then MainModule.startNoClip() end
+                ybaNoClipStatusLabel.Text = "NoClip Status: ON"
+                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
+            else
+                if MainModule then MainModule.stopNoClip() end
+                ybaNoClipStatusLabel.Text = "NoClip Status: OFF"
+                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
+            end
+        end)
+        
+        createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
+            YBAConfig.UndergroundControl.FlightSpeed = v
+            if YBAModule and YBAModule.isUndergroundControlEnabled() then
+                print("YBA: Скорость подземного полета изменена на:", v)
+            end
+        end)
+        
+
+        
+        -- ⏰ ANTI TS заголовок как в Player ESP
+        createSectionHeader("⏰ ANTI TS")
+        
+        local         antiTimeStopBtn = Instance.new("TextButton", functionsContainer)
+        antiTimeStopBtn.Size = UDim2.new(1, -10, 0, 28)
+        antiTimeStopBtn.Position = UDim2.new(0, 5, 0, currentY)
+        antiTimeStopBtn.Text = getText("AntiTimeStop")
+        antiTimeStopBtn.Font = Enum.Font.GothamBold
+        antiTimeStopBtn.TextSize = 14
+        antiTimeStopBtn.TextColor3 = Color3.new(1,1,1)
+        antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
+        antiTimeStopBtn.AutoButtonColor = false
+        Instance.new("UICorner", antiTimeStopBtn).CornerRadius = UDim.new(0,6)
+        currentY = currentY + 28 + padding
+        
+        antiTimeStopBtn.MouseButton1Click:Connect(function()
+            if not isAntiTimeStopEnabled then
+                AntiTimeStopConfig.Enabled = true
+                if YBAModule then YBAModule.startAntiTimeStop() end
+                antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
+                antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
+                
+                -- Быстрое отключение после освобождения
+                spawn(function()
+                    task.wait(0.1) -- Минимальное время для освобождения
+                    
+                    AntiTimeStopConfig.Enabled = false
+                    if YBAModule then YBAModule.stopAntiTimeStop() end
+                    antiTimeStopBtn.Text = "ANTI TIME STOP"
+                    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
+                    print("Anti TS: ГОТОВО!")
+                end)
+            end
+        end)
+        
+
+        createDivider()
+        
+        -- 👥 PLAYER ESP заголовок
+        createSectionHeader("👥 PLAYER ESP")
+        
+        local userStandToggleBtn = createToggleSlider("User Stand", false, function(v)
+            if v then
+                startUserStandESP()
+            else
+                stopUserStandESP()
+            end
+        end)
+        
+        local userStyleToggleBtn = createToggleSlider("User Style", false, function(v)
+            if v then
+                startUserStyleESP()
+            else
+                stopUserStyleESP()
+            end
+        end)
+        
+        -- 📦 ITEM ESP заголовок
+        createSectionHeader("📦 ITEM ESP")
+        
+        local itemESPToggleBtn = createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
+            YBAConfig.ItemESP.Enabled = v
+            if v then 
+                if YBAModule then YBAModule.startItemESP() end
+            else 
+                if YBAModule then YBAModule.stopItemESP() end 
+            end
+        end)
+        
+        local itemSelectionHeader = Instance.new("TextLabel", functionsContainer)
+        itemSelectionHeader.Size = UDim2.new(1, -10, 0, 25)
+        itemSelectionHeader.Position = UDim2.new(0, 5, 0, currentY)
+        itemSelectionHeader.Text = "📦 ITEM SELECTION"
+        itemSelectionHeader.Font = Enum.Font.GothamBold
+        itemSelectionHeader.TextSize = 14
+        itemSelectionHeader.TextColor3 = Color3.fromRGB(255, 255, 0)
+        itemSelectionHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        itemSelectionHeader.BorderSizePixel = 1
+        itemSelectionHeader.BorderColor3 = Color3.fromRGB(100, 100, 120)
+        itemSelectionHeader.TextXAlignment = Enum.TextXAlignment.Left
+        Instance.new("UICorner", itemSelectionHeader).CornerRadius = UDim.new(0,4)
+        currentY = currentY + 25 + padding
+        
+        local function createItemToggle(itemName, defaultState)
+            local btn = createToggleSlider(itemName, defaultState, function(v)
+                YBAConfig.ItemESP.Items[itemName] = v
+                print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
+                
+                -- ИСПРАВЛЕНО: Принудительно обновляем ESP независимо от общего состояния
+                if not v then
+                    -- При отключении предмета немедленно убираем все его ESP элементы
+                    print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
+                    for obj, esp in pairs(itemESPElements) do
+                        if esp and esp.itemName == itemName then
+                            print("YBA Item ESP: Удаляем ESP элемент для:", itemName)
+                            pcall(removeItemESP, {Object = obj})
+                        end
+                    end
+                else
+                    -- При включении предмета принудительно обновляем поиск если ESP активен
+                    if YBAConfig.ItemESP.Enabled then
+                        print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
+                    end
+                end
+            end)
+            return btn
+        end
+        
+        createItemToggle(getText("MysteriousArrow"), YBAConfig.ItemESP.Items["Mysterious Arrow"])
+        createItemToggle(getText("Rokakaka"), YBAConfig.ItemESP.Items["Rokakaka"])
+        createItemToggle(getText("PureRokakaka"), YBAConfig.ItemESP.Items["Pure Rokakaka"])
+        createItemToggle(getText("Diamond"), YBAConfig.ItemESP.Items["Diamond"])
+        createItemToggle(getText("GoldCoin"), YBAConfig.ItemESP.Items["Gold Coin"])
+        createItemToggle(getText("SteelBall"), YBAConfig.ItemESP.Items["Steel Ball"])
+        createItemToggle(getText("Clackers"), YBAConfig.ItemESP.Items["Clackers"])
+        createItemToggle(getText("CaesarsHeadband"), YBAConfig.ItemESP.Items["Caesar's Headband"])
+        createItemToggle(getText("ZeppeliHat"), YBAConfig.ItemESP.Items["Zeppeli's Hat"])
+        createItemToggle(getText("ZeppeliScarf"), YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
+        createItemToggle(getText("QuintonsGlove"), YBAConfig.ItemESP.Items["Quinton's Glove"])
+        createItemToggle(getText("StoneMask"), YBAConfig.ItemESP.Items["Stone Mask"])
+        createItemToggle(getText("RibCage"), YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
+        createItemToggle(getText("AncientScroll"), YBAConfig.ItemESP.Items["Ancient Scroll"])
+        createItemToggle(getText("DiosDiary"), YBAConfig.ItemESP.Items["DIO's Diary"])
+        createItemToggle(getText("LuckyStoneMask"), YBAConfig.ItemESP.Items["Lucky Stone Mask"])
+        createItemToggle(getText("LuckyArrow"), YBAConfig.ItemESP.Items["Lucky Arrow"])
+        
+        -- 🤖 AUTOFARM заголовок
+        createSectionHeader("🤖 AUTOFARM")
+        
+        -- Autofarm тумблер
+        createToggleSlider("Autofarm", YBAModule and YBAModule.isAutofarmEnabled() or false, function(v)
+            if v then
+                if YBAModule then YBAModule.startAutofarm() end
+            else
+                if YBAModule then YBAModule.stopAutofarm() end
+            end
+        end)
+        
+        -- Заголовок для выбора предметов автофарма
+        createSectionHeader("📦 ITEMS FARM")
+        
+        -- Функция для создания переключателей предметов автофарма
+        local function createAutofarmItemToggle(itemName, defaultState)
+            local btn = createToggleSlider(itemName, defaultState, function(v)
+                AutofarmConfig.Items[itemName] = v
+                
+                -- ФИКС: Синхронизируем ОБА варианта ключей для предметов
+                if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" or itemName == "Таинственная стрела" then
+                    AutofarmConfig.Items["Mysterious Arrow"] = v -- с пробелом (ОСНОВНОЙ ключ для поиска)
+                    AutofarmConfig.Items["MysteriousArrow"] = v -- без пробела
+                elseif itemName == "GoldCoin" or itemName == "Gold Coin" or itemName == "Золотая монета" then
+                    AutofarmConfig.Items["Gold Coin"] = v -- с пробелом
+                    AutofarmConfig.Items["GoldCoin"] = v -- без пробела
+                end
+                
+                print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
+                
+                -- Если автофарм активен, сбрасываем попытки для всех предметов этого типа
+                -- чтобы изменения применились немедленно
+                if YBAModule and YBAModule.isAutofarmEnabled() then
+                    -- Очищаем счетчики попыток для предмета
+                    for key, _ in pairs(autofarmItemAttempts) do
+                        if string.find(key, itemName) then
+                            autofarmItemAttempts[key] = nil
+                        end
+                    end
+                    
+                    -- Очищаем пропущенные предметы
+                    for key, item in pairs(autofarmSkippedItems) do
+                        if item.Name == itemName then
+                            autofarmSkippedItems[key] = nil
+                        end
+                    end
+                    
+                    -- КРИТИЧНО: Если текущий целевой предмет был отключен, прерываем движение к нему
+                    if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
+                        print("🤖 AUTOFARM: Прерываем движение к предмету", itemName, "- он был отключен в настройках")
+                        autofarmCurrentTarget = nil
+                        autofarmPickingUp = false
+                        
+                        -- ПРИНУДИТЕЛЬНО отпускаем клавишу E если она зажата
+                        pcall(function()
+                            if game:GetService("VirtualInputManager") then
+                                game:GetService("VirtualInputManager"):SendKeyEvent(false, AutofarmConfig.PickupKey, false, game)
+                            end
+                            game:GetService("UserInputService").InputEnded:Fire(
+                                {KeyCode = AutofarmConfig.PickupKey, UserInputType = Enum.UserInputType.Keyboard},
+                                false
+                            )
+                        end)
+                        
+                        -- Отключаем все соединения движения и подбора
+                        for _, connection in ipairs(autofarmConnections) do
+                            if connection then
+                                pcall(function() connection:Disconnect() end)
+                            end
+                        end
+                        autofarmConnections = {}
+                        
+                        -- Немедленно ищем следующий предмет
+                        task.spawn(function()
+                            task.wait(0.1)
+                            if YBAModule and YBAModule.isAutofarmEnabled() then
+                                processNextItem()
+                            end
+                        end)
+                    end
+                    
+                    -- Убираем лишний спам
+                end
+            end)
+            return btn
+        end
+        
+        -- Создаем переключатели для всех предметов автофарма
+        createAutofarmItemToggle("Mysterious Arrow", AutofarmConfig.Items["Mysterious Arrow"])
+        createAutofarmItemToggle("Rokakaka", AutofarmConfig.Items["Rokakaka"])
+        createAutofarmItemToggle("Pure Rokakaka", AutofarmConfig.Items["Pure Rokakaka"])
+        createAutofarmItemToggle("Diamond", AutofarmConfig.Items["Diamond"])
+        createAutofarmItemToggle("Gold Coin", AutofarmConfig.Items["Gold Coin"])
+        createAutofarmItemToggle("Steel Ball", AutofarmConfig.Items["Steel Ball"])
+        createAutofarmItemToggle("Clackers", AutofarmConfig.Items["Clackers"])
+        createAutofarmItemToggle("Caesar's Headband", AutofarmConfig.Items["Caesar's Headband"])
+        createAutofarmItemToggle("Zeppeli's Hat", AutofarmConfig.Items["Zeppeli's Hat"])
+        createAutofarmItemToggle("Zeppeli's Scarf", AutofarmConfig.Items["Zeppeli's Scarf"])
+        createAutofarmItemToggle("Quinton's Glove", AutofarmConfig.Items["Quinton's Glove"])
+        createAutofarmItemToggle("Stone Mask", AutofarmConfig.Items["Stone Mask"])
+        createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
+        createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
+        createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
+        createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
+        createAutofarmItemToggle("Lucky Arrow", AutofarmConfig.Items["Lucky Arrow"])
+        
+        -- AUTOSELL секция (загрузка модуля)
+        createDivider()
+        createSectionHeader("🤖 AUTO SELL")
+        
+        -- Проверяем загружен ли модуль автоселла
+        if _G.AutosellModule then
+            -- Модуль уже загружен, используем его функцию createGUI
+            if _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
+                print("🤖 AUTOSELL: Создаем GUI через модуль...")
+                print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
+                local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
+                print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
+                currentY = newCurrentY or currentY
+            else
+                -- Fallback на старый способ если функция createGUI недоступна
+                createSectionHeader("🤖 AUTO SELL CONTROLS")
+                
+                -- Главный тумблер автоселла
+                createToggleSlider("Auto Sell Enabled", false, function(v)
+                    if _G.AutosellModule then
+                        if v then
+                            _G.AutosellModule.start()
+                        else
+                            _G.AutosellModule.stop()
+                        end
+                    end
+                end)
+                
+                -- Кнопки быстрого управления
+                createButton("Enable All Items for Sale", function()
+                    if _G.AutosellModule and _G.AutosellModule.enableAllItems then
+                        _G.AutosellModule.enableAllItems()
+                    end
+                end)
+                
+                createButton("Disable All Items for Sale", function()
+                    if _G.AutosellModule and _G.AutosellModule.disableAllItems then
+                        _G.AutosellModule.disableAllItems()
+                    end
+                end)
+            end
+        else
+            -- Модуль не загружен, показываем кнопку загрузки
+        end
+        
+        -- Кнопка загрузки модуля автоселла
+        local loadButton = createButton("Load Autosell Module", function()
+            print("🤖 AUTOSELL: Загружаем модуль автоселла...")
+            
+            if _G.AutosellModule then
+                print("🤖 AUTOSELL: Модуль уже загружен! Обновляем интерфейс...")
+                -- Скрываем кнопку если модуль уже загружен
+                if loadButton then loadButton.Visible = false end
+                showContent("YBA Hacks")
+                return
+            end
+            
+            local success, result = pcall(function()
+                -- Загружаем модуль автоселла через HTTP с GitHub
+                local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh98232")
+                return loadstring(autosellCode)()
+            end)
+            
+            if not success then
+                -- Fallback: загружаем локальный файл
+                success, result = pcall(function()
+                    local autosellCode = readfile("autosell.lua")
+                    return loadstring(autosellCode)()
+                end)
+            end
+            
+            if success and result then
+                print("🤖 AUTOSELL: Модуль загружен, создаем GUI...")
+                
+                -- Используем функцию createGUI из загруженного модуля
+                if _G.AutosellModule and _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
+                    print("🤖 AUTOSELL: Создаем GUI через загруженный модуль...")
+                    print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
+                    local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
+                    print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
+                    currentY = newCurrentY or currentY
+                else
+                    -- Fallback на старый способ если функция createGUI недоступна
+                    createDivider()
+                    createSectionHeader("🤖 AUTO SELL CONTROLS")
+                    
+                    -- Главный тумблер автоселла
+                    createToggleSlider("Auto Sell Enabled", false, function(v)
+                        if _G.AutosellModule then
+                            if v then
+                                _G.AutosellModule.start()
+                            else
+                                _G.AutosellModule.stop()
+                            end
+                        end
+                    end)
+                    
+                    -- Кнопки быстрого управления
+                    createButton("Enable All Items for Sale", function()
+                        if _G.AutosellModule and _G.AutosellModule.enableAllItems then
+                            _G.AutosellModule.enableAllItems()
+                        end
+                    end)
+                    
+                    createButton("Disable All Items for Sale", function()
+                        if _G.AutosellModule and _G.AutosellModule.disableAllItems then
+                            _G.AutosellModule.disableAllItems()
+                        end
+                    end)
+                end
+                
+                print("🤖 AUTOSELL: GUI создан! Управление доступно выше.")
+                
+                -- Обновляем размер контейнера чтобы новые элементы отобразились
+                functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+                
+                -- Принудительно обновляем прокрутку
+                if scrollFrame then
+                    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+                end
+                
+                -- Скрываем кнопку загрузки после успешной загрузки
+                if loadButton then loadButton.Visible = false end
+                
+                -- Делаем задержку и полное обновление интерфейса
+                task.wait(0.5)
+                showContent("YBA Hacks")
+            else
+                print("🤖 AUTOSELL: Ошибка загрузки модуля:", tostring(result))
+                print("🤖 AUTOSELL: Попробуйте:")
+                print("1. Разместить autosell.lua онлайн и обновить URL")
+                print("2. Или поместить autosell.lua в папку workspace")
+            end
+        end)
+    elseif tabName == "Settings" then
+        contentTitle.Text = getText("MenuSettings")
+        
+
+        
+        createDivider()
+        
+        local accentColorLabel = Instance.new("TextLabel", functionsContainer)
+        accentColorLabel.Text = getText("AccentColor")
+        accentColorLabel.TextColor3 = Color3.new(1,1,1)
+        accentColorLabel.BackgroundTransparency = 1
+        accentColorLabel.Size = UDim2.new(1, -10, 0, 20)
+        accentColorLabel.Position = UDim2.new(0, 5, 0, currentY)
+        accentColorLabel.Font = Enum.Font.Gotham
+        accentColorLabel.TextSize = 14
+        accentColorLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 20 + padding
+
+        local accentColors = {
+            Color3.fromRGB(0, 150, 0),
+            Color3.fromRGB(0, 100, 255),
+            Color3.fromRGB(255, 0, 100),
+            Color3.fromRGB(255, 150, 0),
+            Color3.fromRGB(150, 0, 255),
+            Color3.fromRGB(255, 255, 0),
+            Color3.fromRGB(0, 255, 255),
+            Color3.fromRGB(255, 50, 50),
+        }
+
+        local colorRow = Instance.new("Frame", functionsContainer)
+        colorRow.Size = UDim2.new(1, -10, 0, 35)
+        colorRow.Position = UDim2.new(0, 5, 0, currentY)
+        colorRow.BackgroundTransparency = 1
+
+        local colorLayout = Instance.new("UIListLayout", colorRow)
+        colorLayout.FillDirection = Enum.FillDirection.Horizontal
+        colorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        colorLayout.Padding = UDim.new(0, 8)
+
+        for _, color in pairs(accentColors) do
+            local colorBtn = Instance.new("TextButton", colorRow)
+            colorBtn.Size = UDim2.new(0, 30, 0, 30)
+            colorBtn.BackgroundColor3 = color
+            colorBtn.Text = ""
+            colorBtn.AutoButtonColor = false
+            colorBtn.BorderSizePixel = 0
+            
+            local colorCorner = Instance.new("UICorner", colorBtn)
+            colorCorner.CornerRadius = UDim.new(0, 6)
+            
+            if MenuSettings.AccentColor == color then
+                local highlight = Instance.new("UIStroke", colorBtn)
+                highlight.Color = Color3.new(1, 1, 1)
+                highlight.Thickness = 2
+            end
+            
+            colorBtn.MouseButton1Click:Connect(function()
+                MenuSettings.AccentColor = color
+                updateAccentColor()
+                
+                for _, btn in pairs(colorRow:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        local stroke = btn:FindFirstChild("UIStroke")
+                        if stroke then stroke:Destroy() end
+                        
+                        if btn.BackgroundColor3 == color then
+                            local highlight = Instance.new("UIStroke", btn)
+                            highlight.Color = Color3.new(1, 1, 1)
+                            highlight.Thickness = 2
+                        end
+                    end
+                end
+                
+                showContent(selectedTab)
+            end)
+        end
+        
+        currentY = currentY + 35 + padding
+        
+        createDivider()
+        
+        createDropdown(getText("Language"), {"English", "Russian"}, MenuSettings.Language, function(selectedLanguage)
+            MenuSettings.Language = selectedLanguage
+            updateAllTexts()
+        end)
+    end
+    
+    functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+    
+    selectedTab = tabName
+    
+    if scrollFrame and tabScrollPositions[tabName] then
+        scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+    end
+end
+
+showContent("Main")
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        mainFrame.Visible = not mainFrame.Visible
+        if mainFrame.Visible then
+            local existingButton = screenGui:FindFirstChild("ReopenButton")
+            if existingButton then
+                existingButton:Destroy()
+            end
+        else
+            createReopenButton()
+        end
+    end
+end)
