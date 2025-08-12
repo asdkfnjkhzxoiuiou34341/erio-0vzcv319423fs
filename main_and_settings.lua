@@ -1,0 +1,862 @@
+-- Модуль для вкладок Main и Settings
+-- Содержит основную функциональность ESP, Aimbot, движение, телепорт и настройки меню
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Основные конфигурации
+local Config = {
+    ESP = {
+        Enabled     = true,
+        TeamCheck   = false,
+        ShowOutline = true,
+        ShowLines   = false,
+        Rainbow     = false,
+        FillColor   = Color3.fromRGB(255,255,255),
+        OutlineColor= Color3.fromRGB(255,255,255),
+        TextColor   = Color3.fromRGB(255,255,255),
+        LineColor   = Color3.fromRGB(255,255,255),
+        FillTransparency    = 0.5,
+        OutlineTransparency = 0,
+        Font        = Enum.Font.SciFi,
+        TeamColor   = Color3.fromRGB(0,255,0),
+        EnemyColor  = Color3.fromRGB(255,0,0),
+        ToggleKey   = nil,
+    },
+    Aimbot = {
+        Enabled         = false,
+        TeamCheck       = false,
+        VisibilityCheck = true,
+        FOV             = 150,
+        ToggleKey       = nil,
+        FOVColor        = Color3.fromRGB(255,128,128),
+        FOVRainbow      = false,
+    },
+}
+
+local MovementConfig = {
+    Fly = {Enabled = false, Speed = 1, ToggleKey = nil},
+    NoClip = {Enabled = false, ToggleKey = nil, ForceToggleKey = nil},
+    Speed = {Enabled = false, Speed = 1, ToggleKey = nil, UseJumpPower = false},
+    LongJump = {Enabled = false, JumpPower = 150, ToggleKey = nil},
+    InfiniteJump = {Enabled = false, JumpPower = 50, ToggleKey = nil},
+}
+
+local TeleportConfig = {
+    Enabled = false,
+    TargetPlayer = nil,
+    OriginalPosition = nil,
+    ToggleKey = nil,
+    SelectedPlayerName = nil,
+    UseStealthMode = true,
+    TeleportSpeed = 2000,
+    ReturnSpeed = 2400,
+    BehindPlayerDistance = 2.6,
+    StabilizationTime = 0.25,
+    MaxSpeedResetTime = 2.0,
+    SpeedResetThreshold = 50,
+    InstantTurnSpeed = 600,
+    SmoothingFactor = 0.2,
+    MaxCorrectionSpeed = 180,
+    StabilizationThreshold = 0.9,
+}
+
+-- Переводы (расширенные)
+local Translations = {
+    English = {
+        ESP = "ESP",
+        TeamCheck = "Team Check",
+        ShowOutline = "Show Outline",
+        ShowLines = "Show Lines",
+        RainbowColors = "Rainbow Colors",
+        Aimbot = "Aimbot",
+        VisibilityCheck = "Visibility Check",
+        FOVRainbow = "FOV Rainbow",
+        LongJump = "Long Jump",
+        InfiniteJump = "Infinite Jump",
+        SelectedPlayer = "Selected Player",
+        StartTeleport = "Start Teleport",
+        StopTeleport = "Stop Teleport",
+        AccentColor = "Accent Color",
+        Language = "Language"
+    },
+    Russian = {
+        ESP = "ЕСП",
+        TeamCheck = "Проверка команды",
+        ShowOutline = "Показать контуры",
+        ShowLines = "Показать линии",
+        RainbowColors = "Радужные цвета",
+        Aimbot = "Эимбот",
+        VisibilityCheck = "Проверка видимости",
+        FOVRainbow = "Радужный FOV",
+        LongJump = "Длинный прыжок",
+        InfiniteJump = "Бесконечный прыжок",
+        SelectedPlayer = "Выбранный игрок",
+        StartTeleport = "Начать телепорт",
+        StopTeleport = "Остановить телепорт",
+        AccentColor = "Цвет акцента",
+        Language = "Язык"
+    }
+}
+
+-- Переменные состояния
+local isFlying = false
+local flyConnections = {}
+local originalGravity = workspace.Gravity
+
+local isNoClipping = false
+local noClipConnections = {}
+
+local isSpeedHacking = false
+local speedHackConnections = {}
+local originalWalkSpeed = 16
+local originalJumpPower = 50
+
+local isLongJumping = false
+local longJumpConnections = {}
+
+local isInfiniteJumping = false
+local infiniteJumpConnections = {}
+
+local isTeleportingToPlayer = false
+local teleportConnections = {}
+
+-- Вспомогательные переменные для GUI
+local currentY = 0
+local padding = 5
+local functionsContainer = nil
+local scrollFrame = nil
+local teleportBtn = nil
+
+-- Функции ESP
+local function createPlayerESP(player)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local character = player.Character
+    local humanoidRootPart = character.HumanoidRootPart
+    local head = character:FindFirstChild("Head")
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerESP"
+    billboard.Parent = head or humanoidRootPart
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    
+    local frame = Instance.new("Frame")
+    frame.Parent = billboard
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = Config.ESP.FillTransparency
+    frame.BackgroundColor3 = Config.ESP.FillColor
+    frame.BorderSizePixel = Config.ESP.ShowOutline and 2 or 0
+    frame.BorderColor3 = Config.ESP.OutlineColor
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Parent = frame
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = Config.ESP.TextColor
+    nameLabel.TextScaled = true
+    nameLabel.Font = Config.ESP.Font
+end
+
+-- Функции движения
+local function startFly()
+    if isFlying then return end
+    isFlying = true
+    
+    local player = Players.LocalPlayer
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local character = player.Character
+    local humanoidRootPart = character.HumanoidRootPart
+    
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = humanoidRootPart
+    
+    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+    bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+    bodyAngularVelocity.Parent = humanoidRootPart
+    
+    workspace.Gravity = 0
+    
+    local connection = RunService.Heartbeat:Connect(function()
+        local camera = workspace.CurrentCamera
+        local forward = camera.CFrame.lookVector
+        local right = camera.CFrame.rightVector
+        local up = Vector3.new(0, 1, 0)
+        
+        local moveVector = Vector3.new(0, 0, 0)
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveVector = moveVector + forward
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveVector = moveVector - forward
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveVector = moveVector - right
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveVector = moveVector + right
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveVector = moveVector + up
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveVector = moveVector - up
+        end
+        
+        bodyVelocity.Velocity = moveVector * MovementConfig.Fly.Speed * 16
+    end)
+    
+    table.insert(flyConnections, connection)
+    print("✈️ Fly: Активирован")
+end
+
+local function stopFly()
+    if not isFlying then return end
+    isFlying = false
+    
+    for _, connection in pairs(flyConnections) do
+        connection:Disconnect()
+    end
+    flyConnections = {}
+    
+    workspace.Gravity = originalGravity
+    
+    local player = Players.LocalPlayer
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local humanoidRootPart = player.Character.HumanoidRootPart
+        
+        local bodyVelocity = humanoidRootPart:FindFirstChild("BodyVelocity")
+        if bodyVelocity then
+            bodyVelocity:Destroy()
+        end
+        
+        local bodyAngularVelocity = humanoidRootPart:FindFirstChild("BodyAngularVelocity")
+        if bodyAngularVelocity then
+            bodyAngularVelocity:Destroy()
+        end
+    end
+    
+    print("✈️ Fly: Деактивирован")
+end
+
+local function startNoClip()
+    if isNoClipping then return end
+    isNoClipping = true
+    
+    local player = Players.LocalPlayer
+    if not player.Character then return end
+    
+    local connection = RunService.Stepped:Connect(function()
+        if player.Character then
+            for _, part in pairs(player.Character:GetChildren()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+    
+    table.insert(noClipConnections, connection)
+    print("👻 NoClip: Активирован")
+end
+
+local function stopNoClip()
+    if not isNoClipping then return end
+    isNoClipping = false
+    
+    for _, connection in pairs(noClipConnections) do
+        connection:Disconnect()
+    end
+    noClipConnections = {}
+    
+    local player = Players.LocalPlayer
+    if player.Character then
+        for _, part in pairs(player.Character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+    
+    print("👻 NoClip: Деактивирован")
+end
+
+local function startSpeedHack()
+    if isSpeedHacking then return end
+    isSpeedHacking = true
+    
+    local player = Players.LocalPlayer
+    if not player.Character or not player.Character:FindFirstChildOfClass("Humanoid") then
+        return
+    end
+    
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    originalWalkSpeed = humanoid.WalkSpeed
+    originalJumpPower = humanoid.JumpPower
+    
+    humanoid.WalkSpeed = MovementConfig.Speed.Speed * 16
+    if MovementConfig.Speed.UseJumpPower then
+        humanoid.JumpPower = MovementConfig.Speed.Speed * 50
+    end
+    
+    print("🏃 SpeedHack: Активирован со скоростью", MovementConfig.Speed.Speed)
+end
+
+local function stopSpeedHack()
+    if not isSpeedHacking then return end
+    isSpeedHacking = false
+    
+    local player = Players.LocalPlayer
+    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        humanoid.WalkSpeed = originalWalkSpeed
+        humanoid.JumpPower = originalJumpPower
+    end
+    
+    print("🏃 SpeedHack: Деактивирован")
+end
+
+-- Функции создания GUI элементов
+local function createToggleSlider(name, defaultValue, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 35)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    container.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", container)
+    corner.CornerRadius = UDim.new(0, 6)
+    
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Text = name
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local slider = Instance.new("Frame", container)
+    slider.Size = UDim2.new(0, 50, 0, 20)
+    slider.Position = UDim2.new(1, -60, 0.5, -10)
+    slider.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
+    slider.BorderSizePixel = 0
+    
+    local sliderCorner = Instance.new("UICorner", slider)
+    sliderCorner.CornerRadius = UDim.new(0, 10)
+    
+    local handle = Instance.new("Frame", slider)
+    handle.Size = UDim2.new(0, 18, 0, 18)
+    handle.Position = defaultValue and UDim2.new(1, -19, 0.5, -9) or UDim2.new(0, 1, 0.5, -9)
+    handle.BackgroundColor3 = Color3.new(1, 1, 1)
+    handle.BorderSizePixel = 0
+    
+    local handleCorner = Instance.new("UICorner", handle)
+    handleCorner.CornerRadius = UDim.new(0, 9)
+    
+    local enabled = defaultValue
+    
+    local function toggle()
+        enabled = not enabled
+        slider.BackgroundColor3 = enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(100, 100, 100)
+        
+        local targetPosition = enabled and UDim2.new(1, -19, 0.5, -9) or UDim2.new(0, 1, 0.5, -9)
+        local tween = TweenService:Create(handle, TweenInfo.new(0.2), {Position = targetPosition})
+        tween:Play()
+        
+        callback(enabled)
+    end
+    
+    slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            toggle()
+        end
+    end)
+    
+    currentY = currentY + 35 + padding
+    return container
+end
+
+local function createSlider(name, min, max, defaultValue, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 50)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    container.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", container)
+    corner.CornerRadius = UDim.new(0, 6)
+    
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(1, -10, 0, 25)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.Text = name .. ": " .. defaultValue
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local sliderBack = Instance.new("Frame", container)
+    sliderBack.Name = "SliderBack"
+    sliderBack.Size = UDim2.new(1, -20, 0, 6)
+    sliderBack.Position = UDim2.new(0, 10, 1, -15)
+    sliderBack.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    sliderBack.BorderSizePixel = 0
+    
+    local sliderCorner = Instance.new("UICorner", sliderBack)
+    sliderCorner.CornerRadius = UDim.new(0, 3)
+    
+    local sliderHandle = Instance.new("Frame", sliderBack)
+    sliderHandle.Size = UDim2.new(0, 12, 1, 6)
+    sliderHandle.Position = UDim2.new((defaultValue - min) / (max - min), -6, 0, -3)
+    sliderHandle.BackgroundColor3 = Color3.new(1, 1, 1)
+    sliderHandle.BorderSizePixel = 0
+    
+    local handleCorner = Instance.new("UICorner", sliderHandle)
+    handleCorner.CornerRadius = UDim.new(0, 6)
+    
+    local dragging = false
+    
+    sliderHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local mouse = Players.LocalPlayer:GetMouse()
+            local relativeX = math.clamp((mouse.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X, 0, 1)
+            local value = math.floor(min + (max - min) * relativeX)
+            
+            sliderHandle.Position = UDim2.new(relativeX, -6, 0, -3)
+            label.Text = name .. ": " .. value
+            callback(value)
+        end
+    end)
+    
+    currentY = currentY + 50 + padding
+    return container
+end
+
+local function createColorPicker(name, defaultColor, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 35)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    container.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", container)
+    corner.CornerRadius = UDim.new(0, 6)
+    
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Text = name
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local colorButton = Instance.new("TextButton", container)
+    colorButton.Size = UDim2.new(0, 25, 0, 25)
+    colorButton.Position = UDim2.new(1, -35, 0.5, -12.5)
+    colorButton.BackgroundColor3 = defaultColor
+    colorButton.Text = ""
+    colorButton.BorderSizePixel = 0
+    
+    local colorCorner = Instance.new("UICorner", colorButton)
+    colorCorner.CornerRadius = UDim.new(0, 4)
+    
+    currentY = currentY + 35 + padding
+    return container
+end
+
+local function createSectionHeader(text)
+    local header = Instance.new("TextLabel", functionsContainer)
+    header.Size = UDim2.new(1, -10, 0, 30)
+    header.Position = UDim2.new(0, 5, 0, currentY)
+    header.Text = text
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 16
+    header.TextColor3 = Color3.fromRGB(255, 255, 0)
+    header.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    header.BorderSizePixel = 1
+    header.BorderColor3 = Color3.fromRGB(100, 100, 120)
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local headerCorner = Instance.new("UICorner", header)
+    headerCorner.CornerRadius = UDim.new(0, 4)
+    
+    currentY = currentY + 30 + padding
+    return header
+end
+
+local function createDivider()
+    local divider = Instance.new("Frame", functionsContainer)
+    divider.Size = UDim2.new(1, -20, 0, 2)
+    divider.Position = UDim2.new(0, 10, 0, currentY)
+    divider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    divider.BorderSizePixel = 0
+    
+    currentY = currentY + 2 + padding * 2
+    return divider
+end
+
+local function createDropdown(name, options, defaultValue, callback)
+    local container = Instance.new("Frame", functionsContainer)
+    container.Size = UDim2.new(1, -10, 0, 35)
+    container.Position = UDim2.new(0, 5, 0, currentY)
+    container.BackgroundTransparency = 1
+    
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.Text = name
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local dropdown = Instance.new("TextButton", container)
+    dropdown.Size = UDim2.new(0.5, 0, 1, 0)
+    dropdown.Position = UDim2.new(0.5, 0, 0, 0)
+    dropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+    dropdown.BorderSizePixel = 0
+    dropdown.Font = Enum.Font.Gotham
+    dropdown.TextSize = 14
+    dropdown.TextColor3 = Color3.new(1, 1, 1)
+    dropdown.AutoButtonColor = false
+    
+    local dropdownCorner = Instance.new("UICorner", dropdown)
+    dropdownCorner.CornerRadius = UDim.new(0, 6)
+    
+    local currentValue = defaultValue
+    local isOpen = false
+    
+    dropdown.Text = currentValue .. " ▼"
+    
+    local optionsFrame = Instance.new("Frame", dropdown)
+    optionsFrame.Size = UDim2.new(1, 0, 0, #options * 25)
+    optionsFrame.Position = UDim2.new(0, 0, 1, 5)
+    optionsFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+    optionsFrame.BorderSizePixel = 0
+    optionsFrame.Visible = false
+    optionsFrame.ZIndex = 10
+    
+    local optionsCorner = Instance.new("UICorner", optionsFrame)
+    optionsCorner.CornerRadius = UDim.new(0, 6)
+    
+    for i, option in ipairs(options) do
+        local optionButton = Instance.new("TextButton", optionsFrame)
+        optionButton.Size = UDim2.new(1, 0, 0, 25)
+        optionButton.Position = UDim2.new(0, 0, 0, (i-1) * 25)
+        optionButton.Text = option
+        optionButton.Font = Enum.Font.Gotham
+        optionButton.TextSize = 12
+        optionButton.TextColor3 = Color3.new(1, 1, 1)
+        optionButton.BackgroundColor3 = option == currentValue and Color3.fromRGB(80, 80, 85) or Color3.fromRGB(60, 60, 65)
+        optionButton.BorderSizePixel = 0
+        optionButton.AutoButtonColor = false
+        
+        optionButton.MouseButton1Click:Connect(function()
+            currentValue = option
+            dropdown.Text = currentValue .. " ▼"
+            optionsFrame.Visible = false
+            isOpen = false
+            callback(option)
+            
+            for _, btn in pairs(optionsFrame:GetChildren()) do
+                if btn:IsA("TextButton") then
+                    btn.BackgroundColor3 = btn.Text == currentValue and Color3.fromRGB(80, 80, 85) or Color3.fromRGB(60, 60, 65)
+                end
+            end
+        end)
+    end
+    
+    dropdown.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        optionsFrame.Visible = isOpen
+        dropdown.Text = currentValue .. (isOpen and " ▲" or " ▼")
+    end)
+    
+    currentY = currentY + 35 + padding
+    return container
+end
+
+-- Основная функция модуля
+local function showContent(tabName, rightPanel, MenuSettings, getText)
+    -- Очищаем контейнер
+    for _, child in pairs(rightPanel:GetChildren()) do
+        if child.Name ~= "ContentTitle" and child.Name ~= "CloseButton" and child.Name ~= "LoadingLabel" then
+            child:Destroy()
+        end
+    end
+    
+    -- Создаем контейнер для контента
+    scrollFrame = Instance.new("ScrollingFrame", rightPanel)
+    scrollFrame.Name = "ScrollFrame"
+    scrollFrame.Size = UDim2.new(1, -30, 1, -60)
+    scrollFrame.Position = UDim2.new(0, 15, 0, 50)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    
+    functionsContainer = Instance.new("Frame", scrollFrame)
+    functionsContainer.Name = "FunctionsContainer"
+    functionsContainer.Size = UDim2.new(1, 0, 0, 0)
+    functionsContainer.Position = UDim2.new(0, 0, 0, 0)
+    functionsContainer.BackgroundTransparency = 1
+    
+    currentY = 0
+    
+    if tabName == "Main" then
+        -- Main tab content
+        createSectionHeader("🔷 ESP Settings")
+        createToggleSlider(getText("ESP"), Config.ESP.Enabled, function(v) 
+            Config.ESP.Enabled = v 
+            if v then
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= Players.LocalPlayer then
+                        createPlayerESP(player)
+                    end
+                end
+            else
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player.Character and player.Character:FindFirstChild("Head") then
+                        local esp = player.Character.Head:FindFirstChild("PlayerESP")
+                        if esp then esp:Destroy() end
+                    end
+                end
+            end
+        end)
+        createToggleSlider(getText("TeamCheck"), Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
+        createToggleSlider(getText("ShowOutline"), Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
+        createToggleSlider(getText("ShowLines"), Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
+        createToggleSlider(getText("RainbowColors"), Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
+        
+        createColorPicker("Fill Color", Config.ESP.FillColor, function(c) Config.ESP.FillColor = c end)
+        createColorPicker("Outline Color", Config.ESP.OutlineColor, function(c) Config.ESP.OutlineColor = c end)
+        createSlider("Fill Transparency", 0, 1, Config.ESP.FillTransparency, function(v) Config.ESP.FillTransparency = v end)
+        
+        createDivider()
+        
+        createSectionHeader("🔷 Aimbot Settings")
+        createToggleSlider(getText("Aimbot"), Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
+        createToggleSlider(getText("TeamCheck"), Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
+        createToggleSlider(getText("VisibilityCheck"), Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
+        createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
+        createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
+        createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
+        
+        createDivider()
+        
+        createSectionHeader("🟨 Fly Settings")
+        createToggleSlider("Fly", MovementConfig.Fly.Enabled, function(v)
+            MovementConfig.Fly.Enabled = v
+            if v then startFly() else stopFly() end
+        end)
+        createSlider("Fly Speed", 0.1, 10, MovementConfig.Fly.Speed, function(v)
+            MovementConfig.Fly.Speed = v
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🟪 NoClip Settings")
+        createToggleSlider("NoClip", MovementConfig.NoClip.Enabled, function(v)
+            MovementConfig.NoClip.Enabled = v
+            if v then startNoClip() else stopNoClip() end
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🟦 SpeedHack Settings")
+        createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
+            MovementConfig.Speed.Enabled = v
+            if v then startSpeedHack() else stopSpeedHack() end
+        end)
+        createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
+            MovementConfig.Speed.UseJumpPower = v
+            if MovementConfig.Speed.Enabled then
+                stopSpeedHack()
+                startSpeedHack()
+            end
+        end)
+        createSlider("SpeedHack Speed", 0.1, 10, MovementConfig.Speed.Speed, function(v)
+            MovementConfig.Speed.Speed = v
+            if MovementConfig.Speed.Enabled then
+                local char = Players.LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = v * 16
+                    if MovementConfig.Speed.UseJumpPower then
+                        hum.JumpPower = v * 50
+                    end
+                end
+            end
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🦘 Jump Settings")
+        createToggleSlider(getText("LongJump"), MovementConfig.LongJump.Enabled, function(v)
+            MovementConfig.LongJump.Enabled = v
+        end)
+        createSlider("Long Jump Power", 50, 500, MovementConfig.LongJump.JumpPower, function(v)
+            MovementConfig.LongJump.JumpPower = v
+        end)
+        createToggleSlider(getText("InfiniteJump"), MovementConfig.InfiniteJump.Enabled, function(v)
+            MovementConfig.InfiniteJump.Enabled = v
+        end)
+        createSlider("Infinite Jump Power", 20, 150, MovementConfig.InfiniteJump.JumpPower, function(v)
+            MovementConfig.InfiniteJump.JumpPower = v
+        end)
+        
+        createDivider()
+        
+        createSectionHeader("🟩 Teleport Settings")
+        
+        local selectedPlayerLabel = Instance.new("TextLabel", functionsContainer)
+        selectedPlayerLabel.Size = UDim2.new(1, -10, 0, 24)
+        selectedPlayerLabel.Position = UDim2.new(0, 5, 0, currentY)
+        selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. (TeleportConfig.SelectedPlayerName or "None")
+        selectedPlayerLabel.Font = Enum.Font.GothamBold
+        selectedPlayerLabel.TextSize = 14
+        selectedPlayerLabel.TextColor3 = Color3.new(1,1,1)
+        selectedPlayerLabel.BackgroundTransparency = 1
+        selectedPlayerLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 24 + padding
+        
+        -- Дропдаун для выбора игрока
+        local playerNames = {}
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer then
+                table.insert(playerNames, player.Name)
+            end
+        end
+        
+        if #playerNames > 0 then
+            createDropdown("Select Player", playerNames, playerNames[1] or "None", function(selectedName)
+                TeleportConfig.SelectedPlayerName = selectedName
+                selectedPlayerLabel.Text = getText("SelectedPlayer") .. ": " .. selectedName
+                TeleportConfig.TargetPlayer = Players:FindFirstChild(selectedName)
+            end)
+        end
+        
+    elseif tabName == "Settings" then
+        -- Settings tab content
+        createDivider()
+        
+        local accentColorLabel = Instance.new("TextLabel", functionsContainer)
+        accentColorLabel.Text = getText("AccentColor")
+        accentColorLabel.TextColor3 = Color3.new(1,1,1)
+        accentColorLabel.BackgroundTransparency = 1
+        accentColorLabel.Size = UDim2.new(1, -10, 0, 20)
+        accentColorLabel.Position = UDim2.new(0, 5, 0, currentY)
+        accentColorLabel.Font = Enum.Font.Gotham
+        accentColorLabel.TextSize = 14
+        accentColorLabel.TextXAlignment = Enum.TextXAlignment.Left
+        currentY = currentY + 20 + padding
+        
+        local accentColors = {
+            Color3.fromRGB(0, 150, 0),
+            Color3.fromRGB(0, 100, 255),
+            Color3.fromRGB(255, 0, 100),
+            Color3.fromRGB(255, 150, 0),
+            Color3.fromRGB(150, 0, 255),
+            Color3.fromRGB(255, 255, 0),
+            Color3.fromRGB(0, 255, 255),
+            Color3.fromRGB(255, 50, 50),
+        }
+        
+        local colorRow = Instance.new("Frame", functionsContainer)
+        colorRow.Size = UDim2.new(1, -10, 0, 35)
+        colorRow.Position = UDim2.new(0, 5, 0, currentY)
+        colorRow.BackgroundTransparency = 1
+        
+        local colorLayout = Instance.new("UIListLayout", colorRow)
+        colorLayout.FillDirection = Enum.FillDirection.Horizontal
+        colorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        colorLayout.Padding = UDim.new(0, 8)
+        
+        for _, color in pairs(accentColors) do
+            local colorBtn = Instance.new("TextButton", colorRow)
+            colorBtn.Size = UDim2.new(0, 30, 0, 30)
+            colorBtn.BackgroundColor3 = color
+            colorBtn.Text = ""
+            colorBtn.AutoButtonColor = false
+            colorBtn.BorderSizePixel = 0
+            
+            local colorCorner = Instance.new("UICorner", colorBtn)
+            colorCorner.CornerRadius = UDim.new(0, 6)
+            
+            if MenuSettings.AccentColor == color then
+                local highlight = Instance.new("UIStroke", colorBtn)
+                highlight.Color = Color3.new(1, 1, 1)
+                highlight.Thickness = 2
+            end
+            
+            colorBtn.MouseButton1Click:Connect(function()
+                MenuSettings.AccentColor = color
+                
+                for _, btn in pairs(colorRow:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        local stroke = btn:FindFirstChild("UIStroke")
+                        if stroke then stroke:Destroy() end
+                        
+                        if btn.BackgroundColor3 == color then
+                            local highlight = Instance.new("UIStroke", btn)
+                            highlight.Color = Color3.new(1, 1, 1)
+                            highlight.Thickness = 2
+                        end
+                    end
+                end
+            end)
+        end
+        
+        currentY = currentY + 35 + padding
+        
+        createDivider()
+        
+        createDropdown(getText("Language"), {"English", "Russian"}, MenuSettings.Language, function(selectedLanguage)
+            MenuSettings.Language = selectedLanguage
+        end)
+    end
+    
+    functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+end
+
+-- Возвращаем модуль
+return {
+    showContent = showContent,
+    Config = Config,
+    MovementConfig = MovementConfig,
+    TeleportConfig = TeleportConfig,
+    Translations = Translations
+}
