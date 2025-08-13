@@ -4264,7 +4264,7 @@ local function moveToPosition(targetPosition, callback)
     end
     
     -- НОВАЯ ЛОГИКА: Перемещаемся под землю к предмету для скрытности
-    local undergroundOffset = -1.6 -- На 1.5 единицы под землей для скрытности 
+    local undergroundOffset = -1.9 -- На 1.5 единицы под землей для скрытности 
     local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + undergroundOffset, targetPosition.Z)
     
     print("AUTOFARM: 🔥 ПОДЗЕМНЫЙ полет к позиции", targetPosition, "-> под землю:", adjustedTarget)
@@ -4805,7 +4805,7 @@ function processNextItem()
     print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
     
     -- Летим к предмету (с отступом 1.5 единицы под землей)
-    local targetPosition = Vector3.new(nextItem.Position.X, nextItem.Position.Y - 1.6, nextItem.Position.Z)
+    local targetPosition = Vector3.new(nextItem.Position.X, nextItem.Position.Y - 1.9, nextItem.Position.Z)
     pcall(function()
         moveToPosition(targetPosition, function()
         if isAutofarmEnabled then
@@ -4869,19 +4869,16 @@ local function forceLoadEntireMap()
     -- Оптимизированные точки для прогрузки карты (7 точек: углы + центр + Diavolo)
     local loadPoints = {
         -- Центр карты
-        Vector3.new(0, 70, 0),
+        Vector3.new(0, -70, 0),
         
         -- 4 угла карты (увеличенное расстояние)
-        Vector3.new(600, 70, 600),   -- Северо-Восток
-        Vector3.new(-600, 70, 600),  -- Северо-Запад
-        Vector3.new(600, 70, -600),  -- Юго-Восток
-        Vector3.new(-600, 70, -600), -- Юго-Запад
-        
-        -- Высотная точка для вертикального покрытия
-        Vector3.new(0, 150, 0),      -- Центр высоко
+        Vector3.new(600, -70, 600),   -- Северо-Восток
+        Vector3.new(-600, -70, 600),  -- Северо-Запад
+        Vector3.new(600, -70, -600),  -- Юго-Восток
+        Vector3.new(-600, -70, -600), -- Юго-Запад
         
         -- Область босса Diavolo (Boss Arena) - добавлено для лучшего покрытия
-        Vector3.new(900, 70, 45), -- Позиция левее Diavolo для прогрузки boss arena
+        Vector3.new(900, -70, 0), -- Позиция левее Diavolo для прогрузки boss arena
     }
     
     print("🤖 AUTOFARM: Летим по", #loadPoints, "точкам для прогрузки карты...")
@@ -6548,7 +6545,7 @@ function showContent(tabName)
             
             local success, result = pcall(function()
                 -- Загружаем модуль автоселла через HTTP с GitHub
-                local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh98232")
+                local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh9831")
                 return loadstring(autosellCode)()
             end)
             
