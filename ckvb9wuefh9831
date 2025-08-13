@@ -1484,12 +1484,12 @@ local function flipPlayerUpsideDown()
     -- Создаем BodyAngularVelocity для переворота
     local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
     bodyAngularVelocity.Name = "AutofarmFlipRotation"
-    bodyAngularVelocity.MaxTorque = Vector3.new(0, 0, math.huge)
+    bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0) -- Поворот по оси X
     bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
     bodyAngularVelocity.Parent = humanoidRootPart
     
-    -- Поворачиваем персонажа на 180 градусов по оси Z (переворот вниз головой)
-    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
+    -- Поворачиваем персонажа на 180 градусов по оси X (переворот вниз головой относительно ног)
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.rad(180), 0, 0)
     
     -- Устанавливаем флаг
     isPlayerFlipped = true
@@ -1519,7 +1519,7 @@ local function unflipPlayer()
     end
     
     -- Возвращаем нормальное положение
-    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.rad(180), 0, 0)
     
     -- Сбрасываем флаг
     isPlayerFlipped = false
