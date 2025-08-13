@@ -1447,7 +1447,130 @@ local renderSteppedConnection = nil
 local isMapLoaded = false
 local gameStartTime = tick() -- Время запуска скрипта для определения прогрузки
 
--- УЛУЧШЕННАЯ функция для постоянного переворота персонажа
+-- Переменные для системы платформы
+local flipPlatform = nil
+local platformWeld = nil
+local platformToPlayerWeld = nil
+local platformSize = Vector3.new(4, 0.5, 4) -- Размер платформы под ногами
+
+-- Функция создания платформы под ногами персонажа
+local function createFlipPlatform()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    -- Удаляем старую платформу если есть
+    destroyFlipPlatform()
+    
+    print("🛠️ PLATFORM: Создаем платформу под ногами персонажа...")
+    
+    -- Создаем платформу
+    flipPlatform = Instance.new("Part")
+    flipPlatform.Name = "AutofarmFlipPlatform"
+    flipPlatform.Size = platformSize
+    flipPlatform.Material = Enum.Material.ForceField
+    flipPlatform.BrickColor = BrickColor.new("Bright blue")
+    flipPlatform.Transparency = 0.5
+    flipPlatform.Anchored = false
+    flipPlatform.CanCollide = false
+    flipPlatform.TopSurface = Enum.SurfaceType.Smooth
+    flipPlatform.BottomSurface = Enum.SurfaceType.Smooth
+    
+    -- Позиционируем платформу под ногами персонажа
+    local playerPosition = humanoidRootPart.Position
+    local platformPosition = playerPosition + Vector3.new(0, -3, 0) -- Под ногами
+    flipPlatform.CFrame = CFrame.new(platformPosition)
+    flipPlatform.Parent = workspace
+    
+    -- Создаем WeldConstraint для крепления персонажа к платформе
+    platformToPlayerWeld = Instance.new("WeldConstraint")
+    platformToPlayerWeld.Name = "AutofarmPlatformWeld"
+    platformToPlayerWeld.Part0 = flipPlatform
+    platformToPlayerWeld.Part1 = humanoidRootPart
+    platformToPlayerWeld.Parent = flipPlatform
+    
+    print("✅ PLATFORM: Платформа создана и прикреплена к персонажу!")
+    return true
+end
+
+-- Функция удаления платформы
+local function destroyFlipPlatform()
+    if flipPlatform then
+        flipPlatform:Destroy()
+        flipPlatform = nil
+        print("🗑️ PLATFORM: Платформа удалена")
+    end
+    
+    if platformWeld then
+        platformWeld:Destroy()
+        platformWeld = nil
+    end
+    
+    if platformToPlayerWeld then
+        platformToPlayerWeld:Destroy()
+        platformToPlayerWeld = nil
+    end
+end
+
+-- Функция переворота платформы (и персонажа вместе с ней)
+local function flipPlatformWithPlayer()
+    if not flipPlatform then
+        print("❌ PLATFORM: Платформа не найдена!")
+        return false
+    end
+    
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    print("🔄 PLATFORM: Переворачиваем платформу с персонажем...")
+    
+    -- Сохраняем исходную позицию если еще не сохранена
+    if not originalPlayerPosition then
+        originalPlayerPosition = humanoidRootPart.Position
+        print("📍 PLATFORM: Сохранена исходная позиция:", originalPlayerPosition)
+    end
+    
+    -- Поворачиваем платформу на 180 градусов по оси Z
+    local currentCFrame = flipPlatform.CFrame
+    local rotatedCFrame = currentCFrame * CFrame.Angles(0, 0, math.rad(180))
+    flipPlatform.CFrame = rotatedCFrame
+    
+    print("✅ PLATFORM: Платформа перевернута! Персонаж теперь висит головой вниз!")
+    return true
+end
+
+-- Функция возврата платформы в исходное положение
+local function unflipPlatformWithPlayer()
+    if not flipPlatform then
+        print("❌ PLATFORM: Платформа не найдена!")
+        return false
+    end
+    
+    print("🔄 PLATFORM: Возвращаем платформу в исходное положение...")
+    
+    -- Если есть исходная позиция, возвращаем платформу туда
+    if originalPlayerPosition then
+        local platformPosition = originalPlayerPosition + Vector3.new(0, -3, 0)
+        flipPlatform.CFrame = CFrame.new(platformPosition)
+        originalPlayerPosition = nil
+        print("📍 PLATFORM: Возврат к исходной позиции")
+    else
+        -- Просто убираем поворот
+        local currentPos = flipPlatform.Position
+        flipPlatform.CFrame = CFrame.new(currentPos)
+        print("📍 PLATFORM: Убран поворот платформы")
+    end
+    
+    print("✅ PLATFORM: Платформа возвращена в нормальное положение!")
+    return true
+end
+
+-- НОВАЯ функция для поддержания переворота платформы
 local function startContinuousFlip()
     if continuousFlipConnection then
         task.cancel(continuousFlipConnection)
@@ -1457,63 +1580,54 @@ local function startContinuousFlip()
         renderSteppedConnection:Disconnect()
     end
     
-    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - запуск...")
+    print("🔄 PLATFORM: Запуск поддержания переворота платформы...")
     
-    -- СТАБИЛЬНЫЙ переворот каждый кадр
+    -- Поддерживаем переворот платформы каждый кадр
     renderSteppedConnection = RunService.RenderStepped:Connect(function()
-        if not isPlayerFlipped then return end
+        if not isPlayerFlipped or not flipPlatform then return end
         
-        local player = Players.LocalPlayer
-        if not player or not player.Character then return end
+        -- Проверяем что платформа все еще перевернута
+        local currentRotation = flipPlatform.CFrame:ToEulerAnglesXYZ()
+        local targetZRotation = math.rad(180)
         
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        if not humanoidRootPart then return end
-        
-        -- Рассчитываем правильную позицию с учетом высоты персонажа
-        local humanoidHeight = 5
-        if humanoid then
-            humanoidHeight = humanoid.HipHeight + 3
-        end
-        
-        -- Если есть исходная позиция, используем её для расчета
-        if originalPlayerPosition then
-            local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
-            local flippedCFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
-            humanoidRootPart.CFrame = flippedCFrame
-        else
-            -- Если исходной позиции нет, просто переворачиваем на текущем месте
-            local currentPos = humanoidRootPart.Position
-            local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
-            humanoidRootPart.CFrame = flippedCFrame
+        -- Если платформа отклонилась от нужного угла, корректируем
+        if math.abs(currentRotation.z - targetZRotation) > math.rad(10) then
+            local currentPos = flipPlatform.Position
+            flipPlatform.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, 0, targetZRotation)
         end
     end)
     
-    -- Дополнительный цикл для создания BodyAngularVelocity
+    -- Дополнительный цикл для проверки целостности системы
     continuousFlipConnection = task.spawn(function()
         while isPlayerFlipped do
             local player = Players.LocalPlayer
             if player and player.Character then
                 local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                if humanoidRootPart then
-                    -- Убираем старый BodyAngularVelocity
-                    local oldBAV = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-                    if oldBAV then oldBAV:Destroy() end
-                    
-                    -- Создаем новый агрессивный BodyAngularVelocity
-                    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-                    bodyAngularVelocity.Name = "AutofarmFlipRotation"
-                    bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-                    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
-                    bodyAngularVelocity.Parent = humanoidRootPart
+                
+                -- Проверяем что платформа существует
+                if not flipPlatform or not flipPlatform.Parent then
+                    print("⚠️ PLATFORM: Платформа потеряна, пересоздаем...")
+                    if createFlipPlatform() then
+                        flipPlatformWithPlayer()
+                    end
+                end
+                
+                -- Проверяем что WeldConstraint существует
+                if flipPlatform and not platformToPlayerWeld then
+                    print("⚠️ PLATFORM: Weld потерян, пересоздаем...")
+                    platformToPlayerWeld = Instance.new("WeldConstraint")
+                    platformToPlayerWeld.Name = "AutofarmPlatformWeld"
+                    platformToPlayerWeld.Part0 = flipPlatform
+                    platformToPlayerWeld.Part1 = humanoidRootPart
+                    platformToPlayerWeld.Parent = flipPlatform
                 end
             end
-            task.wait(1)
+            task.wait(2) -- Проверяем каждые 2 секунды
         end
     end)
 end
 
--- Функция для остановки постоянного переворота
+-- Функция для остановки поддержания переворота платформы
 local function stopContinuousFlip()
     if continuousFlipConnection then
         task.cancel(continuousFlipConnection)
@@ -1525,7 +1639,7 @@ local function stopContinuousFlip()
         renderSteppedConnection = nil
     end
     
-    -- Убираем все BodyMovers для переворота
+    -- Убираем все BodyMovers для переворота (на всякий случай)
     local player = Players.LocalPlayer
     if player and player.Character then
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
@@ -1538,54 +1652,51 @@ local function stopContinuousFlip()
         end
     end
     
-    print("🛑 FLIP: Остановка постоянного переворота")
+    print("🛑 PLATFORM: Остановка поддержания переворота платформы")
 end
 
--- Функция для переворота персонажа вниз головой
+-- НОВАЯ функция для переворота персонажа с платформой
 local function flipPlayerUpsideDown()
     local player = Players.LocalPlayer
     if not player or not player.Character then return false end
     
     local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoidRootPart then return false end
     
     if isPlayerFlipped then
-        print("🔄 FLIP: Персонаж уже перевернут!")
+        print("🔄 PLATFORM: Персонаж уже перевернут!")
         return true
     end
     
-    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - начинаем!")
+    print("🔄 PLATFORM: НОВЫЙ переворот с платформой - начинаем!")
     
-    -- Сохраняем оригинальную позицию
-    originalPlayerPosition = humanoidRootPart.Position
-    print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
-    
-    -- Рассчитываем правильную позицию для переворота
-    -- Персонаж должен быть перевернут так, чтобы его голова была ниже исходного уровня ног
-    local humanoidHeight = 5 -- Примерная высота персонажа
-    if humanoid then
-        humanoidHeight = humanoid.HipHeight + 3 -- Более точный расчет высоты
+    -- Создаем платформу под ногами персонажа
+    if not createFlipPlatform() then
+        print("❌ PLATFORM: Не удалось создать платформу!")
+        return false
     end
     
-    -- Смещаем персонажа вниз на полную высоту + дополнительное смещение
-    local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
-    print("📍 FLIP: Целевая позиция (голова ниже исходных ног):", targetPosition)
+    -- Небольшая задержка для стабилизации
+    task.wait(0.5)
     
-    -- Переворачиваем персонажа на 180 градусов по оси X и перемещаем
-    humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
+    -- Переворачиваем платформу с персонажем
+    if not flipPlatformWithPlayer() then
+        print("❌ PLATFORM: Не удалось перевернуть платформу!")
+        destroyFlipPlatform()
+        return false
+    end
     
     -- Устанавливаем флаг
     isPlayerFlipped = true
     
-    -- Запускаем постоянный переворот
+    -- Запускаем постоянное поддержание переворота
     startContinuousFlip()
     
-    print("✅ FLIP: УЛУЧШЕННЫЙ переворот активирован! Голова теперь ниже исходного уровня ног!")
+    print("✅ PLATFORM: НОВЫЙ переворот с платформой активирован! Персонаж висит головой вниз!")
     return true
 end
 
--- Функция для возврата персонажа в нормальное положение
+-- НОВАЯ функция для возврата персонажа в нормальное положение
 local function unflipPlayer()
     local player = Players.LocalPlayer
     if not player or not player.Character then return false end
@@ -1597,12 +1708,21 @@ local function unflipPlayer()
         return true
     end
     
-    print("🔄 FLIP: Возвращаем персонажа в нормальное положение...")
+    print("🔄 PLATFORM: Возвращаем персонажа в нормальное положение...")
     
     -- Останавливаем постоянный переворот
     stopContinuousFlip()
     
-    -- Убираем все BodyMovers для переворота
+    -- Возвращаем платформу в исходное положение
+    unflipPlatformWithPlayer()
+    
+    -- Небольшая задержка для стабилизации
+    task.wait(0.5)
+    
+    -- Удаляем платформу
+    destroyFlipPlatform()
+    
+    -- Убираем все BodyMovers для переворота (на всякий случай)
     local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
     if flipRotation then
         flipRotation:Destroy()
@@ -1613,30 +1733,10 @@ local function unflipPlayer()
         flipPosition:Destroy()
     end
     
-    -- Возвращаем нормальное положение и позицию
-    if originalPlayerPosition then
-        humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition) * CFrame.Angles(0, 0, 0)
-        print("📍 FLIP: Возврат к исходной позиции:", originalPlayerPosition)
-        originalPlayerPosition = nil
-    else
-        -- Если нет сохранённой позиции, рассчитываем правильное смещение вверх
-        local currentPosition = humanoidRootPart.Position
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        local humanoidHeight = 5
-        if humanoid then
-            humanoidHeight = humanoid.HipHeight + 3
-        end
-        
-        -- Поднимаем персонажа на полную высоту * 2 (компенсируем смещение при перевороте)
-        local upwardOffset = Vector3.new(0, humanoidHeight * 2, 0)
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(0, 0, 0)
-        print("📍 FLIP: Возврат с расчетным смещением:", currentPosition + upwardOffset)
-    end
-    
     -- Сбрасываем флаг
     isPlayerFlipped = false
     
-    print("✅ FLIP: Персонаж возвращен в нормальное положение!")
+    print("✅ PLATFORM: Персонаж возвращен в нормальное положение! Платформа удалена.")
     return true
 end
 
@@ -1845,11 +1945,14 @@ local function setupCharacterHandling()
     
     -- Обработка смерти
     local function onCharacterRemoving()
-        print("💀 FLIP: Персонаж умер - сбрасываем состояние переворота")
+        print("💀 PLATFORM: Персонаж умер - сбрасываем состояние переворота и удаляем платформу")
         isPlayerFlipped = false
         originalPlayerPosition = nil
         isMapLoaded = false -- Сбрасываем флаг прогрузки карты
         stopContinuousFlip()
+        
+        -- Удаляем платформу
+        destroyFlipPlatform()
         
         -- Дополнительная очистка соединений
         if renderSteppedConnection then
@@ -1904,29 +2007,41 @@ local function initializeFlipModule()
     print("✅ FLIP: Модуль переворота персонажа готов к работе!")
 end
 
--- ТЕСТОВАЯ функция для мгновенного переворота
+-- ТЕСТОВАЯ функция для мгновенного переворота с платформой
 local function testFlipNow()
     local player = Players.LocalPlayer
     if player and player.Character then
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoidRootPart then
-            print("🧪 TEST FLIP: УЛУЧШЕННЫЙ мгновенный переворот!")
-            local pos = humanoidRootPart.Position
+            print("🧪 TEST PLATFORM: НОВЫЙ мгновенный переворот с платформой!")
             
-            -- Рассчитываем правильное смещение
-            local humanoidHeight = 5
-            if humanoid then
-                humanoidHeight = humanoid.HipHeight + 3
+            -- Сбрасываем предыдущее состояние
+            if isPlayerFlipped then
+                unflipPlayer()
+                task.wait(1)
             end
             
-            local targetPos = pos + Vector3.new(0, -(humanoidHeight * 2), 0)
-            humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
-            print("🧪 TEST FLIP: Выполнено! Исходная позиция:", pos, "Новая позиция:", targetPos)
-            return true
+            -- Создаем платформу
+            if createFlipPlatform() then
+                task.wait(0.5)
+                
+                -- Переворачиваем платформу
+                if flipPlatformWithPlayer() then
+                    isPlayerFlipped = true
+                    print("🧪 TEST PLATFORM: Тест выполнен успешно! Персонаж висит на платформе головой вниз!")
+                    return true
+                else
+                    destroyFlipPlatform()
+                    print("❌ TEST PLATFORM: Не удалось перевернуть платформу!")
+                    return false
+                end
+            else
+                print("❌ TEST PLATFORM: Не удалось создать платформу!")
+                return false
+            end
         end
     end
-    print("❌ TEST FLIP: Персонаж не найден!")
+    print("❌ TEST PLATFORM: Персонаж не найден!")
     return false
 end
 
@@ -1972,13 +2087,21 @@ CharacterFlipModule = {
     startContinuousFlip = startContinuousFlip,
     stopContinuousFlip = stopContinuousFlip,
     initialize = initializeFlipModule,
-    testFlipNow = testFlipNow, -- ТЕСТОВАЯ функция
+    testFlipNow = testFlipNow, -- ТЕСТОВАЯ функция с платформой
     testAutofarmDetection = testAutofarmDetection, -- ТЕСТОВАЯ функция для проверки автофарма
+    
+    -- Новые функции работы с платформой
+    createPlatform = createFlipPlatform,
+    destroyPlatform = destroyFlipPlatform,
+    flipPlatform = flipPlatformWithPlayer,
+    unflipPlatform = unflipPlatformWithPlayer,
     
     -- Функции для отладки
     getOriginalPosition = function() return originalPlayerPosition end,
     isMapLoaded = function() return isMapLoaded end,
-    forceMapLoaded = function() isMapLoaded = true; print("🗺️ FLIP: Принудительно установлена прогрузка карты") end
+    forceMapLoaded = function() isMapLoaded = true; print("🗺️ FLIP: Принудительно установлена прогрузка карты") end,
+    getPlatform = function() return flipPlatform end,
+    hasPlatform = function() return flipPlatform ~= nil end
 }
 
 -- Добавляем модуль в AutosellModule для доступа извне
@@ -2005,11 +2128,17 @@ print("   _G.AutosellModule.disableAllItems() - отключить ВСЕ пре
 print("🔒 Функции фиксации персонажа:")
 print("   _G.AutosellModule.freezePlayerAtShiftplox() - зафиксировать персонажа у Shiftplox")
 print("   _G.AutosellModule.unfreezePlayerFromShiftplox() - снять фиксацию персонажа")
-print("🔄 Функции переворота персонажа:")
-print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
-print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
+print("🔄 Функции переворота персонажа (НОВАЯ СИСТЕМА С ПЛАТФОРМОЙ):")
+print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа с платформой")
+print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму и удалить платформу")
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
-print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: улучшенный мгновенный переворот")
+print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: новый переворот с платформой")
+print("🛠️ Функции работы с платформой:")
+print("   _G.AutosellModule.CharacterFlip.createPlatform() - создать платформу под ногами")
+print("   _G.AutosellModule.CharacterFlip.destroyPlatform() - удалить платформу")
+print("   _G.AutosellModule.CharacterFlip.flipPlatform() - перевернуть платформу")
+print("   _G.AutosellModule.CharacterFlip.unflipPlatform() - вернуть платформу в норму")
+print("   _G.AutosellModule.CharacterFlip.hasPlatform() - проверить наличие платформы")
 print("🧪 Функции отладки переворота:")
 print("   _G.AutosellModule.CharacterFlip.testAutofarmDetection() - проверить обнаружение автофарма")
 print("   _G.AutosellModule.CharacterFlip.isMapLoaded() - проверить прогрузку карты")
