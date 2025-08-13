@@ -1386,7 +1386,7 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     createSectionHeader("☠️ DISTANCE KILL")
     
     -- Кнопка включения/выключения Distance Kill
-    local initialState = (_G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or DistanceKillConfig.Enabled
+    local initialState = (_G and _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or false
     if createButton and type(createButton) == "function" then
         local function refreshDistanceKillButton(btn, state)
             if not btn then return end
@@ -1435,7 +1435,7 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     for _, plr in ipairs(Players:GetPlayers()) do
         if Players.LocalPlayer and plr ~= Players.LocalPlayer then
             local userId = plr.UserId
-            local defaultState = (DistanceKillConfig.SelectedPlayers[userId] == true)
+            local defaultState = (_G and _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.config and _G.AutosellModule.DistanceKill.config.SelectedPlayers and _G.AutosellModule.DistanceKill.config.SelectedPlayers[userId] == true) or false
             createToggleSlider(string.format("Player: %s (%d)", plr.Name, userId), defaultState, function(v)
                 if _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.setTarget then
                     _G.AutosellModule.DistanceKill.setTarget(userId, v)
