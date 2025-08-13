@@ -4927,7 +4927,11 @@ local function forceLoadEntireMap()
     task.wait(1)
     
     print("🤖 AUTOFARM: Прогрузка карты завершена! Загружено", #loadPoints, "точек (включая область Diavolo). Начинаем поиск предметов...")
+    
+    -- Уведомляем модуль переворота о завершении прогрузки
+    _G.mapLoadCompleted = true
 end
+
 
 function startAutofarm()
     if isAutofarmEnabled then
@@ -4962,6 +4966,11 @@ function startAutofarm()
     isAutofarmEnabled = true
     AutofarmConfig.Enabled = true
     
+    -- Сбрасываем флаг прогрузки карты
+    _G.mapLoadCompleted = false
+    
+
+    
     -- Настраиваем отслеживание смерти игрока для автофарма
     local function setupAutofarmDeathTracking()
         local humanoid = character:FindFirstChild("Humanoid")
@@ -4982,6 +4991,8 @@ function startAutofarm()
                     print("🤖 AUTOFARM: Останавливаем автосел из-за смерти игрока...")
                     _G.AutosellModule.stop()
                 end
+                
+
             end)
         end
     end
@@ -5004,6 +5015,7 @@ function startAutofarm()
                 print("🤖 AUTOFARM: Перезапускаем автофарм после возрождения...")
                 if not isAutofarmEnabled then
                     startAutofarm()
+
                 end
             end
             
@@ -5063,6 +5075,8 @@ function stopAutofarm()
     AutofarmConfig.Enabled = false
     autofarmPickingUp = false
     autofarmCurrentTarget = nil
+    
+
     
     -- Отменяем автоматический перезапуск если он был запланирован
     if autofarmAutoRestarting then
