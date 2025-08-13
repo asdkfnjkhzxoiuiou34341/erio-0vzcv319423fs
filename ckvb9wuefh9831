@@ -1618,7 +1618,10 @@ local function initializeTravelMonitor()
 				if enabled then
 					stopTravelToSafeSpot()
 				else
-					startTravelToSafeSpot()
+					-- Даем stopAutofarm() завершить очистку BodyVelocity/NoClip
+					task.delay(1.0, function()
+						startTravelToSafeSpot()
+					end)
 				end
 				wasEnabled = enabled
 			end
