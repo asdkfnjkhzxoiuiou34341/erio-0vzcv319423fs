@@ -1918,6 +1918,7 @@ local DistanceKillConfig = {
     Radius = 8,            -- радиус расстановки игроков вокруг вас
     HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
     SelectedPlayers = {},  -- [userId] = true/false
+    UseConstraints = false -- режим фиксации через BodyPosition/BodyGyro (по умолчанию выключен для надежного появления)
 }
 
 local isDistanceKillEnabled = false
@@ -2043,25 +2044,28 @@ local function updateDistanceKillPositions()
             local targetPos = myRoot.Position + offsets[index]
             local userId = targetPlayer.UserId
             activeUserIds[userId] = true
-            local rec = ensureConstraintsForTarget(userId, targetCharacter)
-            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
-            if rec and rec.bodyPosition and rec.bodyGyro and hrp then
-                -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
-                pcall(function()
-                    if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-                    if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
-                    local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-                    if humanoid then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                        humanoid.PlatformStand = true
-                    end
-                    -- Запрашиваем владение сетью для лучшей синхронизации (может не всегда работать)
-                    pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
-                end)
-                rec.bodyPosition.Position = targetPos
-                rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+            if DistanceKillConfig.UseConstraints then
+                local rec = ensureConstraintsForTarget(userId, targetCharacter)
+                local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+                if rec and rec.bodyPosition and rec.bodyGyro and hrp then
+                    -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
+                    pcall(function()
+                        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+                        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+                        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                            humanoid.PlatformStand = true
+                        end
+                        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
+                    end)
+                    rec.bodyPosition.Position = targetPos
+                    rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+                else
+                    setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+                end
             else
-                -- Fallback: прямое перемещение CFrame
+                -- Простой надежный режим: жестко телепортируем цели CFrame-ом
                 setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
             end
             -- Дополнительный жесткий снап каждые ~0.15с
@@ -2070,10 +2074,12 @@ local function updateDistanceKillPositions()
             end
         end
     end
-    -- Убираем констрейнты у игроков, которые сейчас не активны
-    for userId, rec in pairs(distanceKillConstraintsByUserId) do
-        if not activeUserIds[userId] then
-            cleanupConstraintsForUserId(userId)
+    -- Убираем констрейнты у игроков, которые сейчас не активны (только в режиме констрейнтов)
+    if DistanceKillConfig.UseConstraints then
+        for userId, rec in pairs(distanceKillConstraintsByUserId) do
+            if not activeUserIds[userId] then
+                cleanupConstraintsForUserId(userId)
+            end
         end
     end
 end
