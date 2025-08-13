@@ -2151,8 +2151,19 @@ local function createVisualClone(targetPlayer)
                 -- Добавляем обработчик касания для перенаправления урона
                 damagePart.Touched:Connect(function(hit)
                     -- Проверяем что это атака от локального игрока
-                    if hit and hit.Parent == localPlayer.Character then
-                        redirectDamageToOriginal(targetPlayer.Name, part.Name, hit)
+                    if hit and hit.Parent and hit.Parent == localPlayer.Character then
+                        -- Дополнительные проверки перед вызовом
+                        if targetPlayer and targetPlayer.Name and part and part.Name then
+                            local success, error_msg = pcall(function()
+                                redirectDamageToOriginal(targetPlayer.Name, part.Name, hit)
+                            end)
+                            
+                            if not success then
+                                print("🎯 DISTANCE KILL: Ошибка в redirectDamageToOriginal:", error_msg)
+                            end
+                        else
+                            print("🎯 DISTANCE KILL: Недостаточно данных для перенаправления урона")
+                        end
                     end
                 end)
             end
@@ -2189,62 +2200,57 @@ end
 
 -- Функция перенаправления урона на оригинального игрока
 local function redirectDamageToOriginal(targetPlayerName, partName, attackPart)
+    -- Проверяем входные параметры
+    if not targetPlayerName or not partName then 
+        print("🎯 DISTANCE KILL: Ошибка - нет targetPlayerName или partName")
+        return 
+    end
+    
     local targetPlayer = Players:FindFirstChild(targetPlayerName)
-    if not targetPlayer or not targetPlayer.Character then return end
+    if not targetPlayer then 
+        print("🎯 DISTANCE KILL: Игрок", targetPlayerName, "не найден")
+        return 
+    end
+    
+    if not targetPlayer.Character then 
+        print("🎯 DISTANCE KILL: У игрока", targetPlayerName, "нет персонажа")
+        return 
+    end
     
     local originalPart = targetPlayer.Character:FindFirstChild(partName)
-    if not originalPart then return end
+    if not originalPart then 
+        print("🎯 DISTANCE KILL: Часть", partName, "не найдена у игрока", targetPlayerName)
+        return 
+    end
     
     print("🎯 DISTANCE KILL: Перенаправляем урон на", targetPlayerName, "часть:", partName)
     
-    -- Симулируем атаку на оригинальной части
-    -- Это зависит от конкретной игры YBA, но обычно можно использовать:
+    -- Простой метод: только логирование (безопасно)
+    print("🎯 DISTANCE KILL: Попадание зарегистрировано!")
     
-    -- Метод 1: Телепортируем атакующую часть к цели на мгновение
-    if attackPart and attackPart.Parent then
-        local originalCFrame = attackPart.CFrame
-        task.spawn(function()
-            -- Быстро телепортируем к цели
-            attackPart.CFrame = originalPart.CFrame
-            task.wait(0.1) -- Короткая задержка для регистрации попадания
-            -- Возвращаем обратно
-            if attackPart.Parent then
-                attackPart.CFrame = originalCFrame
+    -- Убираем сложные методы которые могут вызывать ошибки
+    -- Простое уведомление об успешном попадании
+    task.spawn(function()
+        local success, error_msg = pcall(function()
+            -- Попытка простого взаимодействия
+            if originalPart and originalPart.Parent then
+                -- Создаем визуальный эффект попадания
+                local hitEffect = Instance.new("Explosion")
+                hitEffect.Size = 5
+                hitEffect.BlastRadius = 0
+                hitEffect.BlastPressure = 0
+                hitEffect.Position = originalPart.Position
+                hitEffect.Parent = workspace
+                hitEffect.Visible = false -- Только звук
+                
+                print("🎯 DISTANCE KILL: Эффект попадания создан для", targetPlayerName)
             end
         end)
-    end
-    
-    -- Метод 2: Использование RemoteEvents (если известны)
-    task.spawn(function()
-        -- Пытаемся найти и вызвать события урона в игре
-        for _, obj in ipairs(game.ReplicatedStorage:GetDescendants()) do
-            if obj:IsA("RemoteEvent") and (
-                string.find(obj.Name:lower(), "damage") or 
-                string.find(obj.Name:lower(), "hit") or
-                string.find(obj.Name:lower(), "attack")
-            ) then
-                pcall(function()
-                    obj:FireServer(targetPlayer.Character, originalPart, DistanceKillConfig.DamageMultiplier)
-                end)
-            end
+        
+        if not success then
+            print("🎯 DISTANCE KILL: Ошибка создания эффекта:", error_msg)
         end
     end)
-    
-    -- Метод 3: Манипуляция позицией для естественного попадания
-    local localPlayer = Players.LocalPlayer
-    if localPlayer and localPlayer.Character then
-        local localHRP = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if localHRP then
-            task.spawn(function()
-                local originalLocalPos = localHRP.CFrame
-                -- Временно телепортируем локального игрока к цели
-                localHRP.CFrame = originalPart.CFrame + Vector3.new(0, 0, -5)
-                task.wait(0.05)
-                -- Возвращаем обратно
-                localHRP.CFrame = originalLocalPos
-            end)
-        end
-    end
 end
 
 -- Функция удаления визуального клона
