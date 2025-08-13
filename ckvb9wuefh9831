@@ -1381,6 +1381,69 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     createAutosellItemToggle("DIO's Diary", AutosellConfig.Items["DIO's Diary"])
     print("🤖 AUTOSELL: Все индивидуальные тумблеры созданы!")
     
+    -- DISTANCE KILL секция
+    createDivider()
+    createSectionHeader("☠️ DISTANCE KILL")
+    
+    -- Кнопка включения/выключения Distance Kill
+    local initialState = (_G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or DistanceKillConfig.Enabled
+    if createButton and type(createButton) == "function" then
+        local function refreshDistanceKillButton(btn, state)
+            if not btn then return end
+            btn.Text = state and "🛑 STOP DISTANCE KILL" or "☠️ START DISTANCE KILL"
+        end
+        local btn
+        btn = createButton("", function()
+            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
+                local state = _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled() or false
+                if state then
+                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
+                    refreshDistanceKillButton(btn, false)
+                else
+                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
+                    refreshDistanceKillButton(btn, true)
+                end
+            end
+        end)
+        refreshDistanceKillButton(btn, initialState)
+    else
+        -- Fallback: если createButton недоступно, используем тумблер
+        createToggleSlider("Distance Kill Enabled", initialState, function(v)
+            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
+                if v then
+                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
+                else
+                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
+                end
+            end
+        end)
+    end
+    
+    -- Подпись для списка игроков
+    local playersLabel = Instance.new("TextLabel", functionsContainer)
+    playersLabel.Text = "Select Players for Distance Kill:"
+    playersLabel.TextColor3 = Color3.new(1,1,1)
+    playersLabel.BackgroundTransparency = 1
+    playersLabel.Size = UDim2.new(1, -10, 0, 20)
+    playersLabel.Position = UDim2.new(0, 5, 0, currentY)
+    playersLabel.Font = Enum.Font.GothamBold
+    playersLabel.TextSize = 14
+    playersLabel.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 25
+
+    -- Тумблеры напротив каждого игрока (кроме вас)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if Players.LocalPlayer and plr ~= Players.LocalPlayer then
+            local userId = plr.UserId
+            local defaultState = (DistanceKillConfig.SelectedPlayers[userId] == true)
+            createToggleSlider(string.format("Player: %s (%d)", plr.Name, userId), defaultState, function(v)
+                if _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.setTarget then
+                    _G.AutosellModule.DistanceKill.setTarget(userId, v)
+                end
+            end)
+        end
+    end
+    
     print("🤖 AUTOSELL: GUI создание завершено! Возвращаем currentY =", currentY)
     -- Возвращаем обновленный currentY (функции создания элементов обычно обновляют currentY внутренне)
     return currentY
@@ -1400,7 +1463,7 @@ _G.AutosellModule = {
     enableAllItems = enableAllAutosellItems,
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
-    
+
     -- Функции фиксации персонажа
     freezePlayerAtShiftplox = freezePlayerAtShiftplox,
     unfreezePlayerFromShiftplox = unfreezePlayerFromShiftplox,
@@ -1846,5 +1909,130 @@ print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - переве�
 print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
 print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
+
+-- =========================================================
+-- DISTANCE KILL MODULE (ВИЗУАЛЬНОЕ ПРИБЛИЖЕНИЕ ИГРОКОВ К ВАМ)
+-- =========================================================
+local DistanceKillConfig = {
+    Enabled = false,
+    Radius = 8,            -- радиус расстановки игроков вокруг вас
+    HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
+    SelectedPlayers = {},  -- [userId] = true/false
+}
+
+local isDistanceKillEnabled = false
+local distanceKillHeartbeatConnection = nil
+
+local function getLocalHumanoidRootPart()
+    local me = Players.LocalPlayer
+    if not me or not me.Character then return nil end
+    return me.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function iterateSelectedTargets()
+    local targets = {}
+    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
+        if enabled then
+            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
+            if plr then table.insert(targets, plr) end
+        end
+    end
+    return targets
+end
+
+local function computeOffsets(count, radius)
+    local offsets = {}
+    if count <= 0 then return offsets end
+    for i = 1, count do
+        local angle = (2 * math.pi) * ((i - 1) / count)
+        local x = math.cos(angle) * radius
+        local z = math.sin(angle) * radius
+        offsets[i] = Vector3.new(x, DistanceKillConfig.HeightOffset, z)
+    end
+    return offsets
+end
+
+local function setCharacterCFrameSafely(character, cframe)
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    -- ВИЗУАЛЬНО перемещаем персонажа к вам. Это клиентская операция.
+    -- На некоторых играх это помогает наносить урон на расстоянии, т.к. таргет выбирается рядом с вами.
+    pcall(function()
+        if hrp.AssemblyLinearVelocity then
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+        if hrp.AssemblyAngularVelocity then
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end
+        hrp.CFrame = cframe
+    end)
+end
+
+local function updateDistanceKillPositions()
+    if not isDistanceKillEnabled then return end
+    local myRoot = getLocalHumanoidRootPart()
+    if not myRoot then return end
+
+    local targets = iterateSelectedTargets()
+    if #targets == 0 then return end
+
+    local offsets = computeOffsets(#targets, DistanceKillConfig.Radius)
+    for index, targetPlayer in ipairs(targets) do
+        local targetCharacter = targetPlayer.Character
+        if targetCharacter then
+            local targetPos = myRoot.Position + offsets[index]
+            setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+        end
+    end
+end
+
+local function startDistanceKill()
+    if isDistanceKillEnabled then return end
+    isDistanceKillEnabled = true
+    DistanceKillConfig.Enabled = true
+
+    if distanceKillHeartbeatConnection then
+        distanceKillHeartbeatConnection:Disconnect()
+        distanceKillHeartbeatConnection = nil
+    end
+
+    distanceKillHeartbeatConnection = RunService.Heartbeat:Connect(function()
+        updateDistanceKillPositions()
+    end)
+
+    print("☠️ DISTANCE KILL: ВКЛЮЧЕНО. Выбранные игроки будут визуально перемещены к вам.")
+end
+
+local function stopDistanceKill()
+    if not isDistanceKillEnabled then return end
+    isDistanceKillEnabled = false
+    DistanceKillConfig.Enabled = false
+
+    if distanceKillHeartbeatConnection then
+        distanceKillHeartbeatConnection:Disconnect()
+        distanceKillHeartbeatConnection = nil
+    end
+
+    print("☠️ DISTANCE KILL: ВЫКЛЮЧЕНО.")
+end
+
+local function setDistanceKillTarget(userId, enabled)
+    if type(userId) ~= "number" then
+        -- Попытка преобразовать строку в число, если передали строковый userId
+        local maybe = tonumber(userId)
+        if maybe then userId = maybe end
+    end
+    if type(userId) ~= "number" then return end
+    DistanceKillConfig.SelectedPlayers[userId] = enabled and true or false
+    print("☠️ DISTANCE KILL:", "Игрок", userId, enabled and "ДОБАВЛЕН" or "УДАЛЕН", "из списка целей")
+end
+
+_G.AutosellModule.DistanceKill = {
+    config = DistanceKillConfig,
+    start = startDistanceKill,
+    stop = stopDistanceKill,
+    setTarget = setDistanceKillTarget,
+    isEnabled = function() return isDistanceKillEnabled end,
+}
 
 return _G.AutosellModule
