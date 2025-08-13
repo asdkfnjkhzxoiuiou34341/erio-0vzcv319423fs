@@ -2100,13 +2100,29 @@ local function createVisualClone(targetPlayer)
     clonedCharacter.Name = targetPlayer.Name .. "_DistanceKillClone"
     clonedCharacter.Parent = workspace
     
-    -- Позиционируем клон рядом с локальным игроком
+    -- Позиционируем клон в фиксированной позиции рядом с локальным игроком
     local localHRP = localPlayer.Character:FindFirstChild("HumanoidRootPart")
     if localHRP then
         local cloneHRP = clonedCharacter:FindFirstChild("HumanoidRootPart")
         if cloneHRP then
-            cloneHRP.CFrame = localHRP.CFrame + DistanceKillConfig.TeleportOffset
-            cloneHRP.Anchored = true -- Фиксируем позицию
+            -- Создаем уникальное смещение для каждого игрока
+            local playerIndex = 0
+            for name, _ in pairs(visualClones) do
+                if name ~= targetPlayer.Name then
+                    playerIndex = playerIndex + 1
+                end
+            end
+            
+            -- Размещаем клонов в ряд перед игроком
+            local offsetX = (playerIndex % 3 - 1) * 5 -- -5, 0, 5 по X
+            local offsetZ = -8 - math.floor(playerIndex / 3) * 3 -- Ряды по Z
+            local fixedOffset = Vector3.new(offsetX, 2, offsetZ)
+            
+            local fixedPosition = localHRP.CFrame + fixedOffset
+            cloneHRP.CFrame = fixedPosition
+            cloneHRP.Anchored = true -- Фиксируем позицию намертво
+            
+            print("🎯 DISTANCE KILL: Клон", targetPlayer.Name, "размещен в фиксированной позиции:", fixedPosition.Position)
         end
     end
     
@@ -2240,24 +2256,20 @@ local function removeVisualClone(playerName)
     end
 end
 
--- Функция обновления позиций клонов
-local function updateClonePositions()
-    local localPlayer = Players.LocalPlayer
-    if not localPlayer or not localPlayer.Character then return end
-    
-    local localHRP = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not localHRP then return end
-    
+-- Функция проверки состояния клонов (без обновления позиций)
+local function checkCloneStates()
     for playerName, clone in pairs(visualClones) do
-        if clone and clone.Parent then
-            local cloneHRP = clone:FindFirstChild("HumanoidRootPart")
-            if cloneHRP then
-                -- Обновляем позицию клона относительно локального игрока
-                cloneHRP.CFrame = localHRP.CFrame + DistanceKillConfig.TeleportOffset
-            end
-        else
+        if not clone or not clone.Parent then
             -- Убираем недействительные клоны
+            print("🎯 DISTANCE KILL: Клон", playerName, "исчез, удаляем из списка")
             visualClones[playerName] = nil
+        else
+            -- Проверяем что оригинальный игрок все еще на сервере
+            local targetPlayer = Players:FindFirstChild(playerName)
+            if not targetPlayer then
+                print("🎯 DISTANCE KILL: Игрок", playerName, "покинул сервер, удаляем клон")
+                removeVisualClone(playerName)
+            end
         end
     end
 end
@@ -2327,11 +2339,11 @@ local function startDistanceKill()
         end
     end
     
-    -- Запускаем цикл обновления позиций
-    distanceKillConnections.updateLoop = task.spawn(function()
+    -- Запускаем цикл проверки состояния клонов (без обновления позиций)
+    distanceKillConnections.checkLoop = task.spawn(function()
         while isDistanceKillEnabled do
-            updateClonePositions()
-            task.wait(DistanceKillConfig.UpdateInterval)
+            checkCloneStates()
+            task.wait(2.0) -- Проверяем реже, только состояние
         end
     end)
     
@@ -2398,10 +2410,16 @@ local function createDistanceKillGUI(functionsContainer, currentY, createToggleS
         end
     end)
     
-    -- Настройки
-    createSlider("Update Interval", DistanceKillConfig.UpdateInterval, 0.1, 2.0, function(v)
-        DistanceKillConfig.UpdateInterval = v
-        print("🎯 DISTANCE KILL: Интервал обновления:", DistanceKillConfig.UpdateInterval)
+    -- Информация о количестве активных клонов
+    createButton("📊 SHOW ACTIVE CLONES", function()
+        local count = 0
+        for playerName, clone in pairs(visualClones) do
+            if clone and clone.Parent then
+                count = count + 1
+                print("🎯 ACTIVE CLONE:", playerName, "at position:", clone:FindFirstChild("HumanoidRootPart") and clone.HumanoidRootPart.Position or "unknown")
+            end
+        end
+        print("🎯 DISTANCE KILL: Всего активных клонов:", count)
     end)
     
     -- Заголовок списка игроков
