@@ -1922,6 +1922,64 @@ local DistanceKillConfig = {
 
 local isDistanceKillEnabled = false
 local distanceKillHeartbeatConnection = nil
+local distanceKillConstraintsByUserId = {}
+
+local function destroyConstraintRecord(rec)
+    if not rec then return end
+    pcall(function()
+        if rec.bodyPosition and rec.bodyPosition.Destroy then rec.bodyPosition:Destroy() end
+    end)
+    pcall(function()
+        if rec.bodyGyro and rec.bodyGyro.Destroy then rec.bodyGyro:Destroy() end
+    end)
+end
+
+local function cleanupConstraintsForUserId(userId)
+    local rec = distanceKillConstraintsByUserId[userId]
+    if rec then
+        destroyConstraintRecord(rec)
+        distanceKillConstraintsByUserId[userId] = nil
+    end
+end
+
+local function cleanupAllDistanceKillConstraints()
+    for userId, rec in pairs(distanceKillConstraintsByUserId) do
+        destroyConstraintRecord(rec)
+        distanceKillConstraintsByUserId[userId] = nil
+    end
+end
+
+local function ensureConstraintsForTarget(userId, character)
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return nil end
+    local rec = distanceKillConstraintsByUserId[userId]
+    -- recreate if character changed
+    if rec and rec.character ~= character then
+        destroyConstraintRecord(rec)
+        rec = nil
+    end
+    if not rec then
+        rec = { character = character }
+        -- BodyPosition для фиксации позиции
+        local bp = Instance.new("BodyPosition")
+        bp.Name = "DK_BodyPosition"
+        bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        bp.P = 100000
+        bp.D = 1000
+        bp.Parent = humanoidRootPart
+        rec.bodyPosition = bp
+        -- BodyGyro для фиксации ориентации к вам
+        local bg = Instance.new("BodyGyro")
+        bg.Name = "DK_BodyGyro"
+        bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+        bg.P = 100000
+        bg.D = 1000
+        bg.Parent = humanoidRootPart
+        rec.bodyGyro = bg
+        distanceKillConstraintsByUserId[userId] = rec
+    end
+    return rec
+end
 
 local function getLocalHumanoidRootPart()
     local me = Players.LocalPlayer
@@ -1977,11 +2035,33 @@ local function updateDistanceKillPositions()
     if #targets == 0 then return end
 
     local offsets = computeOffsets(#targets, DistanceKillConfig.Radius)
+    local activeUserIds = {}
     for index, targetPlayer in ipairs(targets) do
         local targetCharacter = targetPlayer.Character
         if targetCharacter then
             local targetPos = myRoot.Position + offsets[index]
-            setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+            local userId = targetPlayer.UserId
+            activeUserIds[userId] = true
+            local rec = ensureConstraintsForTarget(userId, targetCharacter)
+            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+            if rec and rec.bodyPosition and rec.bodyGyro and hrp then
+                -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
+                pcall(function()
+                    if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+                    if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+                end)
+                rec.bodyPosition.Position = targetPos
+                rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+            else
+                -- Fallback: прямое перемещение CFrame
+                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+            end
+        end
+    end
+    -- Убираем констрейнты у игроков, которые сейчас не активны
+    for userId, rec in pairs(distanceKillConstraintsByUserId) do
+        if not activeUserIds[userId] then
+            cleanupConstraintsForUserId(userId)
         end
     end
 end
@@ -2013,6 +2093,7 @@ local function stopDistanceKill()
         distanceKillHeartbeatConnection = nil
     end
 
+    cleanupAllDistanceKillConstraints()
     print("☠️ DISTANCE KILL: ВЫКЛЮЧЕНО.")
 end
 
@@ -2024,6 +2105,9 @@ local function setDistanceKillTarget(userId, enabled)
     end
     if type(userId) ~= "number" then return end
     DistanceKillConfig.SelectedPlayers[userId] = enabled and true or false
+    if not enabled then
+        cleanupConstraintsForUserId(userId)
+    end
     print("☠️ DISTANCE KILL:", "Игрок", userId, enabled and "ДОБАВЛЕН" or "УДАЛЕН", "из списка целей")
 end
 
