@@ -6502,16 +6502,22 @@ function showContent(tabName)
                 return
             end
             
+            -- Пытаемся сначала загрузить локальный модуль, затем HTTP
             local success, result = pcall(function()
-                -- Загружаем модуль автоселла через HTTP с GitHub
-                local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh9831")
+                local autosellCode = readfile("ckvb9wuefh9831")
                 return loadstring(autosellCode)()
             end)
             
             if not success then
-                -- Fallback: загружаем локальный файл
                 success, result = pcall(function()
                     local autosellCode = readfile("autosell.lua")
+                    return loadstring(autosellCode)()
+                end)
+            end
+            
+            if not success then
+                success, result = pcall(function()
+                    local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/ckvb9wuefh9831")
                     return loadstring(autosellCode)()
                 end)
             end
