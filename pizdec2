@@ -1924,8 +1924,13 @@ local DistanceKillConfig = {
     YBAMode = true,        -- специальный режим для YBA - убирает ограничения дистанции
     AntiCheatSafe = true,  -- БЕЗОПАСНЫЙ РЕЖИМ: телепортируются только враги, игрок остается на месте
     AttackMode = "hybrid", -- "constraints" (только констрейнты), "cframe" (только CFrame), "hybrid" (оба метода)
-    MicroTeleport = true,  -- Включить микро-телепортацию на 2 кадра при атаке (может помочь в YBA)
-    MicroTeleportFrames = 2 -- Количество кадров для микро-телепортации (1-3 кадра)
+    MicroTeleport = false, -- ОТКЛЮЧЕНО: Любые телепорты детектируются античитом
+    MicroTeleportFrames = 2, -- Количество кадров для микро-телепортации (1-3 кадра)
+    
+    -- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ REMOTE DAMAGE
+    ExtendedReach = true,   -- Попытка расширить дальность атак через модификацию рейкастов
+    ReachDistance = 1000,   -- Максимальная дальность атак (в стадах)
+    HitboxMultiplier = 5.0  -- Множитель размера хитбоксов для лучшего попадания
 }
 
 local isDistanceKillEnabled = false
@@ -2151,6 +2156,11 @@ local function startDistanceKill()
         distanceKillHeartbeatConnection:Disconnect()
         distanceKillHeartbeatConnection = nil
     end
+    
+    -- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ
+    hookRaycastMethods()
+    manipulateHitboxes()
+    createPhantomParts()
     if distanceKillRenderConnection then
         distanceKillRenderConnection:Disconnect()
         distanceKillRenderConnection = nil
@@ -2178,6 +2188,9 @@ local function stopDistanceKill()
         distanceKillHeartbeatConnection:Disconnect()
         distanceKillHeartbeatConnection = nil
     end
+    
+    -- ОТКЛЮЧЕНИЕ ЭКСПЕРИМЕНТАЛЬНЫХ МЕТОДОВ
+    unhookRaycastMethods()
     if distanceKillRenderConnection then
         distanceKillRenderConnection:Disconnect()
         distanceKillRenderConnection = nil
@@ -2241,7 +2254,141 @@ local function getNearestSelectedTargetPosition()
     return nearestPos
 end
 
--- YBA режим: функция проверки дистанции больше не нужна, так как мы разрешаем атаку на любой дистанции
+-- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ REMOTE DAMAGE
+local originalWorkspaceRaycast = nil
+local originalFindPartsInRegion3 = nil
+local originalGetPartBoundsInBox = nil
+
+-- Функция для перехвата рейкастов и расширения их дальности
+local function hookRaycastMethods()
+    if not DistanceKillConfig.ExtendedReach then return end
+    
+    pcall(function()
+        -- Перехватываем workspace:Raycast
+        if not originalWorkspaceRaycast then
+            originalWorkspaceRaycast = workspace.Raycast
+            workspace.Raycast = function(self, origin, direction, raycastParams)
+                -- Расширяем направление рейкаста для увеличения дальности
+                local extendedDirection = direction.Unit * DistanceKillConfig.ReachDistance
+                return originalWorkspaceRaycast(self, origin, extendedDirection, raycastParams)
+            end
+        end
+        
+        -- Перехватываем workspace:GetPartBoundsInBox для расширения области поиска
+        if workspace.GetPartBoundsInBox and not originalGetPartBoundsInBox then
+            originalGetPartBoundsInBox = workspace.GetPartBoundsInBox
+            workspace.GetPartBoundsInBox = function(self, cframe, size, overlapParams)
+                -- Увеличиваем размер области поиска
+                local extendedSize = size * DistanceKillConfig.HitboxMultiplier
+                return originalGetPartBoundsInBox(self, cframe, extendedSize, overlapParams)
+            end
+        end
+    end)
+    
+    print("Distance Kill: Перехват рейкастов активирован (дальность: " .. DistanceKillConfig.ReachDistance .. ")")
+end
+
+-- Функция для восстановления оригинальных методов
+local function unhookRaycastMethods()
+    pcall(function()
+        if originalWorkspaceRaycast then
+            workspace.Raycast = originalWorkspaceRaycast
+            originalWorkspaceRaycast = nil
+        end
+        if originalGetPartBoundsInBox then
+            workspace.GetPartBoundsInBox = originalGetPartBoundsInBox
+            originalGetPartBoundsInBox = nil
+        end
+    end)
+    print("Distance Kill: Перехват рейкастов отключен")
+end
+
+-- Функция для попытки манипуляции хитбоксов
+local function manipulateHitboxes()
+    if not DistanceKillConfig.ExtendedReach then return end
+    
+    spawn(function()
+        while isDistanceKillEnabled do
+            wait(0.1)
+            
+            for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
+                if enabled then
+                    local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
+                    local char = plr and plr.Character
+                    if char then
+                        -- Попытка увеличить размер хитбоксов
+                        for _, part in pairs(char:GetChildren()) do
+                            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                                pcall(function()
+                                    local originalSize = part:GetAttribute("OriginalSize")
+                                    if not originalSize then
+                                        part:SetAttribute("OriginalSize", part.Size)
+                                        originalSize = part.Size
+                                    end
+                                    -- Увеличиваем размер хитбокса
+                                    part.Size = originalSize * DistanceKillConfig.HitboxMultiplier
+                                    part.Transparency = 0.8 -- Делаем полупрозрачным для отладки
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    print("Distance Kill: Манипуляция хитбоксов активирована (множитель: " .. DistanceKillConfig.HitboxMultiplier .. ")")
+end
+
+-- Функция для создания "фантомных" частей для перехвата атак
+local function createPhantomParts()
+    if not DistanceKillConfig.ExtendedReach then return end
+    
+    local myPlayer = Players.LocalPlayer
+    if not myPlayer or not myPlayer.Character then return end
+    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    spawn(function()
+        while isDistanceKillEnabled do
+            wait(0.1)
+            
+            for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
+                if enabled then
+                    local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
+                    local char = plr and plr.Character
+                    local targetRoot = char and char:FindFirstChild("HumanoidRootPart")
+                    
+                    if targetRoot then
+                        -- Создаем невидимую часть рядом с игроком, которая "представляет" далекую цель
+                        local phantomName = "PhantomPart_" .. userId
+                        local existingPhantom = myRoot.Parent:FindFirstChild(phantomName)
+                        
+                        if not existingPhantom then
+                            local phantom = Instance.new("Part")
+                            phantom.Name = phantomName
+                            phantom.Size = Vector3.new(4, 6, 1) -- Размер как у игрока
+                            phantom.Transparency = 1 -- Полностью невидимая
+                            phantom.CanCollide = false
+                            phantom.Anchored = true
+                            phantom.Parent = myRoot.Parent
+                            
+                            -- Устанавливаем позицию рядом с игроком
+                            local offset = Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
+                            phantom.CFrame = myRoot.CFrame + offset
+                            
+                            -- Привязываем к реальному игроку через атрибуты
+                            phantom:SetAttribute("TargetUserId", userId)
+                            phantom:SetAttribute("IsPhantomPart", true)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    print("Distance Kill: Фантомные части активированы")
+end
 
 local function beginAttackBlink()
     if not isDistanceKillEnabled then return end
