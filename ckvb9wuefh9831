@@ -1557,48 +1557,83 @@ local function stopContinuousFlip()
 end
 
 -- Функция для переворота персонажа вниз головой
-local function flipPlayerUpsideDown()
+local function flipPlayerUsingPlatform()
 	local player = Players.LocalPlayer
 	if not player or not player.Character then return false end
 	local character = player.Character
-	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-	if not humanoidRootPart then return false end
-	if isPlayerFlipped then
-		print("🔄 FLIP: Персонаж уже перевернут!")
-		return true
+	local humanoid = character:FindFirstChild("Humanoid")
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+	-- Находим ноги
+	local leftFoot = character:FindFirstChild("LeftFoot") or character:FindFirstChild("Left Leg")
+	local rightFoot = character:FindFirstChild("RightFoot") or character:FindFirstChild("Right Leg")
+	local feetY = getFeetY(character) or hrp.Position.Y
+	local feetXZ = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+	local pivotPos = Vector3.new(feetXZ.X, feetY, feetXZ.Z)
+	-- Создаем платформу
+	local platform = Instance.new("Part")
+	platform.Name = "FlipPivotPlatform"
+	platform.Size = Vector3.new(5, 0.4, 5)
+	platform.Anchored = true
+	platform.CanCollide = false
+	platform.Transparency = 1
+	platform.CFrame = CFrame.new(pivotPos)
+	platform.Parent = workspace
+	-- Сохраняем состояния
+	local originalAutoRotate = humanoid and humanoid.AutoRotate or nil
+	local originalPlatformStand = humanoid and humanoid.PlatformStand or nil
+	if humanoid then
+		humanoid.AutoRotate = false
+		-- На мгновение отключаем физику ходьбы, чтобы не сопротивлялась повороту
+		humanoid.PlatformStand = true
 	end
-	print("🔄 FLIP: Переворот через Root Motor6D - начинаем!")
-	-- Сохраняем исходную позицию HRP
-	originalPlayerPosition = humanoidRootPart.Position
-	print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
-	-- Находим корневой Motor6D и фиксируем исходный Transform
+	-- Создаем привязки к ногам и HRP
+	local welds = {}
+	local function weldTo(part)
+		if part then
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = platform
+			w.Part1 = part
+			w.Parent = platform
+			table.insert(welds, w)
+		end
+	end
+	weldTo(leftFoot)
+	weldTo(rightFoot)
+	weldTo(hrp)
+	-- Небольшая пауза для инициализации сварок
+	task.wait()
+	-- Поворачиваем платформу на 180° вокруг Z, чтобы перевернуть персонажа
+	platform.CFrame = CFrame.new(pivotPos) * CFrame.Angles(0, 0, math.rad(180))
+	-- Небольшая пауза, чтобы сборка приняла новую позу
+	task.wait(0.05)
+	-- Фиксируем инверсию через Root Motor6D, чтобы сохранить ориентацию после отсоединения
 	rootMotor6D = findRootMotor6D(character)
 	if not rootMotor6D then
-		print("⚠️ FLIP: Root Motor6D не найден — отмена переворота")
+		-- Чистим и откатываем, если не нашли корневой сустав
+		for _,w in ipairs(welds) do pcall(function() w:Destroy() end) end
+		pcall(function() platform:Destroy() end)
+		if humanoid then
+			if originalAutoRotate ~= nil then humanoid.AutoRotate = originalAutoRotate end
+			if originalPlatformStand ~= nil then humanoid.PlatformStand = originalPlatformStand end
+		end
 		return false
 	end
 	originalRootTransform = rootMotor6D.Transform
-	desiredRootTransform = CFrame.Angles(math.rad(180), 0, 0)
-	-- Блокируем авторотацию, чтобы анимации/наведение не боролись с переворотом
-	local humanoid = character:FindFirstChild("Humanoid")
-	if humanoid then
-		originalHumanoidAutoRotate = humanoid.AutoRotate
-		humanoid.AutoRotate = false
-	end
-	-- Определяем уровень ног до переворота и высоту персонажа
-	local feetY = getFeetY(character) or originalPlayerPosition.Y
-	local characterHeight = getCharacterHeight(character, humanoidRootPart)
-	-- Опускаем HRP так, чтобы верхняя точка тела была ниже уровня ног до переворота
-	local margin = 1
-	local targetHRPY = feetY - (characterHeight / 2) - margin
-	humanoidRootPart.CFrame = CFrame.new(Vector3.new(originalPlayerPosition.X, targetHRPY, originalPlayerPosition.Z), (humanoidRootPart.CFrame * CFrame.new()).p)
-	-- Применяем инверсию (через Transform корня)
+	desiredRootTransform = CFrame.Angles(0, 0, math.rad(180))
 	rootMotor6D.Transform = desiredRootTransform
-	-- Флаг и поддержка
+	-- Отсоединяемся от платформы, удаляем её
+	for _,w in ipairs(welds) do pcall(function() w:Destroy() end) end
+	pcall(function() platform:Destroy() end)
+	-- Возвращаем физику, но оставляем AutoRotate выключенным (мы его восстановим при unflip)
+	if humanoid and originalPlatformStand ~= nil then
+		humanoid.PlatformStand = originalPlatformStand
+	end
+	-- Включаем поддерживающие петли
 	isPlayerFlipped = true
 	startContinuousFlip()
 	ensureMovementMonitor()
-	print("✅ FLIP: Инверсия активирована (без вмешательства в перемещение)")
+	print("✅ FLIP: Переворот через платформу выполнен")
 	return true
 end
 
@@ -1691,7 +1726,7 @@ local function monitorAutofarmState()
 					print("🚀 FLIP: Автофарм включился — выполняем переворот!")
 					task.spawn(function()
 						task.wait(0.3)
-						flipPlayerUpsideDown()
+						flipPlayerUsingPlatform()
 					end)
 				elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
 					print("🔄 FLIP: Автофарм включен, ждем прогрузки карты...")
@@ -1715,7 +1750,7 @@ local function monitorAutofarmState()
 						end
 						if isAutofarmCurrentlyEnabled then
 							print("🚀 FLIP: Выполняем переворот после ожидания!")
-							flipPlayerUpsideDown()
+							flipPlayerUsingPlatform()
 						end
 					end)
 				else
@@ -1733,7 +1768,7 @@ local function monitorAutofarmState()
 			print("⏭️ FLIP: Фолбэк-триггер — пробуем переворот при активном автофарме")
 			-- Остановить возможный полет ожидания
 			stopTravelToSafeSpot()
-			flipPlayerUpsideDown()
+			flipPlayerUsingPlatform()
 		end
 		end
 	end)
@@ -1762,7 +1797,7 @@ local function setupCharacterHandling()
 			if isAutofarmActive then
 				print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
 				isPlayerFlipped = false
-				flipPlayerUpsideDown()
+				flipPlayerUsingPlatform()
 			end
 		end)
 	end
@@ -1789,7 +1824,7 @@ local function initializeFlipModule()
 		if ok and not isPlayerFlipped then
 			print("⏱️ FLIP: Автофарм уже активен — выполняем переворот (инициализация)")
 			stopTravelToSafeSpot()
-			flipPlayerUpsideDown()
+			flipPlayerUsingPlatform()
 		end
 	end)
 	print("✅ FLIP: Модуль переворота персонажа готов к работе!")
@@ -1802,7 +1837,7 @@ local function testFlipNow()
 		local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
 		if humanoidRootPart then
 			print("🧪 TEST FLIP: Мгновенный переворот (Root Motor6D + безопасное смещение)!")
-			flipPlayerUpsideDown()
+			flipPlayerUsingPlatform()
 			print("🧪 TEST FLIP: Выполнено!")
 			return true
 		end
@@ -1813,7 +1848,7 @@ end
 
 -- Экспорт функций в глобальное пространство
 CharacterFlipModule = {
-	flipPlayerUpsideDown = flipPlayerUpsideDown,
+	flipPlayerUsingPlatform = flipPlayerUsingPlatform,
 	unflipPlayer = unflipPlayer,
 	isPlayerFlipped = function() return isPlayerFlipped end,
 	startContinuousFlip = startContinuousFlip,
@@ -1845,7 +1880,7 @@ print("🔒 Функции фиксации персонажа:")
 print("   _G.AutosellModule.freezePlayerAtShiftplox() - зафиксировать персонажа у Shiftplox")
 print("   _G.AutosellModule.unfreezePlayerFromShiftplox() - снять фиксацию персонажа")
 print("🔄 Функции переворота персонажа:")
-print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
+print("   _G.AutosellModule.CharacterFlip.flipPlayerUsingPlatform() - перевернуть персонажа")
 print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
 print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
