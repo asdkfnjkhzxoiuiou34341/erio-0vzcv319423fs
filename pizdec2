@@ -1385,16 +1385,39 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     createDivider()
     createSectionHeader("☠️ DISTANCE KILL")
     
-    -- Тумблер включения/выключения Distance Kill
-    createToggleSlider("Distance Kill Enabled", (_G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or DistanceKillConfig.Enabled, function(v)
-        if _G.AutosellModule and _G.AutosellModule.DistanceKill then
-            if v then
-                if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
-            else
-                if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
-            end
+    -- Кнопка включения/выключения Distance Kill
+    local initialState = (_G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or DistanceKillConfig.Enabled
+    if createButton and type(createButton) == "function" then
+        local function refreshDistanceKillButton(btn, state)
+            if not btn then return end
+            btn.Text = state and "🛑 STOP DISTANCE KILL" or "☠️ START DISTANCE KILL"
         end
-    end)
+        local btn
+        btn = createButton("", function()
+            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
+                local state = _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled() or false
+                if state then
+                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
+                    refreshDistanceKillButton(btn, false)
+                else
+                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
+                    refreshDistanceKillButton(btn, true)
+                end
+            end
+        end)
+        refreshDistanceKillButton(btn, initialState)
+    else
+        -- Fallback: если createButton недоступно, используем тумблер
+        createToggleSlider("Distance Kill Enabled", initialState, function(v)
+            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
+                if v then
+                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
+                else
+                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
+                end
+            end
+        end)
+    end
     
     -- Подпись для списка игроков
     local playersLabel = Instance.new("TextLabel", functionsContainer)
@@ -1441,15 +1464,6 @@ _G.AutosellModule = {
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
 
-    -- DISTANCE KILL API
-    DistanceKill = {
-        config = DistanceKillConfig,
-        start = startDistanceKill,
-        stop = stopDistanceKill,
-        setTarget = setDistanceKillTarget,
-        isEnabled = function() return isDistanceKillEnabled end,
-    },
-    
     -- Функции фиксации персонажа
     freezePlayerAtShiftplox = freezePlayerAtShiftplox,
     unfreezePlayerFromShiftplox = unfreezePlayerFromShiftplox,
@@ -2012,5 +2026,13 @@ local function setDistanceKillTarget(userId, enabled)
     DistanceKillConfig.SelectedPlayers[userId] = enabled and true or false
     print("☠️ DISTANCE KILL:", "Игрок", userId, enabled and "ДОБАВЛЕН" or "УДАЛЕН", "из списка целей")
 end
+
+_G.AutosellModule.DistanceKill = {
+    config = DistanceKillConfig,
+    start = startDistanceKill,
+    stop = stopDistanceKill,
+    setTarget = setDistanceKillTarget,
+    isEnabled = function() return isDistanceKillEnabled end,
+}
 
 return _G.AutosellModule
