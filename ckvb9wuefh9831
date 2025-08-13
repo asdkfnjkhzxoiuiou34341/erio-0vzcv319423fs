@@ -1922,6 +1922,7 @@ local DistanceKillConfig = {
 
 local isDistanceKillEnabled = false
 local distanceKillHeartbeatConnection = nil
+local distanceKillRenderConnection = nil
 local distanceKillConstraintsByUserId = {}
 
 local function destroyConstraintRecord(rec)
@@ -1963,17 +1964,17 @@ local function ensureConstraintsForTarget(userId, character)
         -- BodyPosition для фиксации позиции
         local bp = Instance.new("BodyPosition")
         bp.Name = "DK_BodyPosition"
-        bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-        bp.P = 100000
-        bp.D = 1000
+        bp.MaxForce = Vector3.new(2e9, 2e9, 2e9)
+        bp.P = 40000
+        bp.D = 2000
         bp.Parent = humanoidRootPart
         rec.bodyPosition = bp
         -- BodyGyro для фиксации ориентации к вам
         local bg = Instance.new("BodyGyro")
         bg.Name = "DK_BodyGyro"
-        bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-        bg.P = 100000
-        bg.D = 1000
+        bg.MaxTorque = Vector3.new(2e9, 2e9, 2e9)
+        bg.P = 30000
+        bg.D = 1500
         bg.Parent = humanoidRootPart
         rec.bodyGyro = bg
         distanceKillConstraintsByUserId[userId] = rec
@@ -2049,11 +2050,22 @@ local function updateDistanceKillPositions()
                 pcall(function()
                     if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
                     if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+                    local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                    if humanoid then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                        humanoid.PlatformStand = true
+                    end
+                    -- Запрашиваем владение сетью для лучшей синхронизации (может не всегда работать)
+                    pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
                 end)
                 rec.bodyPosition.Position = targetPos
                 rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
             else
                 -- Fallback: прямое перемещение CFrame
+                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+            end
+            -- Дополнительный жесткий снап каждые ~0.15с
+            if (tick() % 0.15) < 0.016 then
                 setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
             end
         end
@@ -2075,8 +2087,18 @@ local function startDistanceKill()
         distanceKillHeartbeatConnection:Disconnect()
         distanceKillHeartbeatConnection = nil
     end
+    if distanceKillRenderConnection then
+        distanceKillRenderConnection:Disconnect()
+        distanceKillRenderConnection = nil
+    end
 
-    distanceKillHeartbeatConnection = RunService.Heartbeat:Connect(function()
+    -- Обновляем позиции на каждом кадре, чтобы фиксация была стабильной
+    distanceKillRenderConnection = RunService.RenderStepped:Connect(function()
+        updateDistanceKillPositions()
+    end)
+
+    -- Мгновенно подтянем выбранные цели к вам один раз при старте
+    task.defer(function()
         updateDistanceKillPositions()
     end)
 
@@ -2091,6 +2113,10 @@ local function stopDistanceKill()
     if distanceKillHeartbeatConnection then
         distanceKillHeartbeatConnection:Disconnect()
         distanceKillHeartbeatConnection = nil
+    end
+    if distanceKillRenderConnection then
+        distanceKillRenderConnection:Disconnect()
+        distanceKillRenderConnection = nil
     end
 
     cleanupAllDistanceKillConstraints()
