@@ -1884,8 +1884,27 @@ end)
 
 local DistanceKillModule = {}
 
--- Функция перенаправления урона на оригинального игрока (MOVED TO TOP)
-local function redirectDamageToOriginal(targetPlayerName, partName, attackPart)
+-- Предварительное объявление функции для решения проблем с областью видимости
+local redirectDamageToOriginal
+
+-- Distance Kill variables
+local isDistanceKillEnabled = false
+local selectedPlayers = {} -- {playerName = true/false}
+local distanceKillConnections = {}
+local visualClones = {} -- Визуальные клоны игроков
+local originalPositions = {} -- Сохраняем оригинальные позиции для восстановления
+
+-- Конфигурация Distance Kill
+local DistanceKillConfig = {
+    Enabled = false,
+    TeleportOffset = Vector3.new(0, 5, -10), -- Смещение относительно локального игрока
+    UpdateInterval = 0.5, -- Частота обновления позиций (секунды)
+    MaxDistance = 1000, -- Максимальная дистанция действия
+    DamageMultiplier = 1.0, -- Множитель урона
+}
+
+-- Теперь определяем функцию перенаправления урона
+redirectDamageToOriginal = function(targetPlayerName, partName, attackPart)
     print("🎯 DISTANCE KILL: [DEBUG] Начало redirectDamageToOriginal")
     print("🎯 DISTANCE KILL: [DEBUG] targetPlayerName:", targetPlayerName)
     print("🎯 DISTANCE KILL: [DEBUG] partName:", partName)
@@ -1962,21 +1981,7 @@ local function redirectDamageToOriginal(targetPlayerName, partName, attackPart)
     return true -- Возвращаем успех вместо nil
 end
 
--- Distance Kill variables
-local isDistanceKillEnabled = false
-local selectedPlayers = {} -- {playerName = true/false}
-local distanceKillConnections = {}
-local visualClones = {} -- Визуальные клоны игроков
-local originalPositions = {} -- Сохраняем оригинальные позиции для восстановления
-
--- Конфигурация Distance Kill
-local DistanceKillConfig = {
-    Enabled = false,
-    TeleportOffset = Vector3.new(0, 5, -10), -- Смещение относительно локального игрока
-    UpdateInterval = 0.5, -- Частота обновления позиций (секунды)
-    MaxDistance = 1000, -- Максимальная дистанция действия
-    DamageMultiplier = 1.0, -- Множитель урона
-}
+-- (Distance Kill variables moved to top of module)
 
 -- Функция получения списка всех игроков
 local function getAllPlayers()
@@ -2249,6 +2254,13 @@ local function createVisualClone(targetPlayer)
                     if hit and hit.Parent and hit.Parent == localPlayer.Character then
                         -- Дополнительные проверки перед вызовом
                         if targetPlayer and targetPlayer.Name and part and part.Name then
+                            -- Проверяем что функция redirectDamageToOriginal доступна
+                            if not redirectDamageToOriginal then
+                                print("🎯 DISTANCE KILL: [DEBUG] КРИТИЧЕСКАЯ ОШИБКА - функция redirectDamageToOriginal равна nil!")
+                                return
+                            end
+                            
+                            print("🎯 DISTANCE KILL: [DEBUG] Функция redirectDamageToOriginal найдена, вызываем...")
                             local success, error_msg = pcall(function()
                                 local result = redirectDamageToOriginal(targetPlayer.Name, part.Name, hit)
                                 print("🎯 DISTANCE KILL: [DEBUG] Результат redirectDamageToOriginal:", result)
