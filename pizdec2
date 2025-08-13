@@ -2208,6 +2208,11 @@ local function beginAttackBlink()
     savedOriginalCFrame = myRoot.CFrame
     attackBlinkActive = true
     attackBlinkEndTime = tick() + 0.15
+    -- Немедленный шаг перемещения, чтобы не ждать следующий кадр
+    local toward = (targetPos - myRoot.Position)
+    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
+    local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
+    setMyCFrame(CFrame.new(nearPos, targetPos))
 end
 
 local function handleAttackBlink()
@@ -2221,7 +2226,6 @@ local function bindDistanceKillAttack()
     -- ЛКМ
     if not dkAttackConnections.inputBegan then
         dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 beginAttackBlink()
             elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
