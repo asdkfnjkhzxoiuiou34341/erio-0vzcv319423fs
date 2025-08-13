@@ -1453,6 +1453,12 @@ local platformWeld = nil
 local platformToPlayerWeld = nil
 local platformSize = Vector3.new(4, 0.5, 4) -- Размер платформы под ногами
 
+-- Переменные для системы ожидания
+local waitingPosition = Vector3.new(8, 0, -783) -- Координаты для ожидания спавна предметов
+local isWaitingForItems = false
+local waitingFlightConnection = nil
+local waitingCheckConnection = nil
+
 -- Функция создания платформы под ногами персонажа
 local function createFlipPlatform()
     local player = Players.LocalPlayer
@@ -1535,9 +1541,9 @@ local function flipPlatformWithPlayer()
         print("📍 PLATFORM: Сохранена исходная позиция:", originalPlayerPosition)
     end
     
-    -- Поворачиваем платформу на 180 градусов по оси Z
+    -- Поворачиваем платформу на 180 градусов по оси X (чтобы персонаж висел головой вниз)
     local currentCFrame = flipPlatform.CFrame
-    local rotatedCFrame = currentCFrame * CFrame.Angles(0, 0, math.rad(180))
+    local rotatedCFrame = currentCFrame * CFrame.Angles(math.rad(180), 0, 0)
     flipPlatform.CFrame = rotatedCFrame
     
     print("✅ PLATFORM: Платформа перевернута! Персонаж теперь висит головой вниз!")
@@ -1570,6 +1576,184 @@ local function unflipPlatformWithPlayer()
     return true
 end
 
+-- Функция быстрого полета к координатам ожидания
+local function flyToWaitingPosition()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not humanoidRootPart then return false end
+    
+    print("🚀 WAITING: Быстрый полет к координатам ожидания:", waitingPosition)
+    
+    -- Включаем NoClip для полета
+    if _G.MovementConfig and not _G.MovementConfig.NoClip.Enabled then
+        _G.MovementConfig.NoClip.Enabled = true
+        if _G.startNoClip and type(_G.startNoClip) == "function" then
+            _G.startNoClip()
+        end
+    end
+    
+    -- Отключаем ходьбу
+    if humanoid then
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        humanoid.JumpHeight = 0
+        humanoid.HipHeight = 0
+        humanoid.Sit = false
+    end
+    
+    -- Очищаем все BodyMovers
+    local allBodyMovers = humanoidRootPart:GetChildren()
+    for _, child in pairs(allBodyMovers) do
+        if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyAngularVelocity") or 
+           child:IsA("BodyThrust") or child:IsA("BodyForce") or child:IsA("BodyGyro") then
+            child:Destroy()
+        end
+    end
+    
+    -- Отключаем гравитацию
+    workspace.Gravity = 0
+    
+    -- Создаем BodyVelocity для очень быстрого полета
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Name = "WaitingFlightVelocity"
+    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = humanoidRootPart
+    
+    -- Очень быстрый полет к координатам
+    waitingFlightConnection = RunService.Heartbeat:Connect(function()
+        local currentPos = humanoidRootPart.Position
+        local distance = (waitingPosition - currentPos).Magnitude
+        
+        if distance > 5 then
+            -- Летим ОЧЕНЬ быстро к координатам
+            local direction = (waitingPosition - currentPos).Unit
+            bodyVelocity.Velocity = direction * 300 -- Очень высокая скорость
+        else
+            -- Достигли координат - РЕЗКО останавливаемся
+            waitingFlightConnection:Disconnect()
+            waitingFlightConnection = nil
+            
+            -- Полная остановка
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            task.wait(0.1)
+            
+            -- Убираем BodyVelocity
+            if bodyVelocity and bodyVelocity.Parent then
+                bodyVelocity:Destroy()
+            end
+            
+            -- Фиксируем персонажа в позиции ожидания
+            local fixBodyVelocity = Instance.new("BodyVelocity")
+            fixBodyVelocity.Name = "WaitingFixVelocity"
+            fixBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            fixBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            fixBodyVelocity.Parent = humanoidRootPart
+            
+            -- Точно позиционируем в координатах
+            humanoidRootPart.CFrame = CFrame.new(waitingPosition)
+            
+            print("✅ WAITING: Достигли координат ожидания! Персонаж зафиксирован.")
+        end
+    end)
+    
+    return true
+end
+
+-- Функция остановки полета к координатам ожидания
+local function stopWaitingFlight()
+    if waitingFlightConnection then
+        waitingFlightConnection:Disconnect()
+        waitingFlightConnection = nil
+    end
+    
+    local player = Players.LocalPlayer
+    if player and player.Character then
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        
+        if humanoidRootPart then
+            -- Убираем все BodyVelocity для полета
+            local waitingVelocity = humanoidRootPart:FindFirstChild("WaitingFlightVelocity")
+            if waitingVelocity then waitingVelocity:Destroy() end
+            
+            local fixVelocity = humanoidRootPart:FindFirstChild("WaitingFixVelocity")
+            if fixVelocity then fixVelocity:Destroy() end
+        end
+        
+        if humanoid then
+            -- Восстанавливаем параметры движения
+            humanoid.WalkSpeed = 16
+            humanoid.JumpPower = 50
+            humanoid.JumpHeight = 7.2
+            humanoid.HipHeight = 2
+        end
+    end
+    
+    -- Восстанавливаем гравитацию
+    workspace.Gravity = 196.2
+    
+    print("🛑 WAITING: Полет к координатам ожидания остановлен")
+end
+
+-- Функция запуска ожидания спавна предметов
+local function startWaitingForItems()
+    if isWaitingForItems then return end
+    isWaitingForItems = true
+    
+    print("⏳ WAITING: Запуск режима ожидания спавна предметов...")
+    
+    -- Летим к координатам ожидания
+    flyToWaitingPosition()
+    
+    -- Запускаем проверку появления предметов
+    waitingCheckConnection = task.spawn(function()
+        while isWaitingForItems do
+            task.wait(2) -- Проверяем каждые 2 секунды
+            
+            -- Проверяем есть ли предметы для сбора
+            local hasItems = false
+            
+            -- Простая проверка через workspace
+            if workspace:FindFirstChild("Item_Spawns") then
+                local itemSpawns = workspace.Item_Spawns
+                if itemSpawns:FindFirstChild("Items") then
+                    local items = itemSpawns.Items:GetChildren()
+                    if #items > 0 then
+                        hasItems = true
+                        print("🎯 WAITING: Обнаружены новые предметы! Выходим из режима ожидания...")
+                    end
+                end
+            end
+            
+            if hasItems then
+                stopWaitingForItems()
+                break
+            end
+        end
+    end)
+end
+
+-- Функция остановки ожидания спавна предметов
+local function stopWaitingForItems()
+    if not isWaitingForItems then return end
+    isWaitingForItems = false
+    
+    print("🛑 WAITING: Остановка режима ожидания спавна предметов...")
+    
+    -- Останавливаем полет
+    stopWaitingFlight()
+    
+    -- Останавливаем проверку
+    if waitingCheckConnection then
+        task.cancel(waitingCheckConnection)
+        waitingCheckConnection = nil
+    end
+end
+
 -- НОВАЯ функция для поддержания переворота платформы
 local function startContinuousFlip()
     if continuousFlipConnection then
@@ -1588,12 +1772,12 @@ local function startContinuousFlip()
         
         -- Проверяем что платформа все еще перевернута
         local currentRotation = flipPlatform.CFrame:ToEulerAnglesXYZ()
-        local targetZRotation = math.rad(180)
+        local targetXRotation = math.rad(180)
         
         -- Если платформа отклонилась от нужного угла, корректируем
-        if math.abs(currentRotation.z - targetZRotation) > math.rad(10) then
+        if math.abs(currentRotation.x - targetXRotation) > math.rad(10) then
             local currentPos = flipPlatform.Position
-            flipPlatform.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, 0, targetZRotation)
+            flipPlatform.CFrame = CFrame.new(currentPos) * CFrame.Angles(targetXRotation, 0, 0)
         end
     end)
     
@@ -2079,6 +2263,40 @@ local function testAutofarmDetection()
     return foundActive
 end
 
+-- ТЕСТОВАЯ функция для полета к координатам ожидания
+local function testWaitingFlight()
+    print("🧪 TEST WAITING: Тестируем быстрый полет к координатам ожидания:", waitingPosition)
+    
+    local player = Players.LocalPlayer
+    if not player or not player.Character then
+        print("❌ TEST WAITING: Персонаж не найден!")
+        return false
+    end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        print("❌ TEST WAITING: HumanoidRootPart не найден!")
+        return false
+    end
+    
+    local currentPos = humanoidRootPart.Position
+    print("🧪 TEST WAITING: Текущая позиция:", currentPos)
+    print("🧪 TEST WAITING: Целевая позиция:", waitingPosition)
+    print("🧪 TEST WAITING: Расстояние:", (waitingPosition - currentPos).Magnitude)
+    
+    -- Останавливаем предыдущий полет если есть
+    if isWaitingForItems then
+        stopWaitingForItems()
+        task.wait(1)
+    end
+    
+    -- Запускаем тестовый полет
+    startWaitingForItems()
+    
+    print("🧪 TEST WAITING: Тест запущен! Персонаж должен очень быстро лететь к координатам ожидания.")
+    return true
+end
+
 -- Экспорт функций в глобальное пространство
 CharacterFlipModule = {
     flipPlayerUpsideDown = flipPlayerUpsideDown,
@@ -2089,12 +2307,19 @@ CharacterFlipModule = {
     initialize = initializeFlipModule,
     testFlipNow = testFlipNow, -- ТЕСТОВАЯ функция с платформой
     testAutofarmDetection = testAutofarmDetection, -- ТЕСТОВАЯ функция для проверки автофарма
+    testWaitingFlight = testWaitingFlight, -- ТЕСТОВАЯ функция для полета к координатам ожидания
     
     -- Новые функции работы с платформой
     createPlatform = createFlipPlatform,
     destroyPlatform = destroyFlipPlatform,
     flipPlatform = flipPlatformWithPlayer,
     unflipPlatform = unflipPlatformWithPlayer,
+    
+    -- Функции ожидания спавна предметов
+    startWaiting = startWaitingForItems,
+    stopWaiting = stopWaitingForItems,
+    isWaiting = function() return isWaitingForItems end,
+    flyToWaiting = flyToWaitingPosition,
     
     -- Функции для отладки
     getOriginalPosition = function() return originalPlayerPosition end,
@@ -2139,6 +2364,12 @@ print("   _G.AutosellModule.CharacterFlip.destroyPlatform() - удалить п�
 print("   _G.AutosellModule.CharacterFlip.flipPlatform() - перевернуть платформу")
 print("   _G.AutosellModule.CharacterFlip.unflipPlatform() - вернуть платформу в норму")
 print("   _G.AutosellModule.CharacterFlip.hasPlatform() - проверить наличие платформы")
+print("⏳ Функции ожидания спавна предметов:")
+print("   _G.AutosellModule.CharacterFlip.startWaiting() - запустить режим ожидания и полет к координатам")
+print("   _G.AutosellModule.CharacterFlip.stopWaiting() - остановить режим ожидания")
+print("   _G.AutosellModule.CharacterFlip.isWaiting() - проверить активен ли режим ожидания")
+print("   _G.AutosellModule.CharacterFlip.flyToWaiting() - ручной полет к координатам ожидания")
+print("   _G.AutosellModule.CharacterFlip.testWaitingFlight() - ТЕСТ: полет к координатам ожидания")
 print("🧪 Функции отладки переворота:")
 print("   _G.AutosellModule.CharacterFlip.testAutofarmDetection() - проверить обнаружение автофарма")
 print("   _G.AutosellModule.CharacterFlip.isMapLoaded() - проверить прогрузку карты")
