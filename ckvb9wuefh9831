@@ -33,6 +33,29 @@ startAntiAFK()
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+-- Вспомогательная функция: переворот модели вокруг плоскости стоп (опускание "верхней" части ниже ног)
+local function FlipCharacterAroundFeet(character)
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local model = character
+    local footPlaneY = math.huge
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local bottomY = d.Position.Y - (d.Size.Y / 2)
+            if bottomY < footPlaneY then
+                footPlaneY = bottomY
+            end
+        end
+    end
+    if footPlaneY == math.huge then footPlaneY = hrp.Position.Y end
+
+    local pivot = CFrame.new(hrp.Position.X, footPlaneY, hrp.Position.Z)
+    local current = model:GetPivot()
+    local flipped = pivot * CFrame.Angles(math.pi, 0, 0) * pivot:ToObjectSpace(current)
+    model:PivotTo(flipped)
+end
+
 -- Конфигурация автоселла с правильными лимитами
 local AutosellConfig = {
     Enabled = false,
@@ -1428,6 +1451,7 @@ _G.AutosellModule = {
     enableAllItems = enableAllAutosellItems,
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
+    FlipCharacterAroundFeet = FlipCharacterAroundFeet,
     
     -- Функции для работы с внешним автофармом
     ExternalAutofarm = {
