@@ -1468,6 +1468,7 @@ local originalPlayerPosition = nil
 local autofarmFlipConnections = {}
 local continuousFlipConnection = nil
 local renderSteppedConnection = nil
+local isMapLoaded = false
 
 -- Функция для постоянного переворота персонажа
 local function startContinuousFlip()
@@ -1491,25 +1492,34 @@ local function startContinuousFlip()
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
         if not humanoidRootPart then return end
         
-        -- МГНОВЕННАЯ коррекция поворота каждый кадр
-        local currentCFrame = humanoidRootPart.CFrame
-        local currentPosition = currentCFrame.Position
-        local currentRotation = currentCFrame - currentPosition
+        -- Проверяем движется ли персонаж (менее агрессивный переворот во время движения)
+        local velocity = humanoidRootPart.Velocity
+        local isMoving = velocity.Magnitude > 5
         
-        -- Проверяем правильность поворота
-        local upVector = currentRotation:VectorToWorldSpace(Vector3.new(0, 1, 0))
-        local dotProduct = upVector:Dot(Vector3.new(0, 1, 0))
-        
-        -- Если персонаж не достаточно перевернут, мгновенно корректируем
-        if dotProduct > -0.8 then
-            local correctRotation = CFrame.Angles(math.rad(180), 0, 0)
-            humanoidRootPart.CFrame = CFrame.new(currentPosition) * correctRotation
+        if not isMoving then
+            -- Стоит на месте - агрессивный переворот
+            local currentCFrame = humanoidRootPart.CFrame
+            local currentPosition = currentCFrame.Position
+            local currentRotation = currentCFrame - currentPosition
+            
+            -- Проверяем правильность поворота
+            local upVector = currentRotation:VectorToWorldSpace(Vector3.new(0, 1, 0))
+            local dotProduct = upVector:Dot(Vector3.new(0, 1, 0))
+            
+            -- Если персонаж не достаточно перевернут, корректируем
+            if dotProduct > -0.5 then
+                -- Сохраняем текущую позицию для правильного смещения
+                local targetY = originalPlayerPosition and (originalPlayerPosition.Y - 6) or (currentPosition.Y - 3)
+                local correctPosition = Vector3.new(currentPosition.X, targetY, currentPosition.Z)
+                local correctRotation = CFrame.Angles(math.rad(180), 0, 0)
+                humanoidRootPart.CFrame = CFrame.new(correctPosition) * correctRotation
+            end
         end
     end)
     
     continuousFlipConnection = task.spawn(function()
         while isPlayerFlipped do
-            task.wait(0.05) -- Обновляем каждые 0.05 секунды для более частого контроля
+            task.wait(0.2) -- Менее частое обновление чтобы не мешать движению
             
             local player = Players.LocalPlayer
             if not player or not player.Character then continue end
@@ -1517,51 +1527,25 @@ local function startContinuousFlip()
             local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
             if not humanoidRootPart then continue end
             
-            -- АГРЕССИВНО поддерживаем переворот
-            local currentCFrame = humanoidRootPart.CFrame
-            local currentPosition = currentCFrame.Position
-            local currentRotation = currentCFrame - currentPosition
+            -- Проверяем движется ли персонаж
+            local velocity = humanoidRootPart.Velocity
+            local isMoving = velocity.Magnitude > 3
             
-            -- Проверяем правильность поворота (персонаж должен быть вверх ногами)
-            local upVector = currentRotation:VectorToWorldSpace(Vector3.new(0, 1, 0))
-            local dotProduct = upVector:Dot(Vector3.new(0, 1, 0))
-            
-            -- Если персонаж не перевернут (dotProduct > -0.5), принудительно переворачиваем
-            if dotProduct > -0.5 then
-                local correctRotation = CFrame.Angles(math.rad(180), 0, 0)
-                humanoidRootPart.CFrame = CFrame.new(currentPosition) * correctRotation
-            end
-            
-            -- Усиливаем BodyAngularVelocity
-            local bodyAngularVelocity = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-            if bodyAngularVelocity then
-                -- Более агрессивная угловая скорость
-                bodyAngularVelocity.AngularVelocity = Vector3.new(10, 0, 0)
-                bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-            else
-                -- Создаем новый BodyAngularVelocity если его нет
-                local newBodyAngularVelocity = Instance.new("BodyAngularVelocity")
-                newBodyAngularVelocity.Name = "AutofarmFlipRotation"
-                newBodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-                newBodyAngularVelocity.AngularVelocity = Vector3.new(10, 0, 0)
-                newBodyAngularVelocity.Parent = humanoidRootPart
-            end
-            
-            -- Также используем BodyPosition для удержания вертикального смещения
-            local bodyPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
-            if originalPlayerPosition then
-                local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
-                
-                if not bodyPosition then
-                    bodyPosition = Instance.new("BodyPosition")
-                    bodyPosition.Name = "AutofarmFlipPosition"
-                    bodyPosition.MaxForce = Vector3.new(0, math.huge, 0) -- Только по Y оси
-                    bodyPosition.P = 3000
-                    bodyPosition.D = 500
-                    bodyPosition.Parent = humanoidRootPart
+            if not isMoving then
+                -- Только когда не движется - поддерживаем BodyAngularVelocity
+                local bodyAngularVelocity = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
+                if bodyAngularVelocity then
+                    -- Легкая угловая скорость для поддержания переворота
+                    bodyAngularVelocity.AngularVelocity = Vector3.new(2, 0, 0)
+                    bodyAngularVelocity.MaxTorque = Vector3.new(50000, 0, 0)
+                else
+                    -- Создаем новый BodyAngularVelocity если его нет
+                    local newBodyAngularVelocity = Instance.new("BodyAngularVelocity")
+                    newBodyAngularVelocity.Name = "AutofarmFlipRotation"
+                    newBodyAngularVelocity.MaxTorque = Vector3.new(50000, 0, 0)
+                    newBodyAngularVelocity.AngularVelocity = Vector3.new(2, 0, 0)
+                    newBodyAngularVelocity.Parent = humanoidRootPart
                 end
-                
-                bodyPosition.Position = targetPosition
             end
         end
     end)
@@ -1619,11 +1603,14 @@ local function flipPlayerUpsideDown()
     
     -- Сохраняем оригинальную позицию перед переворотом
     originalPlayerPosition = humanoidRootPart.Position
+    print("🔄 FLIP: Сохранена оригинальная позиция:", originalPlayerPosition)
     
     -- Поворачиваем персонажа на 180 градусов по оси X и смещаем вниз
     local downwardOffset = Vector3.new(0, -6, 0) -- Смещаем на 6 единиц вниз
+    local targetPosition = originalPlayerPosition + downwardOffset
     
-    humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition + downwardOffset) * CFrame.Angles(math.rad(180), 0, 0)
+    print("🔄 FLIP: Перемещаем с", originalPlayerPosition, "в", targetPosition)
+    humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
     
     -- Устанавливаем флаг
     isPlayerFlipped = true
@@ -1723,14 +1710,47 @@ local function monitorAutofarmState()
                 end
             end
             
+            -- Проверяем завершена ли прогрузка карты
+            if not isMapLoaded then
+                -- Ищем сообщение о завершении прогрузки в логах
+                -- Можно проверить через глобальные переменные или другие методы
+                if _G.mapLoadCompleted or 
+                   (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
+                    isMapLoaded = true
+                    print("🗺️ FLIP: Прогрузка карты завершена!")
+                end
+            end
+            
             -- Если состояние автофарма изменилось
             if isAutofarmCurrentlyEnabled ~= wasAutofarmEnabled then
-                if isAutofarmCurrentlyEnabled then
-                    -- Автофарм включился - переворачиваем персонажа
-                    print("🚀 FLIP: Обнаружен запуск автофарма - переворачиваем персонажа!")
+                if isAutofarmCurrentlyEnabled and isMapLoaded then
+                    -- Автофарм включился И карта прогружена - переворачиваем персонажа
+                    print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
                     task.spawn(function()
-                        task.wait(1) -- Даем время автофарму стабилизироваться
+                        task.wait(3) -- Даем больше времени для стабилизации после прогрузки
                         flipPlayerUpsideDown()
+                    end)
+                elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
+                    -- Автофарм включился но карта не прогружена - ждем
+                    print("🔄 FLIP: Автофарм включен, но ждем завершения прогрузки карты...")
+                    task.spawn(function()
+                        -- Ждем прогрузки карты
+                        while isAutofarmCurrentlyEnabled and not isMapLoaded do
+                            task.wait(1)
+                            -- Проверяем прогрузку снова
+                            if _G.mapLoadCompleted or 
+                               (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
+                                isMapLoaded = true
+                                print("🗺️ FLIP: Прогрузка карты завершена во время ожидания!")
+                                break
+                            end
+                        end
+                        
+                        -- Если автофарм все еще включен и карта прогружена
+                        if isAutofarmCurrentlyEnabled and isMapLoaded then
+                            print("🚀 FLIP: Прогрузка завершена - переворачиваем персонажа!")
+                            flipPlayerUpsideDown()
+                        end
                     end)
                 else
                     -- Автофарм выключился - возвращаем персонажа в норму
@@ -1754,6 +1774,7 @@ local function setupCharacterHandling()
         print("💀 FLIP: Персонаж умер - сбрасываем состояние переворота")
         isPlayerFlipped = false
         originalPlayerPosition = nil
+        isMapLoaded = false -- Сбрасываем флаг прогрузки карты
         stopContinuousFlip()
         
         -- Дополнительная очистка соединений
