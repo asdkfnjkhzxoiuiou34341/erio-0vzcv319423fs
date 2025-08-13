@@ -1917,11 +1917,11 @@ print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгнове
 -- =========================================================
 local DistanceKillConfig = {
     Enabled = false,
-    Radius = 1.5,          -- радиус расстановки игроков вокруг вас (уменьшен для ближнего боя)
+    Radius = 1.0,          -- радиус расстановки игроков вокруг вас (оптимизировано для YBA)
     HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
     SelectedPlayers = {},  -- [userId] = true/false
-    UseConstraints = false, -- режим фиксации через BodyPosition/BodyGyro (по умолчанию выключен для надежного появления)
-    MaxAttackDistance = 50 -- максимальная реальная дистанция для атаки (защита от урона телепортированным игрокам)
+    UseConstraints = true, -- включаем констрейнты для более стабильной телепортации в YBA
+    YBAMode = true         -- специальный режим для YBA - убирает ограничения дистанции
 }
 
 local isDistanceKillEnabled = false
@@ -1965,20 +1965,34 @@ local function ensureConstraintsForTarget(userId, character)
     end
     if not rec then
         rec = { character = character }
-        -- BodyPosition для фиксации позиции
+        -- BodyPosition для фиксации позиции (оптимизировано для YBA)
         local bp = Instance.new("BodyPosition")
         bp.Name = "DK_BodyPosition"
-        bp.MaxForce = Vector3.new(2e9, 2e9, 2e9)
-        bp.P = 40000
-        bp.D = 2000
+        if DistanceKillConfig.YBAMode then
+            -- Более мощные настройки для YBA
+            bp.MaxForce = Vector3.new(1e10, 1e10, 1e10)
+            bp.P = 100000  -- Увеличенная мощность
+            bp.D = 5000    -- Увеличенное демпфирование
+        else
+            bp.MaxForce = Vector3.new(2e9, 2e9, 2e9)
+            bp.P = 40000
+            bp.D = 2000
+        end
         bp.Parent = humanoidRootPart
         rec.bodyPosition = bp
-        -- BodyGyro для фиксации ориентации к вам
+        -- BodyGyro для фиксации ориентации к вам (оптимизировано для YBA)
         local bg = Instance.new("BodyGyro")
         bg.Name = "DK_BodyGyro"
-        bg.MaxTorque = Vector3.new(2e9, 2e9, 2e9)
-        bg.P = 30000
-        bg.D = 1500
+        if DistanceKillConfig.YBAMode then
+            -- Более мощные настройки для YBA
+            bg.MaxTorque = Vector3.new(1e10, 1e10, 1e10)
+            bg.P = 80000   -- Увеличенная мощность поворота
+            bg.D = 4000    -- Увеличенное демпфирование
+        else
+            bg.MaxTorque = Vector3.new(2e9, 2e9, 2e9)
+            bg.P = 30000
+            bg.D = 1500
+        end
         bg.Parent = humanoidRootPart
         rec.bodyGyro = bg
         distanceKillConstraintsByUserId[userId] = rec
@@ -2021,16 +2035,28 @@ end
 local function setCharacterCFrameSafely(character, cframe)
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    -- ВИЗУАЛЬНО перемещаем персонажа к вам. Это клиентская операция.
-    -- На некоторых играх это помогает наносить урон на расстоянии, т.к. таргет выбирается рядом с вами.
+    -- ВИЗУАЛЬНО перемещаем персонажа к вам для нанесения урона в YBA режиме
     pcall(function()
+        -- Обнуляем все скорости для более стабильной телепортации
         if hrp.AssemblyLinearVelocity then
             hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
         if hrp.AssemblyAngularVelocity then
             hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end
+        -- Дополнительно останавливаем движение через Velocity если есть
+        if hrp.Velocity then
+            hrp.Velocity = Vector3.new(0, 0, 0)
+        end
+        -- Устанавливаем новую позицию
         hrp.CFrame = cframe
+        -- Дополнительная фиксация для YBA
+        if DistanceKillConfig.YBAMode then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = true
+            end
+        end
     end)
 end
 
@@ -2047,49 +2073,46 @@ local function updateDistanceKillPositions()
     for index, targetPlayer in ipairs(targets) do
         local targetCharacter = targetPlayer.Character
         if targetCharacter then
-            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                -- Проверяем реальную дистанцию перед телепортацией
-                local realDistance = (hrp.Position - myRoot.Position).Magnitude
-                local maxTeleportDistance = DistanceKillConfig.MaxAttackDistance * 1.5 -- увеличиваем лимит для телепортации
-                
-                if realDistance > maxTeleportDistance then
-                    -- Пропускаем телепортацию игроков, которые слишком далеко
-                    print("Distance Kill: Пропуск телепортации игрока " .. targetPlayer.Name .. " (дистанция: " .. math.floor(realDistance) .. ", макс: " .. maxTeleportDistance .. ")")
-                else
-                    local targetPos = myRoot.Position + offsets[index]
-                    local userId = targetPlayer.UserId
-                    activeUserIds[userId] = true
-                    
-                    if DistanceKillConfig.UseConstraints then
-                        local rec = ensureConstraintsForTarget(userId, targetCharacter)
-                        if rec and rec.bodyPosition and rec.bodyGyro and hrp then
-                            -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
-                            pcall(function()
-                                if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-                                if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
-                                local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-                                if humanoid then
-                                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                                    humanoid.PlatformStand = true
-                                end
-                                pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
-                            end)
-                            rec.bodyPosition.Position = targetPos
-                            rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
-                        else
-                            setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+            local targetPos = myRoot.Position + offsets[index]
+            local userId = targetPlayer.UserId
+            activeUserIds[userId] = true
+            
+            if DistanceKillConfig.UseConstraints then
+                local rec = ensureConstraintsForTarget(userId, targetCharacter)
+                local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+                if rec and rec.bodyPosition and rec.bodyGyro and hrp then
+                    -- Агрессивный сброс скоростей и фиксация для YBA режима
+                    pcall(function()
+                        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+                        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+                        if hrp.Velocity then hrp.Velocity = Vector3.new(0, 0, 0) end
+                        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                        if humanoid then
+                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                            humanoid.PlatformStand = true
+                            -- Дополнительная фиксация для YBA
+                            if DistanceKillConfig.YBAMode then
+                                humanoid.Sit = false
+                                humanoid.Jump = false
+                            end
                         end
-                    else
-                        -- Простой надежный режим: жестко телепортируем цели CFrame-ом
-                        setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-                    end
-                    -- Дополнительный жесткий снап каждые ~0.15с
-                    if (tick() % 0.15) < 0.016 then
-                        setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-                    end
+                        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
+                    end)
+                    rec.bodyPosition.Position = targetPos
+                    rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+                else
+                    setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
                 end
+            else
+                -- Простой надежный режим: жестко телепортируем цели CFrame-ом
+                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
             end
+            -- Дополнительный жесткий снап для YBA режима (чаще обновления)
+            local snapInterval = DistanceKillConfig.YBAMode and 0.05 or 0.15
+            if (tick() % snapInterval) < 0.016 then
+                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+            end
+        end
         end
     end
     -- Убираем констрейнты у игроков, которые сейчас не активны (только в режиме констрейнтов)
@@ -2210,37 +2233,7 @@ local function getNearestSelectedTargetPosition()
     return nearestPos
 end
 
--- Функция для проверки реальной дистанции до цели (без учета визуальной телепортации)
-local function isTargetInRealAttackRange(maxDistance)
-    maxDistance = maxDistance or 10 -- максимальная дистанция для атаки по умолчанию
-    local myRoot = getLocalHumanoidRootPart()
-    if not myRoot then return false end
-    
-    local nearestDistance = math.huge
-    local nearestPlayer = nil
-    
-    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
-        if enabled then
-            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
-            local char = plr and plr.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                -- Проверяем реальную дистанцию (не визуальную)
-                local realDistance = (hrp.Position - myRoot.Position).Magnitude
-                if realDistance < nearestDistance then
-                    nearestDistance = realDistance
-                    nearestPlayer = plr
-                end
-            end
-        end
-    end
-    
-    if nearestDistance <= maxDistance then
-        return true, nearestPlayer, nearestDistance
-    else
-        return false, nearestPlayer, nearestDistance
-    end
-end
+-- YBA режим: функция проверки дистанции больше не нужна, так как мы разрешаем атаку на любой дистанции
 
 local function beginAttackBlink()
     if not isDistanceKillEnabled then return end
@@ -2249,12 +2242,8 @@ local function beginAttackBlink()
     local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
     
-    -- ВАЖНО: Проверяем реальную дистанцию до цели перед атакой
-    local inRange, targetPlayer, realDistance = isTargetInRealAttackRange(DistanceKillConfig.MaxAttackDistance)
-    if not inRange then 
-        print("Distance Kill: Цель слишком далеко для атаки (макс. дистанция: " .. DistanceKillConfig.MaxAttackDistance .. ", реальная дистанция: " .. (realDistance or "неизвестно") .. ")")
-        return 
-    end
+    -- YBA режим: разрешаем атаку независимо от реальной дистанции
+    print("Distance Kill: YBA режим - атака разрешена (визуальная телепортация активна)")
     
     local targetPos = getNearestSelectedTargetPosition()
     if not targetPos then return end
@@ -2266,8 +2255,6 @@ local function beginAttackBlink()
     if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
     local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
     setMyCFrame(CFrame.new(nearPos, targetPos))
-    
-    print("Distance Kill: Атака разрешена, дистанция до цели: " .. realDistance)
 end
 
 local function handleAttackBlink()
