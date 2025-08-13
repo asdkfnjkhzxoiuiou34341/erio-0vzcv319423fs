@@ -1922,7 +1922,10 @@ local DistanceKillConfig = {
     SelectedPlayers = {},  -- [userId] = true/false
     UseConstraints = true, -- включаем констрейнты для более стабильной телепортации в YBA
     YBAMode = true,        -- специальный режим для YBA - убирает ограничения дистанции
-    AntiCheatSafe = true   -- БЕЗОПАСНЫЙ РЕЖИМ: телепортируются только враги, игрок остается на месте
+    AntiCheatSafe = true,  -- БЕЗОПАСНЫЙ РЕЖИМ: телепортируются только враги, игрок остается на месте
+    AttackMode = "hybrid", -- "constraints" (только констрейнты), "cframe" (только CFrame), "hybrid" (оба метода)
+    MicroTeleport = true,  -- Включить микро-телепортацию на 2 кадра при атаке (может помочь в YBA)
+    MicroTeleportFrames = 2 -- Количество кадров для микро-телепортации (1-3 кадра)
 }
 
 local isDistanceKillEnabled = false
@@ -2036,28 +2039,41 @@ end
 local function setCharacterCFrameSafely(character, cframe)
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    -- ВИЗУАЛЬНО перемещаем персонажа к вам для нанесения урона в YBA режиме
+    -- АГРЕССИВНАЯ телепортация для реального изменения позиции в YBA
     pcall(function()
-        -- Обнуляем все скорости для более стабильной телепортации
-        if hrp.AssemblyLinearVelocity then
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        end
-        if hrp.AssemblyAngularVelocity then
-            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end
-        -- Дополнительно останавливаем движение через Velocity если есть
-        if hrp.Velocity then
-            hrp.Velocity = Vector3.new(0, 0, 0)
-        end
-        -- Устанавливаем новую позицию
+        -- Попытка получить Network Ownership для более реальной телепортации
+        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
+        
+        -- Обнуляем все скорости
+        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+        if hrp.Velocity then hrp.Velocity = Vector3.new(0, 0, 0) end
+        
+        -- Устанавливаем позицию через разные методы для максимальной совместимости
         hrp.CFrame = cframe
+        
+        -- Попытка через PivotTo если доступно
+        if character.PivotTo then
+            pcall(function() character:PivotTo(cframe) end)
+        end
+        
         -- Дополнительная фиксация для YBA
         if DistanceKillConfig.YBAMode then
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             if humanoid then
                 humanoid.PlatformStand = true
+                -- Принудительно устанавливаем состояние Physics для лучшего контроля
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
             end
         end
+        
+        -- Дополнительное принудительное обновление позиции (без wait)
+        spawn(function()
+            wait(0.01)
+            if hrp and hrp.Parent then
+                hrp.CFrame = cframe
+            end
+        end)
     end)
 end
 
@@ -2228,10 +2244,59 @@ end
 -- YBA режим: функция проверки дистанции больше не нужна, так как мы разрешаем атаку на любой дистанции
 
 local function beginAttackBlink()
-    -- ОТКЛЮЧЕНО: Телепортация игрока детектится античитом
-    -- Теперь полагаемся только на визуальную телепортацию врагов к нам
     if not isDistanceKillEnabled then return end
-    print("Distance Kill: Атака без телепортации игрока (только визуальная телепортация врагов)")
+    
+    -- Проверяем включена ли микро-телепортация
+    if not DistanceKillConfig.MicroTeleport then 
+        print("Distance Kill: Микро-телепортация отключена в конфигурации")
+        return 
+    end
+    
+    -- МИКРО-ТЕЛЕПОРТАЦИЯ: очень быстрая телепортация на несколько кадров для регистрации атаки
+    local myPlayer = Players.LocalPlayer
+    if not myPlayer or not myPlayer.Character then return end
+    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local targetPos = getNearestSelectedTargetPosition()
+    if not targetPos then 
+        print("Distance Kill: Нет целей для микро-телепортации")
+        return 
+    end
+    
+    local originalPos = myRoot.CFrame
+    local toward = (targetPos - myRoot.Position)
+    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
+    local attackPos = targetPos - toward.Unit * 1.5 -- чуть дальше от цели
+    
+    local frames = DistanceKillConfig.MicroTeleportFrames or 2
+    local waitTime = (1/60) * frames -- время на основе количества кадров
+    
+    print("Distance Kill: Микро-телепортация для атаки (" .. frames .. " кадра)")
+    
+    -- Телепортация
+    pcall(function()
+        if myPlayer.Character.PivotTo then
+            myPlayer.Character:PivotTo(CFrame.new(attackPos, targetPos))
+        else
+            myRoot.CFrame = CFrame.new(attackPos, targetPos)
+        end
+    end)
+    
+    -- Возврат через указанное количество кадров
+    spawn(function()
+        wait(waitTime)
+        pcall(function()
+            if myRoot and myRoot.Parent then
+                if myPlayer.Character.PivotTo then
+                    myPlayer.Character:PivotTo(originalPos)
+                else
+                    myRoot.CFrame = originalPos
+                end
+                print("Distance Kill: Возврат на исходную позицию")
+            end
+        end)
+    end)
 end
 
 local function handleAttackBlink()
@@ -2243,14 +2308,38 @@ local function handleAttackBlink()
 end
 
 local function bindDistanceKillAttack()
-    -- ОТКЛЮЧЕНО: Привязка клавиш для attack blink больше не нужна
-    -- Визуальная телепортация врагов работает постоянно, без необходимости в дополнительных действиях
-    print("Distance Kill: Привязка атак отключена (работает только визуальная телепортация)")
+    -- Привязка для МИКРО-ТЕЛЕПОРТАЦИИ при атаке (очень быстрая, 2 кадра)
+    local dkAttackConnections = {}
+    if not dkAttackConnections.inputBegan then
+        dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end -- игнорируем если GUI в фокусе
+            
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                beginAttackBlink()
+            elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or 
+                   input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
+                beginAttackBlink()
+            end
+        end)
+        
+        -- Сохраняем соединение для последующего отключения
+        _G.DistanceKillConnections = _G.DistanceKillConnections or {}
+        _G.DistanceKillConnections.inputBegan = dkAttackConnections.inputBegan
+    end
+    print("Distance Kill: Микро-телепортация при атаке активирована")
 end
 
 local function unbindDistanceKillAttack()
-    -- ОТКЛЮЧЕНО: Отвязка соединений больше не нужна
-    return
+    -- Отключаем соединения микро-телепортации
+    if _G.DistanceKillConnections then
+        for k, conn in pairs(_G.DistanceKillConnections) do
+            if typeof(conn) == "RBXScriptConnection" then
+                pcall(function() conn:Disconnect() end)
+            end
+        end
+        _G.DistanceKillConnections = {}
+    end
+    print("Distance Kill: Микро-телепортация отключена")
 end
 
 -- Активируем/деактивируем перехват при старте/стопе Distance Kill
