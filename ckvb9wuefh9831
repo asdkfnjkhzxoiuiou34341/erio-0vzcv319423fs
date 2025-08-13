@@ -1467,6 +1467,7 @@ local isPlayerFlipped = false
 local originalPlayerPosition = nil
 local autofarmFlipConnections = {}
 local continuousFlipConnection = nil
+local renderSteppedConnection = nil
 
 -- Функция для постоянного переворота персонажа
 local function startContinuousFlip()
@@ -1476,9 +1477,39 @@ local function startContinuousFlip()
     
     print("🔄 FLIP: Запуск постоянного переворота персонажа...")
     
+    -- Запускаем RenderStepped для максимальной частоты обновления
+    if renderSteppedConnection then
+        renderSteppedConnection:Disconnect()
+    end
+    
+    renderSteppedConnection = RunService.RenderStepped:Connect(function()
+        if not isPlayerFlipped then return end
+        
+        local player = Players.LocalPlayer
+        if not player or not player.Character then return end
+        
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return end
+        
+        -- МГНОВЕННАЯ коррекция поворота каждый кадр
+        local currentCFrame = humanoidRootPart.CFrame
+        local currentPosition = currentCFrame.Position
+        local currentRotation = currentCFrame - currentPosition
+        
+        -- Проверяем правильность поворота
+        local upVector = currentRotation:VectorToWorldSpace(Vector3.new(0, 1, 0))
+        local dotProduct = upVector:Dot(Vector3.new(0, 1, 0))
+        
+        -- Если персонаж не достаточно перевернут, мгновенно корректируем
+        if dotProduct > -0.8 then
+            local correctRotation = CFrame.Angles(math.rad(180), 0, 0)
+            humanoidRootPart.CFrame = CFrame.new(currentPosition) * correctRotation
+        end
+    end)
+    
     continuousFlipConnection = task.spawn(function()
         while isPlayerFlipped do
-            task.wait(0.1) -- Обновляем каждые 0.1 секунды
+            task.wait(0.05) -- Обновляем каждые 0.05 секунды для более частого контроля
             
             local player = Players.LocalPlayer
             if not player or not player.Character then continue end
@@ -1486,23 +1517,51 @@ local function startContinuousFlip()
             local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
             if not humanoidRootPart then continue end
             
-            -- Постоянно применяем силу переворота
-            local bodyAngularVelocity = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-            if bodyAngularVelocity then
-                -- Применяем постоянную угловую скорость для переворота
-                bodyAngularVelocity.AngularVelocity = Vector3.new(5, 0, 0) -- Постоянное вращение по оси X
+            -- АГРЕССИВНО поддерживаем переворот
+            local currentCFrame = humanoidRootPart.CFrame
+            local currentPosition = currentCFrame.Position
+            local currentRotation = currentCFrame - currentPosition
+            
+            -- Проверяем правильность поворота (персонаж должен быть вверх ногами)
+            local upVector = currentRotation:VectorToWorldSpace(Vector3.new(0, 1, 0))
+            local dotProduct = upVector:Dot(Vector3.new(0, 1, 0))
+            
+            -- Если персонаж не перевернут (dotProduct > -0.5), принудительно переворачиваем
+            if dotProduct > -0.5 then
+                local correctRotation = CFrame.Angles(math.rad(180), 0, 0)
+                humanoidRootPart.CFrame = CFrame.new(currentPosition) * correctRotation
             end
             
-            -- Также корректируем позицию если персонаж сместился
+            -- Усиливаем BodyAngularVelocity
+            local bodyAngularVelocity = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
+            if bodyAngularVelocity then
+                -- Более агрессивная угловая скорость
+                bodyAngularVelocity.AngularVelocity = Vector3.new(10, 0, 0)
+                bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
+            else
+                -- Создаем новый BodyAngularVelocity если его нет
+                local newBodyAngularVelocity = Instance.new("BodyAngularVelocity")
+                newBodyAngularVelocity.Name = "AutofarmFlipRotation"
+                newBodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
+                newBodyAngularVelocity.AngularVelocity = Vector3.new(10, 0, 0)
+                newBodyAngularVelocity.Parent = humanoidRootPart
+            end
+            
+            -- Также используем BodyPosition для удержания вертикального смещения
+            local bodyPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
             if originalPlayerPosition then
-                local currentPosition = humanoidRootPart.Position
                 local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
-                local distance = (targetPosition - currentPosition).Magnitude
                 
-                -- Если персонаж сместился больше чем на 2 единицы, корректируем позицию
-                if distance > 2 then
-                    humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
+                if not bodyPosition then
+                    bodyPosition = Instance.new("BodyPosition")
+                    bodyPosition.Name = "AutofarmFlipPosition"
+                    bodyPosition.MaxForce = Vector3.new(0, math.huge, 0) -- Только по Y оси
+                    bodyPosition.P = 3000
+                    bodyPosition.D = 500
+                    bodyPosition.Parent = humanoidRootPart
                 end
+                
+                bodyPosition.Position = targetPosition
             end
         end
     end)
@@ -1513,8 +1572,27 @@ local function stopContinuousFlip()
     if continuousFlipConnection then
         task.cancel(continuousFlipConnection)
         continuousFlipConnection = nil
-        print("🛑 FLIP: Остановка постоянного переворота")
     end
+    
+    if renderSteppedConnection then
+        renderSteppedConnection:Disconnect()
+        renderSteppedConnection = nil
+    end
+    
+    -- Убираем все BodyMovers для переворота
+    local player = Players.LocalPlayer
+    if player and player.Character then
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
+            if flipRotation then flipRotation:Destroy() end
+            
+            local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
+            if flipPosition then flipPosition:Destroy() end
+        end
+    end
+    
+    print("🛑 FLIP: Остановка постоянного переворота")
 end
 
 -- Функция для переворота персонажа вниз головой
@@ -1574,10 +1652,15 @@ local function unflipPlayer()
     -- Останавливаем постоянный переворот
     stopContinuousFlip()
     
-    -- Убираем BodyAngularVelocity если есть
+    -- Убираем все BodyMovers для переворота
     local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
     if flipRotation then
         flipRotation:Destroy()
+    end
+    
+    local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
+    if flipPosition then
+        flipPosition:Destroy()
     end
     
     -- Возвращаем нормальное положение и позицию
@@ -1672,6 +1755,12 @@ local function setupCharacterHandling()
         isPlayerFlipped = false
         originalPlayerPosition = nil
         stopContinuousFlip()
+        
+        -- Дополнительная очистка соединений
+        if renderSteppedConnection then
+            renderSteppedConnection:Disconnect()
+            renderSteppedConnection = nil
+        end
     end
     
     -- Обработка возрождения
