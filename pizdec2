@@ -32,6 +32,8 @@ startAntiAFK()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 
 -- Конфигурация автоселла с правильными лимитами
 local AutosellConfig = {
@@ -2153,5 +2155,87 @@ _G.AutosellModule.DistanceKill = {
     setTarget = setDistanceKillTarget,
     isEnabled = function() return isDistanceKillEnabled end,
 }
+
+-- Перехват атаки для Distance Kill: микро-блинк к цели и обратно
+local dkAttackConnections = {}
+local function getNearestSelectedTargetPosition()
+    local myRoot = getLocalHumanoidRootPart()
+    if not myRoot then return nil end
+    local nearestDist, nearestPos = math.huge, nil
+    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
+        if enabled then
+            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
+            local char = plr and plr.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - myRoot.Position).Magnitude
+                if d < nearestDist then
+                    nearestDist, nearestPos = d, hrp.Position
+                end
+            end
+        end
+    end
+    return nearestPos
+end
+
+local function blinkToPositionAndBack(targetPosition)
+    local myPlayer = Players.LocalPlayer
+    if not myPlayer or not myPlayer.Character then return end
+    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot or not targetPosition then return end
+
+    local originalCFrame = myRoot.CFrame
+    -- Телепорт к цели на очень близкую дистанцию
+    local toward = (targetPosition - originalCFrame.Position)
+    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
+    local nearPos = targetPosition - toward.Unit * 1.0 + Vector3.new(0, 0.2, 0)
+    myRoot.CFrame = CFrame.new(nearPos, targetPosition)
+    task.wait(0.02)
+    -- Возврат на исходную позицию
+    myRoot.CFrame = originalCFrame
+end
+
+local function handleAttackBlink()
+    if not isDistanceKillEnabled then return end
+    local targetPos = getNearestSelectedTargetPosition()
+    if not targetPos then return end
+    blinkToPositionAndBack(targetPos)
+end
+
+local function bindDistanceKillAttack()
+    -- ЛКМ
+    if not dkAttackConnections.inputBegan then
+        dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                handleAttackBlink()
+            elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
+                handleAttackBlink()
+            end
+        end)
+    end
+end
+
+local function unbindDistanceKillAttack()
+    for k, conn in pairs(dkAttackConnections) do
+        if typeof(conn) == "RBXScriptConnection" then
+            conn:Disconnect()
+        end
+        dkAttackConnections[k] = nil
+    end
+end
+
+-- Активируем/деактивируем перехват при старте/стопе Distance Kill
+local oldStartDistanceKill = startDistanceKill
+startDistanceKill = function()
+    oldStartDistanceKill()
+    bindDistanceKillAttack()
+end
+
+local oldStopDistanceKill = stopDistanceKill
+stopDistanceKill = function()
+    oldStopDistanceKill()
+    unbindDistanceKillAttack()
+end
 
 return _G.AutosellModule
