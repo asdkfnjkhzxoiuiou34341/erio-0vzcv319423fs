@@ -4927,6 +4927,9 @@ local function forceLoadEntireMap()
     task.wait(1)
     
     print("🤖 AUTOFARM: Прогрузка карты завершена! Загружено", #loadPoints, "точек (включая область Diavolo). Начинаем поиск предметов...")
+    
+    -- Уведомляем модуль переворота о завершении прогрузки
+    _G.mapLoadCompleted = true
 end
 
 
@@ -4962,6 +4965,9 @@ function startAutofarm()
     print("🤖 AUTOFARM: ЗАПУЩЕН!")
     isAutofarmEnabled = true
     AutofarmConfig.Enabled = true
+    
+    -- Сбрасываем флаг прогрузки карты
+    _G.mapLoadCompleted = false
     
 
     
