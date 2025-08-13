@@ -4302,8 +4302,18 @@ local function moveToPosition(targetPosition, callback)
     end
     
     -- НОВАЯ ЛОГИКА: Перемещаемся под землю к предмету для скрытности
-    local undergroundOffset = -1.95 -- На 1.5 единицы под землей для скрытности 
-    local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + undergroundOffset, targetPosition.Z)
+    local flipOffset = 0
+    if _G and _G.AutosellModule and _G.AutosellModule.CharacterFlip and _G.AutosellModule.CharacterFlip.isPlayerFlipped() then
+        local ok, res = pcall(_G.AutosellModule.CharacterFlip.getUndergroundOffset)
+        if ok and type(res) == "number" then
+            flipOffset = res
+        else
+            flipOffset = -6
+        end
+    else
+        flipOffset = -2
+    end
+    local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + flipOffset, targetPosition.Z)
     
     print("AUTOFARM: 🔥 ПОДЗЕМНЫЙ полет к позиции", targetPosition, "-> под землю:", adjustedTarget)
     
