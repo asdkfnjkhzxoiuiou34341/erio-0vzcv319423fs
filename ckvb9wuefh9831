@@ -1666,18 +1666,7 @@ local function monitorAutofarmState()
                     -- Автофарм включился И карта прогружена - переворачиваем персонажа
                     print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
                     
-                    -- МГНОВЕННЫЙ тест переворота
-                    local player = Players.LocalPlayer
-                    if player and player.Character then
-                        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                        if humanoidRootPart then
-                            print("🔄 FLIP: МГНОВЕННЫЙ ТЕСТ - переворачиваем прямо сейчас!")
-                            local pos = humanoidRootPart.Position
-                            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-                            print("🔄 FLIP: ТЕСТ ЗАВЕРШЕН - персонаж должен быть перевернут!")
-                        end
-                    end
-                    
+                    -- Выполняем переворот только после небольшой задержки, без мгновенного изменения
                     task.spawn(function()
                         task.wait(3) -- Даем больше времени для стабилизации после прогрузки
                         flipPlayerUpsideDown()
@@ -1754,9 +1743,27 @@ local function setupCharacterHandling()
             end
             
             if isAutofarmActive then
-                print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
+                print("🔄 FLIP: Автофарм активен после возрождения - ждем прогрузки карты перед переворотом...")
                 isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
-                flipPlayerUpsideDown()
+                
+                -- Ждем прогрузки карты и только потом переворачиваем
+                task.spawn(function()
+                    local maxWaitSeconds = 20
+                    local waited = 0
+                    while waited < maxWaitSeconds and not isMapLoaded do
+                        task.wait(1)
+                        waited = waited + 1
+                        if _G.mapLoadCompleted or (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
+                            isMapLoaded = true
+                        end
+                    end
+                    
+                    if isMapLoaded then
+                        flipPlayerUpsideDown()
+                    else
+                        print("⏭️ FLIP: Прогрузка карты не подтверждена в течение таймаута, переворот пропущен.")
+                    end
+                end)
             end
         end)
     end
