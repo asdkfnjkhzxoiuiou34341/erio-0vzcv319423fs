@@ -1790,7 +1790,6 @@ _G.stopFly = stopFly
 _G.MovementConfig = MovementConfig
 _G.isNoClipping = function() return isNoClipping end
 _G.isFlying = function() return isFlying end
-
 local function createStealthTeleport()
     if not TeleportConfig.TargetPlayer then 
         return 
@@ -4267,7 +4266,7 @@ local function moveToPosition(targetPosition, callback)
     local undergroundOffset = -1.9 -- На 1.5 единицы под землей для скрытности 
     local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + undergroundOffset, targetPosition.Z)
     
-    print("AUTOFARM: 🔥 ПОДЗЕМНЫЙ полет к позиции", targetPosition, "-> под землю:", adjustedTarget)
+    print("AUTOFARM: 🎯 ТОЧНОЕ перемещение к позиции", targetPosition, "-> под землю:", adjustedTarget)
     
     -- Включаем NoClip для прохода через землю
     if AutofarmConfig.UseNoClipMovement and not isNoClipping then
@@ -4299,6 +4298,9 @@ local function moveToPosition(targetPosition, callback)
     end
     
     local moveConnection
+    local lastPositionCheck = tick()
+    local stuckCounter = 0
+    
     moveConnection = RunService.Heartbeat:Connect(function()
         if not isAutofarmEnabled then
             -- При отключении автофарма очищаем BodyVelocity
@@ -4313,33 +4315,66 @@ local function moveToPosition(targetPosition, callback)
         local currentPos = humanoidRootPart.Position
         local distance = (adjustedTarget - currentPos).Magnitude
         
-        if distance > 3 then
+        -- УЛУЧШЕННАЯ ТОЧНОСТЬ: Уменьшил допуск расстояния с 3 до 1 единицы
+        if distance > 1 then
             local direction = (adjustedTarget - currentPos).Unit
-            -- Используем систему как в обычном флае для плавного движения
-            local moveVector = direction * (AutofarmConfig.FlightSpeed * 10) -- как в обычном флае
+            -- Динамическая скорость: быстрее на дальних расстояниях, медленнее при приближении
+            local dynamicSpeed = math.max(20, math.min(AutofarmConfig.FlightSpeed * 8, distance * 25))
+            local moveVector = direction * dynamicSpeed
             bodyVelocity.Velocity = moveVector
+            
+            -- Система обнаружения застревания
+            local currentTime = tick()
+            if currentTime - lastPositionCheck > 1 then -- Проверяем каждую секунду
+                if distance > 1 then -- Если мы все еще далеко от цели
+                    stuckCounter = stuckCounter + 1
+                    if stuckCounter >= 3 then -- Если застряли на 3 секунды
+                        print("AUTOFARM: ⚠️ Обнаружено застревание, применяем коррекцию...")
+                        -- Принудительная коррекция позиции через телепорт
+                        humanoidRootPart.CFrame = CFrame.new(adjustedTarget)
+                        task.wait(0.1)
+                        stuckCounter = 0
+                    end
+                else
+                    stuckCounter = 0 -- Сбрасываем счетчик если движемся
+                end
+                lastPositionCheck = currentTime
+            end
         else
             -- Достигли цели - дополнительная проверка правильности перемещения
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
             
-            -- ПРОВЕРКА: действительно ли мы на правильной позиции?
+            -- УЛУЧШЕННАЯ ПРОВЕРКА: Уменьшил финальный допуск с 5 до 2 единиц
             local finalDistance = (adjustedTarget - humanoidRootPart.Position).Magnitude
-            print("AUTOFARM: Проверка позиции - расстояние до цели:", math.floor(finalDistance), "м")
+            print("AUTOFARM: Финальная проверка позиции - расстояние до цели:", math.floor(finalDistance * 10) / 10, "м")
             
-            if finalDistance <= 5 then
-                print("AUTOFARM: ✅ Успешно достигли позиции предмета")
+            if finalDistance <= 2 then
+                print("AUTOFARM: ✅ Точно достигли позицию предмета")
                 moveConnection:Disconnect()
                 if callback then
                     callback()
                 end
             else
-                print("AUTOFARM: ⚠️ Неточное перемещение, корректируем позицию...")
-                -- Корректируем позицию принудительно
-                humanoidRootPart.CFrame = CFrame.new(adjustedTarget)
-                task.wait(0.2) -- небольшая задержка для стабилизации
+                print("AUTOFARM: ⚠️ Неточное перемещение, применяем точную коррекцию...")
+                -- УЛУЧШЕННАЯ КОРРЕКЦИЯ: Многошаговая точная коррекция
+                local correctionSteps = 3
+                for i = 1, correctionSteps do
+                    local currentPos = humanoidRootPart.Position
+                    local remainingDistance = (adjustedTarget - currentPos).Magnitude
+                    
+                    if remainingDistance <= 0.5 then 
+                        break -- Достаточно точно
+                    end
+                    
+                    -- Плавная коррекция к точной позиции
+                    local correctionTarget = currentPos + (adjustedTarget - currentPos) * (i / correctionSteps)
+                    humanoidRootPart.CFrame = CFrame.new(correctionTarget)
+                    task.wait(0.05) -- Небольшая задержка между шагами коррекции
+                end
                 
+                -- Финальная проверка после коррекции
                 local correctedDistance = (adjustedTarget - humanoidRootPart.Position).Magnitude
-                print("AUTOFARM: После коррекции расстояние:", math.floor(correctedDistance), "м")
+                print("AUTOFARM: После точной коррекции расстояние:", math.floor(correctedDistance * 10) / 10, "м")
                 
                 moveConnection:Disconnect()
                 if callback then
@@ -4930,37 +4965,8 @@ local function forceLoadEntireMap()
         bodyVelocity:Destroy()
     end
     
-    -- Возвращаемся в исходную позицию через полет
-    print("🤖 AUTOFARM: Возвращаемся в исходную позицию через полет")
-    
-    local returnBodyVelocity = Instance.new("BodyVelocity", humanoidRootPart)
-    returnBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    returnBodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    
-    local returnStartTime = tick()
-    local maxReturnTime = 15 -- Максимум 15 секунд на возврат
-    
-    while isAutofarmEnabled and tick() - returnStartTime < maxReturnTime do
-        local currentPos = humanoidRootPart.Position
-        local distance = (originalPosition - currentPos).Magnitude
-        
-        if distance > 5 then
-            local direction = (originalPosition - currentPos).Unit
-            local moveVector = direction * (AutofarmConfig.FlightSpeed * 10)
-            returnBodyVelocity.Velocity = moveVector
-        else
-            -- Достигли исходной позиции
-            returnBodyVelocity.Velocity = Vector3.new(0, 0, 0)
-            break
-        end
-        
-        task.wait(0.03)
-    end
-    
-    -- Очищаем BodyVelocity возврата
-    if returnBodyVelocity and returnBodyVelocity.Parent then
-        returnBodyVelocity:Destroy()
-    end
+    -- НЕ возвращаемся в исходную позицию - остаемся где остановились для продолжения фарма
+    print("🤖 AUTOFARM: Прогрузка карты завершена! Загружено", #loadPoints, "точек (включая область Diavolo). Остаемся на месте для продолжения фарма...")
     
     camera.CFrame = originalCameraCFrame
     
@@ -5405,14 +5411,12 @@ line1.Position = UDim2.new(0, 8, 0, 2)
 line1.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
 line1.BorderSizePixel = 0
 line1.Rotation = 45
-
 local line2 = Instance.new("Frame", resizeHandle)
 line2.Size = UDim2.new(0, 2, 0, 6)
 line2.Position = UDim2.new(0, 5, 0, 6)
 line2.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
 line2.BorderSizePixel = 0
 line2.Rotation = 45
-
 local line3 = Instance.new("Frame", resizeHandle)
 line3.Size = UDim2.new(0, 2, 0, 2)
 line3.Position = UDim2.new(0, 2, 0, 10)
