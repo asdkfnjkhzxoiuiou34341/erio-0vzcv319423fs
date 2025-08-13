@@ -1455,6 +1455,7 @@ local originalHumanoidAutoRotate = nil
 local movementMonitorConnection = nil
 local isFlipSuppressed = false
 local flipResumeCandidateAt = nil
+local ensureMovementMonitor = nil
 
 local function findRootMotor6D(character)
 	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -1843,7 +1844,7 @@ print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в н�
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
 print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
 
-local function ensureMovementMonitor()
+ensureMovementMonitor = function()
 	if movementMonitorConnection then return end
 	movementMonitorConnection = RunService.Heartbeat:Connect(function()
 		if not isPlayerFlipped then return end
