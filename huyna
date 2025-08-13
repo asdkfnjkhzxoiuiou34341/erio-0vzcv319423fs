@@ -4929,10 +4929,8 @@ local function forceLoadEntireMap()
     print("🤖 AUTOFARM: Прогрузка карты завершена! Загружено", #loadPoints, "точек (включая область Diavolo). Начинаем поиск предметов...")
 end
 
--- Функции для переворота персонажа и скрытия модельки
+-- Функции для переворота персонажа
 local isPlayerFlipped = false
-local originalBodyColors = {}
-local originalBodyParts = {}
 
 -- Функция для переворота персонажа вниз головой
 local function flipPlayerUpsideDown()
@@ -4996,130 +4994,6 @@ local function unflipPlayer()
     return true
 end
 
--- Функция для скрытия модельки персонажа
-local function hidePlayerModel()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    print("👻 AUTOFARM: Скрываем модельку персонажа...")
-    
-    -- Сохраняем оригинальные цвета и прозрачность частей тела
-    for _, part in pairs(player.Character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            -- Сохраняем оригинальную прозрачность
-            if not originalBodyParts[part.Name] then
-                originalBodyParts[part.Name] = {
-                    transparency = part.Transparency,
-                    canCollide = part.CanCollide
-                }
-            end
-            
-            -- Делаем части тела невидимыми
-            part.Transparency = 1
-            
-            -- Скрываем аксессуары и одежду
-            for _, accessory in pairs(part:GetChildren()) do
-                if accessory:IsA("SpecialMesh") or accessory:IsA("Decal") or accessory:IsA("Texture") then
-                    accessory.Transparency = 1
-                end
-            end
-        end
-        
-        -- Скрываем аксессуары (шляпы, очки и т.д.)
-        if part:IsA("Accessory") then
-            local handle = part:FindFirstChild("Handle")
-            if handle then
-                if not originalBodyParts[part.Name] then
-                    originalBodyParts[part.Name] = {
-                        transparency = handle.Transparency
-                    }
-                end
-                handle.Transparency = 1
-                
-                -- Скрываем меши аксессуаров
-                for _, mesh in pairs(handle:GetChildren()) do
-                    if mesh:IsA("SpecialMesh") then
-                        mesh.TextureId = ""
-                    end
-                end
-            end
-        end
-    end
-    
-    print("✅ AUTOFARM: Модель персонажа скрыта!")
-    return true
-end
-
--- Функция для показа модельки персонажа
-local function showPlayerModel()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    print("👻 AUTOFARM: Показываем модельку персонажа...")
-    
-    -- Восстанавливаем оригинальные параметры частей тела
-    for _, part in pairs(player.Character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            if originalBodyParts[part.Name] then
-                -- Восстанавливаем прозрачность
-                part.Transparency = originalBodyParts[part.Name].transparency or 0
-            else
-                -- Если нет сохраненных данных, ставим видимость по умолчанию
-                part.Transparency = 0
-            end
-        end
-        
-        -- Показываем аксессуары
-        if part:IsA("Accessory") then
-            local handle = part:FindFirstChild("Handle")
-            if handle then
-                if originalBodyParts[part.Name] then
-                    handle.Transparency = originalBodyParts[part.Name].transparency or 0
-                else
-                    handle.Transparency = 0
-                end
-            end
-        end
-    end
-    
-    print("✅ AUTOFARM: Модель персонажа показана!")
-    return true
-end
-
--- Функция для полной настройки "невидимого перевернутого персонажа"
-local function enableInvisibleFlippedMode()
-    print("🔄👻 AUTOFARM: Включаем режим невидимого перевернутого персонажа...")
-    
-    local success1 = flipPlayerUpsideDown()
-    task.wait(0.5) -- Небольшая задержка между операциями
-    local success2 = hidePlayerModel()
-    
-    if success1 and success2 then
-        print("✅ AUTOFARM: Режим невидимого перевернутого персонажа активирован!")
-        return true
-    else
-        print("❌ AUTOFARM: Ошибка при активации режима!")
-        return false
-    end
-end
-
--- Функция для отключения "невидимого перевернутого персонажа"
-local function disableInvisibleFlippedMode()
-    print("🔄👻 AUTOFARM: Отключаем режим невидимого перевернутого персонажа...")
-    
-    local success1 = unflipPlayer()
-    task.wait(0.5) -- Небольшая задержка между операциями
-    local success2 = showPlayerModel()
-    
-    if success1 and success2 then
-        print("✅ AUTOFARM: Режим невидимого перевернутого персонажа отключен!")
-        return true
-    else
-        print("❌ AUTOFARM: Ошибка при отключении режима!")
-        return false
-    end
-end
-
 function startAutofarm()
     if isAutofarmEnabled then
         print("AUTOFARM: Уже активен!")
@@ -5153,10 +5027,10 @@ function startAutofarm()
     isAutofarmEnabled = true
     AutofarmConfig.Enabled = true
     
-    -- Включаем режим невидимого перевернутого персонажа
+    -- Переворачиваем персонажа вниз головой
     task.spawn(function()
         task.wait(1) -- Даем время персонажу стабилизироваться
-        enableInvisibleFlippedMode()
+        flipPlayerUpsideDown()
     end)
     
     -- Настраиваем отслеживание смерти игрока для автофарма
@@ -5184,7 +5058,6 @@ function startAutofarm()
                 if isPlayerFlipped then
                     print("🔄 AUTOFARM: Сбрасываем состояние переворота из-за смерти...")
                     isPlayerFlipped = false
-                    originalBodyParts = {} -- Очищаем сохраненные данные
                 end
             end)
         end
@@ -5213,7 +5086,7 @@ function startAutofarm()
                         task.wait(2) -- Даем время автофарму полностью запуститься
                         if isAutofarmEnabled and not isPlayerFlipped then
                             print("🔄 AUTOFARM: Дополнительная активация переворота после возрождения...")
-                            enableInvisibleFlippedMode()
+                            flipPlayerUpsideDown()
                         end
                     end)
                 end
@@ -5276,9 +5149,9 @@ function stopAutofarm()
     autofarmPickingUp = false
     autofarmCurrentTarget = nil
     
-    -- Отключаем режим невидимого перевернутого персонажа
+    -- Возвращаем персонажа в нормальное положение
     task.spawn(function()
-        disableInvisibleFlippedMode()
+        unflipPlayer()
     end)
     
     -- Отменяем автоматический перезапуск если он был запланирован
