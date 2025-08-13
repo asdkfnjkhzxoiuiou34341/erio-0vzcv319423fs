@@ -285,12 +285,6 @@ local autofarmDeathCheckConnection = nil -- Отслеживание смерт�
 
 -- Новые переменные визуальных эффектов автофарма
 local autofarmVisualsApplied = false
-local autofarmOriginalPartTransparency = {}
-local autofarmOriginalDecalTransparency = {}
-local autofarmOriginalHumanoidProps = { autoRotate = nil, nameDisplayDistance = nil, healthDisplayType = nil }
-local autofarmOriginalPartCanCollide = {}
-local autofarmOriginalHighlightEnabled = {}
-local autofarmOriginalLocalTransparencyModifier = {}
 
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
@@ -4135,16 +4129,25 @@ end
 
 -- ВСПОМОГАТЕЛЬНЫЕ: переворот модели и скрытие визуалов во время автофарма
 local function setCharacterUpsideDown(character, enabled)
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return end
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
-    -- Поворот вокруг ног: локальный разворот по оси X на 180°
-    if enabled then
-        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.pi, 0, 0)
-    else
-        -- Возвращаем ориентацию, повторно провернув на 180°
-        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.pi, 0, 0)
+    local model = character
+    local footPlaneY = math.huge
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local bottomY = d.Position.Y - (d.Size.Y / 2)
+            if bottomY < footPlaneY then
+                footPlaneY = bottomY
+            end
+        end
     end
+    if footPlaneY == math.huge then footPlaneY = hrp.Position.Y end
+
+    local pivot = CFrame.new(hrp.Position.X, footPlaneY, hrp.Position.Z)
+    local current = model:GetPivot()
+    local flipped = pivot * CFrame.Angles(math.pi, 0, 0) * pivot:ToObjectSpace(current)
+    model:PivotTo(flipped)
 end
 
 local function iterateCharacterVisualParts(character, callback)
@@ -4164,46 +4167,7 @@ local function applyAutofarmVisuals()
     local character = player and player.Character
     if not character then return end
 
-    -- Сохраняем и скрываем визуальные части персонажа (Handle/BodyParts/Decals)
-    autofarmOriginalPartTransparency = {}
-    autofarmOriginalDecalTransparency = {}
-
-    iterateCharacterVisualParts(character, function(obj, kind)
-        if kind == "BasePart" then
-            autofarmOriginalPartTransparency[obj] = obj.Transparency
-            autofarmOriginalPartCanCollide[obj] = obj.CanCollide
-            -- Сохраняем и обнуляем LocalTransparencyModifier (если используется для локальной невидимости)
-            if obj.LocalTransparencyModifier ~= nil then
-                autofarmOriginalLocalTransparencyModifier[obj] = obj.LocalTransparencyModifier
-                obj.LocalTransparencyModifier = 1
-            end
-            obj.Transparency = 1
-            if obj:FindFirstChildOfClass("Highlight") then
-                local hl = obj:FindFirstChildOfClass("Highlight")
-                autofarmOriginalHighlightEnabled[hl] = hl.Enabled
-                hl.Enabled = false
-            end
-            -- Отключаем CanCollide на всякий случай
-            if obj.CanCollide ~= nil then obj.CanCollide = false end
-        elseif kind == "Decal" then
-            autofarmOriginalDecalTransparency[obj] = obj.Transparency
-            obj.Transparency = 1
-        end
-    end)
-
-    -- Скрываем имя/полоску здоровья
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        autofarmOriginalHumanoidProps.autoRotate = humanoid.AutoRotate
-        autofarmOriginalHumanoidProps.nameDisplayDistance = humanoid.NameDisplayDistance
-        autofarmOriginalHumanoidProps.healthDisplayType = humanoid.HealthDisplayType
-
-        humanoid.AutoRotate = false
-        humanoid.NameDisplayDistance = 0
-        humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
-    end
-
-    -- Переворачиваем персонажа вниз головой
+    -- Только переворот модели вокруг уровня ног без скрытия визуалов
     setCharacterUpsideDown(character, true)
 
     autofarmVisualsApplied = true
@@ -4214,52 +4178,6 @@ local function restoreAutofarmVisuals()
     local player = Players.LocalPlayer
     local character = player and player.Character
     if character then
-        -- Восстанавливаем визуальные параметры
-        for obj, tr in pairs(autofarmOriginalPartTransparency) do
-            if obj and obj.Parent then
-                obj.Transparency = tr
-                if obj.CanCollide ~= nil and autofarmOriginalPartCanCollide[obj] ~= nil then
-                    obj.CanCollide = autofarmOriginalPartCanCollide[obj]
-                end
-            end
-        end
-        for obj, tr in pairs(autofarmOriginalDecalTransparency) do
-            if obj and obj.Parent then
-                obj.Transparency = tr
-            end
-        end
-        -- Восстанавливаем LocalTransparencyModifier
-        for obj, ltm in pairs(autofarmOriginalLocalTransparencyModifier) do
-            if obj and obj.Parent then
-                obj.LocalTransparencyModifier = ltm
-            end
-        end
-        -- Восстанавливаем Highlight
-        for hl, wasEnabled in pairs(autofarmOriginalHighlightEnabled) do
-            if hl and hl.Parent then
-                hl.Enabled = wasEnabled
-            end
-        end
-        autofarmOriginalPartTransparency = {}
-        autofarmOriginalDecalTransparency = {}
-        autofarmOriginalPartCanCollide = {}
-        autofarmOriginalHighlightEnabled = {}
-        autofarmOriginalLocalTransparencyModifier = {}
-
-        -- Возвращаем Humanoid параметры
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            if autofarmOriginalHumanoidProps.autoRotate ~= nil then
-                humanoid.AutoRotate = autofarmOriginalHumanoidProps.autoRotate
-            end
-            if autofarmOriginalHumanoidProps.nameDisplayDistance ~= nil then
-                humanoid.NameDisplayDistance = autofarmOriginalHumanoidProps.nameDisplayDistance
-            end
-            if autofarmOriginalHumanoidProps.healthDisplayType ~= nil then
-                humanoid.HealthDisplayType = autofarmOriginalHumanoidProps.healthDisplayType
-            end
-        end
-
         -- Сбрасываем переворот персонажа
         setCharacterUpsideDown(character, false)
     end
