@@ -1930,7 +1930,12 @@ local function createManualClone(originalCharacter, playerName)
             newPart.Size = originalPart.Size
             newPart.Color = originalPart.Color
             newPart.Material = originalPart.Material
-            newPart.Shape = originalPart.Shape
+            
+            -- Проверяем тип части перед установкой Shape
+            if originalPart:IsA("Part") and originalPart.Shape then
+                newPart.Shape = originalPart.Shape
+            end
+            
             newPart.TopSurface = Enum.SurfaceType.Smooth
             newPart.BottomSurface = Enum.SurfaceType.Smooth
             newPart.Parent = clonedCharacter
@@ -2132,8 +2137,9 @@ local function createVisualClone(targetPlayer)
             part.Transparency = 0.3
             part.CanCollide = false
             
-            -- Добавляем перенаправление урона
-            if part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "Head" then
+            -- Добавляем перенаправление урона только если это НЕ простой клон
+            if (part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "Head") and 
+               not string.find(clonedCharacter.Name, "SimpleClone") then
                 -- Создаем невидимую часть для перехвата атак
                 local damagePart = Instance.new("Part")
                 damagePart.Name = "DistanceKillDamagePart_" .. part.Name
@@ -2145,8 +2151,19 @@ local function createVisualClone(targetPlayer)
                 damagePart.Parent = clonedCharacter
                 
                 -- Связываем с оригинальной частью для перенаправления урона
-                damagePart:SetAttribute("OriginalPlayer", targetPlayer.Name)
-                damagePart:SetAttribute("OriginalPart", part.Name)
+                local success1, error1 = pcall(function()
+                    damagePart:SetAttribute("OriginalPlayer", targetPlayer.Name)
+                end)
+                local success2, error2 = pcall(function()
+                    damagePart:SetAttribute("OriginalPart", part.Name)
+                end)
+                
+                if not success1 then
+                    print("🎯 DISTANCE KILL: Ошибка SetAttribute OriginalPlayer:", error1)
+                end
+                if not success2 then
+                    print("🎯 DISTANCE KILL: Ошибка SetAttribute OriginalPart:", error2)
+                end
                 
                 -- Добавляем обработчик касания для перенаправления урона
                 damagePart.Touched:Connect(function(hit)
@@ -2166,6 +2183,28 @@ local function createVisualClone(targetPlayer)
                         end
                     end
                 end)
+            else
+                -- Для простых клонов - простая система касания без сложной логики
+                if string.find(clonedCharacter.Name, "SimpleClone") and 
+                   (part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "Head") then
+                    
+                    part.Touched:Connect(function(hit)
+                        if hit and hit.Parent and hit.Parent == localPlayer.Character then
+                            print("🎯 DISTANCE KILL: Простое попадание по", targetPlayer.Name, "часть:", part.Name)
+                            
+                            -- Простой эффект без сложной логики
+                            task.spawn(function()
+                                local success, err = pcall(function()
+                                    print("🎯 DISTANCE KILL: Зарегистрирован удар по простому клону")
+                                end)
+                                
+                                if not success then
+                                    print("🎯 DISTANCE KILL: Ошибка простого эффекта:", err)
+                                end
+                            end)
+                        end
+                    end)
+                end
             end
         end
     end
