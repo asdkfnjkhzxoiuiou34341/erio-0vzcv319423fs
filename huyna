@@ -4929,70 +4929,6 @@ local function forceLoadEntireMap()
     print("🤖 AUTOFARM: Прогрузка карты завершена! Загружено", #loadPoints, "точек (включая область Diavolo). Начинаем поиск предметов...")
 end
 
--- Функции для переворота персонажа
-local isPlayerFlipped = false
-
--- Функция для переворота персонажа вниз головой
-local function flipPlayerUpsideDown()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if isPlayerFlipped then
-        print("🔄 AUTOFARM: Персонаж уже перевернут!")
-        return true
-    end
-    
-    print("🔄 AUTOFARM: Переворачиваем персонажа вниз головой...")
-    
-    -- Создаем BodyAngularVelocity для переворота
-    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-    bodyAngularVelocity.Name = "AutofarmFlipRotation"
-    bodyAngularVelocity.MaxTorque = Vector3.new(0, 0, math.huge)
-    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
-    bodyAngularVelocity.Parent = humanoidRootPart
-    
-    -- Поворачиваем персонажа на 180 градусов по оси Z (переворот вниз головой)
-    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
-    
-    -- Устанавливаем флаг
-    isPlayerFlipped = true
-    
-    print("✅ AUTOFARM: Персонаж успешно перевернут вниз головой!")
-    return true
-end
-
--- Функция для возврата персонажа в нормальное положение
-local function unflipPlayer()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if not isPlayerFlipped then
-        return true
-    end
-    
-    print("🔄 AUTOFARM: Возвращаем персонажа в нормальное положение...")
-    
-    -- Убираем BodyAngularVelocity если есть
-    local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-    if flipRotation then
-        flipRotation:Destroy()
-    end
-    
-    -- Возвращаем нормальное положение
-    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
-    
-    -- Сбрасываем флаг
-    isPlayerFlipped = false
-    
-    print("✅ AUTOFARM: Персонаж возвращен в нормальное положение!")
-    return true
-end
 
 function startAutofarm()
     if isAutofarmEnabled then
@@ -5027,11 +4963,7 @@ function startAutofarm()
     isAutofarmEnabled = true
     AutofarmConfig.Enabled = true
     
-    -- Переворачиваем персонажа вниз головой
-    task.spawn(function()
-        task.wait(1) -- Даем время персонажу стабилизироваться
-        flipPlayerUpsideDown()
-    end)
+
     
     -- Настраиваем отслеживание смерти игрока для автофарма
     local function setupAutofarmDeathTracking()
@@ -5054,11 +4986,7 @@ function startAutofarm()
                     _G.AutosellModule.stop()
                 end
                 
-                -- Сбрасываем состояние переворота при смерти
-                if isPlayerFlipped then
-                    print("🔄 AUTOFARM: Сбрасываем состояние переворота из-за смерти...")
-                    isPlayerFlipped = false
-                end
+
             end)
         end
     end
@@ -5081,14 +5009,7 @@ function startAutofarm()
                 print("🤖 AUTOFARM: Перезапускаем автофарм после возрождения...")
                 if not isAutofarmEnabled then
                     startAutofarm()
-                    -- Дополнительно включаем переворот персонажа (на случай если он не включился)
-                    task.spawn(function()
-                        task.wait(2) -- Даем время автофарму полностью запуститься
-                        if isAutofarmEnabled and not isPlayerFlipped then
-                            print("🔄 AUTOFARM: Дополнительная активация переворота после возрождения...")
-                            flipPlayerUpsideDown()
-                        end
-                    end)
+
                 end
             end
             
@@ -5149,10 +5070,7 @@ function stopAutofarm()
     autofarmPickingUp = false
     autofarmCurrentTarget = nil
     
-    -- Возвращаем персонажа в нормальное положение
-    task.spawn(function()
-        unflipPlayer()
-    end)
+
     
     -- Отменяем автоматический перезапуск если он был запланирован
     if autofarmAutoRestarting then
