@@ -4128,36 +4128,12 @@ local function getItemKey(item)
 end
 
 -- ВСПОМОГАТЕЛЬНЫЕ: переворот модели и скрытие визуалов во время автофарма
+-- Перенесено в модуль автоселла: _G.AutosellModule.FlipCharacterAroundFeet(character)
 local function setCharacterUpsideDown(character, enabled)
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local model = character
-    local footPlaneY = math.huge
-    for _, d in ipairs(model:GetDescendants()) do
-        if d:IsA("BasePart") then
-            local bottomY = d.Position.Y - (d.Size.Y / 2)
-            if bottomY < footPlaneY then
-                footPlaneY = bottomY
-            end
-        end
-    end
-    if footPlaneY == math.huge then footPlaneY = hrp.Position.Y end
-
-    local pivot = CFrame.new(hrp.Position.X, footPlaneY, hrp.Position.Z)
-    local current = model:GetPivot()
-    local flipped = pivot * CFrame.Angles(math.pi, 0, 0) * pivot:ToObjectSpace(current)
-    model:PivotTo(flipped)
-end
-
-local function iterateCharacterVisualParts(character, callback)
     if not character then return end
-    for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("BasePart") then
-            callback(descendant, "BasePart")
-        elseif descendant:IsA("Decal") then
-            callback(descendant, "Decal")
-        end
+    if _G and _G.AutosellModule and _G.AutosellModule.FlipCharacterAroundFeet then
+        -- Вызываем переворот вокруг ног из модуля автоселла
+        _G.AutosellModule.FlipCharacterAroundFeet(character)
     end
 end
 
@@ -4178,7 +4154,7 @@ local function restoreAutofarmVisuals()
     local player = Players.LocalPlayer
     local character = player and player.Character
     if character then
-        -- Сбрасываем переворот персонажа
+        -- Сбрасываем переворот персонажа (повторный вызов переворота вернет ориентацию)
         setCharacterUpsideDown(character, false)
     end
 
