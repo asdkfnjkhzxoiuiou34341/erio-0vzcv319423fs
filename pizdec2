@@ -1921,7 +1921,8 @@ local DistanceKillConfig = {
     HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
     SelectedPlayers = {},  -- [userId] = true/false
     UseConstraints = true, -- включаем констрейнты для более стабильной телепортации в YBA
-    YBAMode = true         -- специальный режим для YBA - убирает ограничения дистанции
+    YBAMode = true,        -- специальный режим для YBA - убирает ограничения дистанции
+    AntiCheatSafe = true   -- БЕЗОПАСНЫЙ РЕЖИМ: телепортируются только враги, игрок остается на месте
 }
 
 local isDistanceKillEnabled = false
@@ -2192,25 +2193,16 @@ _G.AutosellModule.DistanceKill = {
     isEnabled = function() return isDistanceKillEnabled end,
 }
 
--- Перехват атаки для Distance Kill: микро-блинк к цели и обратно
-local dkAttackConnections = {}
-local attackBlinkActive = false
-local attackBlinkEndTime = 0
-local savedOriginalCFrame = nil
+-- ОТКЛЮЧЕНО: Переменные для attack blink больше не нужны (телепортация игрока детектится)
+-- local dkAttackConnections = {}
+-- local attackBlinkActive = false  
+-- local attackBlinkEndTime = 0
+-- local savedOriginalCFrame = nil
 
 local function setMyCFrame(cf)
-    local me = Players.LocalPlayer
-    if not me or not me.Character then return end
-    local char = me.Character
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    pcall(function()
-        if char.PivotTo then
-            char:PivotTo(cf)
-        else
-            hrp.CFrame = cf
-        end
-    end)
+    -- ОТКЛЮЧЕНО: Функция телепортации игрока отключена для избежания детекта античитом
+    -- Оставлена только для совместимости, но ничего не делает
+    return
 end
 
 local function getNearestSelectedTargetPosition()
@@ -2236,25 +2228,10 @@ end
 -- YBA режим: функция проверки дистанции больше не нужна, так как мы разрешаем атаку на любой дистанции
 
 local function beginAttackBlink()
+    -- ОТКЛЮЧЕНО: Телепортация игрока детектится античитом
+    -- Теперь полагаемся только на визуальную телепортацию врагов к нам
     if not isDistanceKillEnabled then return end
-    local myPlayer = Players.LocalPlayer
-    if not myPlayer or not myPlayer.Character then return end
-    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
-    -- YBA режим: разрешаем атаку независимо от реальной дистанции
-    print("Distance Kill: YBA режим - атака разрешена (визуальная телепортация активна)")
-    
-    local targetPos = getNearestSelectedTargetPosition()
-    if not targetPos then return end
-    savedOriginalCFrame = myRoot.CFrame
-    attackBlinkActive = true
-    attackBlinkEndTime = tick() + 0.15
-    -- Немедленный шаг перемещения, чтобы не ждать следующий кадр
-    local toward = (targetPos - myRoot.Position)
-    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
-    local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
-    setMyCFrame(CFrame.new(nearPos, targetPos))
+    print("Distance Kill: Атака без телепортации игрока (только визуальная телепортация врагов)")
 end
 
 local function handleAttackBlink()
@@ -2266,25 +2243,14 @@ local function handleAttackBlink()
 end
 
 local function bindDistanceKillAttack()
-    -- ЛКМ
-    if not dkAttackConnections.inputBegan then
-        dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                beginAttackBlink()
-            elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
-                beginAttackBlink()
-            end
-        end)
-    end
+    -- ОТКЛЮЧЕНО: Привязка клавиш для attack blink больше не нужна
+    -- Визуальная телепортация врагов работает постоянно, без необходимости в дополнительных действиях
+    print("Distance Kill: Привязка атак отключена (работает только визуальная телепортация)")
 end
 
 local function unbindDistanceKillAttack()
-    for k, conn in pairs(dkAttackConnections) do
-        if typeof(conn) == "RBXScriptConnection" then
-            conn:Disconnect()
-        end
-        dkAttackConnections[k] = nil
-    end
+    -- ОТКЛЮЧЕНО: Отвязка соединений больше не нужна
+    return
 end
 
 -- Активируем/деактивируем перехват при старте/стопе Distance Kill
@@ -2300,31 +2266,8 @@ stopDistanceKill = function()
     unbindDistanceKillAttack()
 end
 
--- Встраиваем удержание позиции в render-цикл Distance Kill
-local oldUpdateDistanceKillPositions = updateDistanceKillPositions
-updateDistanceKillPositions = function()
-    oldUpdateDistanceKillPositions()
-    if not attackBlinkActive then return end
-    local now = tick()
-    local myPlayer = Players.LocalPlayer
-    if not myPlayer or not myPlayer.Character then attackBlinkActive = false return end
-    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then attackBlinkActive = false return end
-    local targetPos = getNearestSelectedTargetPosition()
-    if not targetPos then attackBlinkActive = false return end
-    if now < attackBlinkEndTime then
-        local toward = (targetPos - myRoot.Position)
-        if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
-        local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
-        setMyCFrame(CFrame.new(nearPos, targetPos))
-    else
-        attackBlinkActive = false
-        if savedOriginalCFrame then
-            setMyCFrame(savedOriginalCFrame)
-            savedOriginalCFrame = nil
-        end
-    end
-end
+-- ОТКЛЮЧЕНО: Логика удержания позиции игрока больше не нужна
+-- Теперь updateDistanceKillPositions работает только с телепортацией врагов
 
 -- Обновляем API после переопределений
 if _G and _G.AutosellModule and _G.AutosellModule.DistanceKill then
