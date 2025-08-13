@@ -283,6 +283,15 @@ local autofarmRestartTimer = nil -- Таймер для автоматическ
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
 
+-- Новые переменные визуальных эффектов автофарма
+local autofarmVisualsApplied = false
+local autofarmOriginalPartTransparency = {}
+local autofarmOriginalDecalTransparency = {}
+local autofarmOriginalHumanoidProps = { autoRotate = nil, nameDisplayDistance = nil, healthDisplayType = nil }
+local autofarmOriginalPartCanCollide = {}
+local autofarmOriginalHighlightEnabled = {}
+local autofarmOriginalLocalTransparencyModifier = {}
+
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
 local wasAutofarmEnabledBeforeDeath = false
@@ -1790,7 +1799,6 @@ _G.stopFly = stopFly
 _G.MovementConfig = MovementConfig
 _G.isNoClipping = function() return isNoClipping end
 _G.isFlying = function() return isFlying end
-
 local function createStealthTeleport()
     if not TeleportConfig.TargetPlayer then 
         return 
@@ -4125,7 +4133,141 @@ local function getItemKey(item)
     return item.Name .. "_" .. tostring(item.Position.X) .. "_" .. tostring(item.Position.Z)
 end
 
--- Функция сброса попыток для предмета
+-- ВСПОМОГАТЕЛЬНЫЕ: переворот модели и скрытие визуалов во время автофарма
+local function setCharacterUpsideDown(character, enabled)
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+
+    -- Поворот вокруг ног: локальный разворот по оси X на 180°
+    if enabled then
+        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.pi, 0, 0)
+    else
+        -- Возвращаем ориентацию, повторно провернув на 180°
+        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.pi, 0, 0)
+    end
+end
+
+local function iterateCharacterVisualParts(character, callback)
+    if not character then return end
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            callback(descendant, "BasePart")
+        elseif descendant:IsA("Decal") then
+            callback(descendant, "Decal")
+        end
+    end
+end
+
+local function applyAutofarmVisuals()
+    if autofarmVisualsApplied then return end
+    local player = Players.LocalPlayer
+    local character = player and player.Character
+    if not character then return end
+
+    -- Сохраняем и скрываем визуальные части персонажа (Handle/BodyParts/Decals)
+    autofarmOriginalPartTransparency = {}
+    autofarmOriginalDecalTransparency = {}
+
+    iterateCharacterVisualParts(character, function(obj, kind)
+        if kind == "BasePart" then
+            autofarmOriginalPartTransparency[obj] = obj.Transparency
+            autofarmOriginalPartCanCollide[obj] = obj.CanCollide
+            -- Сохраняем и обнуляем LocalTransparencyModifier (если используется для локальной невидимости)
+            if obj.LocalTransparencyModifier ~= nil then
+                autofarmOriginalLocalTransparencyModifier[obj] = obj.LocalTransparencyModifier
+                obj.LocalTransparencyModifier = 1
+            end
+            obj.Transparency = 1
+            if obj:FindFirstChildOfClass("Highlight") then
+                local hl = obj:FindFirstChildOfClass("Highlight")
+                autofarmOriginalHighlightEnabled[hl] = hl.Enabled
+                hl.Enabled = false
+            end
+            -- Отключаем CanCollide на всякий случай
+            if obj.CanCollide ~= nil then obj.CanCollide = false end
+        elseif kind == "Decal" then
+            autofarmOriginalDecalTransparency[obj] = obj.Transparency
+            obj.Transparency = 1
+        end
+    end)
+
+    -- Скрываем имя/полоску здоровья
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        autofarmOriginalHumanoidProps.autoRotate = humanoid.AutoRotate
+        autofarmOriginalHumanoidProps.nameDisplayDistance = humanoid.NameDisplayDistance
+        autofarmOriginalHumanoidProps.healthDisplayType = humanoid.HealthDisplayType
+
+        humanoid.AutoRotate = false
+        humanoid.NameDisplayDistance = 0
+        humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+    end
+
+    -- Переворачиваем персонажа вниз головой
+    setCharacterUpsideDown(character, true)
+
+    autofarmVisualsApplied = true
+end
+
+local function restoreAutofarmVisuals()
+    if not autofarmVisualsApplied then return end
+    local player = Players.LocalPlayer
+    local character = player and player.Character
+    if character then
+        -- Восстанавливаем визуальные параметры
+        for obj, tr in pairs(autofarmOriginalPartTransparency) do
+            if obj and obj.Parent then
+                obj.Transparency = tr
+                if obj.CanCollide ~= nil and autofarmOriginalPartCanCollide[obj] ~= nil then
+                    obj.CanCollide = autofarmOriginalPartCanCollide[obj]
+                end
+            end
+        end
+        for obj, tr in pairs(autofarmOriginalDecalTransparency) do
+            if obj and obj.Parent then
+                obj.Transparency = tr
+            end
+        end
+        -- Восстанавливаем LocalTransparencyModifier
+        for obj, ltm in pairs(autofarmOriginalLocalTransparencyModifier) do
+            if obj and obj.Parent then
+                obj.LocalTransparencyModifier = ltm
+            end
+        end
+        -- Восстанавливаем Highlight
+        for hl, wasEnabled in pairs(autofarmOriginalHighlightEnabled) do
+            if hl and hl.Parent then
+                hl.Enabled = wasEnabled
+            end
+        end
+        autofarmOriginalPartTransparency = {}
+        autofarmOriginalDecalTransparency = {}
+        autofarmOriginalPartCanCollide = {}
+        autofarmOriginalHighlightEnabled = {}
+        autofarmOriginalLocalTransparencyModifier = {}
+
+        -- Возвращаем Humanoid параметры
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if autofarmOriginalHumanoidProps.autoRotate ~= nil then
+                humanoid.AutoRotate = autofarmOriginalHumanoidProps.autoRotate
+            end
+            if autofarmOriginalHumanoidProps.nameDisplayDistance ~= nil then
+                humanoid.NameDisplayDistance = autofarmOriginalHumanoidProps.nameDisplayDistance
+            end
+            if autofarmOriginalHumanoidProps.healthDisplayType ~= nil then
+                humanoid.HealthDisplayType = autofarmOriginalHumanoidProps.healthDisplayType
+            end
+        end
+
+        -- Сбрасываем переворот персонажа
+        setCharacterUpsideDown(character, false)
+    end
+
+    autofarmVisualsApplied = false
+end
+
+-- Сброс попыток для предмета
 local function resetItemAttempts(itemKey)
     autofarmItemAttempts[itemKey] = nil
 end
@@ -5051,6 +5193,9 @@ function startAutofarm()
             end)
         end
     end)
+    
+    -- Применяем визуальные эффекты автофарма
+    applyAutofarmVisuals()
 end
 
 function stopAutofarm()
@@ -5150,15 +5295,18 @@ function stopAutofarm()
     end
     
     print("AUTOFARM: Полностью остановлен")
+    
+    -- Восстанавливаем визуальные эффекты автофарма
+    restoreAutofarmVisuals()
 end
 
 -- Экспорт функций автофарма для модуля автоселла  
 _G.moveToPosition = moveToPosition
 _G.isAutofarmEnabled = function() return isAutofarmEnabled end
 _G.startAutofarm = startAutofarm
-_G.stopAutofarm = function() 
-    isAutofarmEnabled = false 
-    print("🤖 AUTOFARM: Остановлен через _G.stopAutofarm") 
+_G.stopAutofarm = function()
+    stopAutofarm()
+    print("🤖 AUTOFARM: Остановлен через _G.stopAutofarm")
 end
 _G.AutofarmConfig = AutofarmConfig
 
@@ -5405,7 +5553,6 @@ UserInputService.InputEnded:Connect(function(input)
         resizeHandle.BackgroundTransparency = 0.2
     end
 end)
-
 RunService.RenderStepped:Connect(function()
     if isResizing then
         local currentMousePos = UserInputService:GetMouseLocation()
