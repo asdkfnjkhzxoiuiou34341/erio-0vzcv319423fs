@@ -1446,6 +1446,7 @@ local continuousFlipConnection = nil
 local renderSteppedConnection = nil
 local isMapLoaded = false
 local gameStartTime = tick() -- Время запуска скрипта для определения прогрузки
+local flipTargetY = nil
 
 -- ПРОСТАЯ функция для постоянного переворота персонажа
 local function startContinuousFlip()
@@ -1471,7 +1472,11 @@ local function startContinuousFlip()
         
         -- ПРИНУДИТЕЛЬНО переворачиваем каждый кадр
         local currentPos = humanoidRootPart.Position
-        local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
+        local targetPos = currentPos
+        if flipTargetY then
+            targetPos = Vector3.new(currentPos.X, flipTargetY, currentPos.Z)
+        end
+        local flippedCFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
         humanoidRootPart.CFrame = flippedCFrame
     end)
     
@@ -1523,6 +1528,7 @@ local function stopContinuousFlip()
             if flipPosition then flipPosition:Destroy() end
         end
     end
+    flipTargetY = nil
     
     print("🛑 FLIP: Остановка постоянного переворота")
 end
@@ -1546,8 +1552,28 @@ local function flipPlayerUpsideDown()
     originalPlayerPosition = humanoidRootPart.Position
     print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
     
-    -- СРАЗУ переворачиваем и смещаем вниз
-    local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
+    -- Вычисляем смещение так, чтобы перевернутое тело оказалось ниже уровня ног до переворота
+    local characterHeight = 6
+    do
+        local ok, size = pcall(function()
+            return player.Character:GetExtentsSize()
+        end)
+        if ok and size then
+            characterHeight = size.Y
+        else
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                characterHeight = math.max(6, math.abs((head.Position - humanoidRootPart.Position).Y) * 2)
+            elseif humanoid then
+                characterHeight = math.max(6, (humanoid.HipHeight or 2) * 3)
+            end
+        end
+    end
+    -- Сдвигаем центр на высоту персонажа + небольшой запас, чтобы ВЕСЬ перевернутый корпус оказался ниже уровня ног
+    local downwardOffset = characterHeight + 1
+    flipTargetY = originalPlayerPosition.Y - downwardOffset
+    local targetPosition = Vector3.new(originalPlayerPosition.X, flipTargetY, originalPlayerPosition.Z)
     print("📍 FLIP: Целевая позиция:", targetPosition)
     
     humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
@@ -1597,9 +1623,10 @@ local function unflipPlayer()
     else
         -- Если нет сохранённой позиции, просто поворачиваем обратно и поднимаем вверх
         local currentPosition = humanoidRootPart.Position
-        local upwardOffset = Vector3.new(0, 6, 0) -- Поднимаем на 6 единиц вверх
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(math.rad(180), 0, 0)
+        local upwardOffset = Vector3.new(0, (flipTargetY and (currentPosition.Y - flipTargetY) or 6), 0)
+        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(0, 0, 0)
     end
+    flipTargetY = nil
     
     -- Сбрасываем флаг
     isPlayerFlipped = false
@@ -1692,42 +1719,8 @@ local function monitorAutofarmState()
                     print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
                     
                     task.spawn(function()
-                        -- Дополнительная проверка стабильности перед переворотом
-                        local stableChecks = 0
-                        local maxStableChecks = 3
-                        
-                        while stableChecks < maxStableChecks do
-                            task.wait(1)
-                            
-                            -- Проверяем что персонаж стабилен
-                            local player = Players.LocalPlayer
-                            if player and player.Character then
-                                local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                                local humanoid = player.Character:FindFirstChild("Humanoid")
-                                
-                                if humanoidRootPart and humanoid then
-                                    -- Проверяем что персонаж не движется быстро и не в воздухе
-                                    local velocity = humanoidRootPart.AssemblyLinearVelocity or humanoidRootPart.Velocity
-                                    local isStable = velocity.Magnitude < 50 and humanoid.FloorMaterial ~= Enum.Material.Air
-                                    
-                                    if isStable then
-                                        stableChecks = stableChecks + 1
-                                        print("🔄 FLIP: Проверка стабильности " .. stableChecks .. "/" .. maxStableChecks)
-                                    else
-                                        stableChecks = 0 -- Сбрасываем если персонаж нестабилен
-                                        print("🔄 FLIP: Персонаж нестабилен, ждем стабилизации...")
-                                    end
-                                else
-                                    print("🔄 FLIP: Персонаж не найден, ждем...")
-                                    task.wait(2)
-                                end
-                            else
-                                print("🔄 FLIP: Игрок не найден, ждем...")
-                                task.wait(2)
-                            end
-                        end
-                        
-                        print("🔄 FLIP: Персонаж стабилен, выполняем переворот!")
+                        -- Упрощаем: не ждем касание земли, достаточно загрузки карты и наличия персонажа
+                        task.wait(0.5)
                         flipPlayerUpsideDown()
                     end)
                 elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
@@ -1764,6 +1757,7 @@ local function monitorAutofarmState()
                         -- Если автофарм все еще включен и карта прогружена
                         if isAutofarmCurrentlyEnabled and isMapLoaded then
                             print("🚀 FLIP: Прогрузка завершена - переворачиваем персонажа!")
+                            task.wait(0.5)
                             flipPlayerUpsideDown()
                         end
                     end)
@@ -1819,6 +1813,7 @@ local function setupCharacterHandling()
             if isAutofarmActive then
                 print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
                 isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
+                task.wait(0.5)
                 flipPlayerUpsideDown()
             end
         end)
