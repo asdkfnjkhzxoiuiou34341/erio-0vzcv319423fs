@@ -33,10 +33,33 @@ startAntiAFK()
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+-- Вспомогательная функция: переворот модели вокруг плоскости стоп (опускание "верхней" части ниже ног)
+local function FlipCharacterAroundFeet(character)
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local model = character
+    local footPlaneY = math.huge
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local bottomY = d.Position.Y - (d.Size.Y / 2)
+            if bottomY < footPlaneY then
+                footPlaneY = bottomY
+            end
+        end
+    end
+    if footPlaneY == math.huge then footPlaneY = hrp.Position.Y end
+
+    local pivot = CFrame.new(hrp.Position.X, footPlaneY, hrp.Position.Z)
+    local current = model:GetPivot()
+    local flipped = pivot * CFrame.Angles(math.pi, 0, 0) * pivot:ToObjectSpace(current)
+    model:PivotTo(flipped)
+end
+
 -- Конфигурация автоселла с правильными лимитами
 local AutosellConfig = {
     Enabled = false,
-    ShiftploxPosition = Vector3.new(-709, -35, -332), -- позиция NPC Shiftplox (на 10 единиц ниже)
+    ShiftploxPosition = Vector3.new(-709, -25, -332), -- позиция NPC Shiftplox
     CameraWallhack = true, -- Камера смотрит сквозь стены во время автосела
     MaxItemCount = 10, -- Максимальное количество предметов для слайдера
     ItemLimits = {
@@ -515,95 +538,6 @@ local function restartExternalAutofarm()
     return startExternalAutofarm()
 end
 
--- Функции для фиксации персонажа (как в автофарме из huyna)
-local function freezePlayerAtShiftplox()
-    local player = Players.LocalPlayer
-    local char = player.Character
-    if not char then return end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChild("Humanoid")
-    
-    if root then
-        -- Сохраняем оригинальную позицию
-        local originalPosition = root.Position
-        local originalCFrame = root.CFrame
-        
-        -- Создаем BodyVelocity для фиксации
-        local bv = root:FindFirstChild("ShiftploxFreezeBodyVelocity")
-        if not bv then
-            bv = Instance.new("BodyVelocity", root)
-            bv.Name = "ShiftploxFreezeBodyVelocity"
-            bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-        end
-        bv.Velocity = Vector3.new(0, 0, 0)
-        
-        -- Создаем BodyGyro для фиксации поворота
-        local gyro = root:FindFirstChild("ShiftploxFreezeBodyGyro")
-        if not gyro then
-            gyro = Instance.new("BodyGyro", root)
-            gyro.Name = "ShiftploxFreezeBodyGyro"
-            gyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-        end
-        gyro.CFrame = root.CFrame
-        
-        print("🔒 AUTOSELL: Персонаж зафиксирован у Shiftplox!")
-    end
-    
-    if humanoid then
-        -- Сохраняем оригинальные параметры
-        local originalWalkSpeed = humanoid.WalkSpeed
-        local originalJumpPower = humanoid.JumpPower
-        
-        -- Отключаем движение
-        humanoid.WalkSpeed = 0
-        humanoid.JumpPower = 0
-        
-        -- Отключаем авто-поворот
-        humanoid.AutoRotate = false
-        humanoid.AutoJumpEnabled = false
-        
-        print("🔒 AUTOSELL: Движение персонажа отключено!")
-    end
-end
-
-local function unfreezePlayerFromShiftplox()
-    local player = Players.LocalPlayer
-    local char = player.Character
-    if not char then return end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChild("Humanoid")
-    
-    if root then
-        -- Убираем BodyVelocity
-        local bv = root:FindFirstChild("ShiftploxFreezeBodyVelocity")
-        if bv then
-            bv:Destroy()
-        end
-        
-        -- Убираем BodyGyro
-        local gyro = root:FindFirstChild("ShiftploxFreezeBodyGyro")
-        if gyro then
-            gyro:Destroy()
-        end
-        
-        print("🔓 AUTOSELL: Фиксация персонажа снята!")
-    end
-    
-    if humanoid then
-        -- Восстанавливаем параметры движения
-        humanoid.WalkSpeed = 16
-        humanoid.JumpPower = 50
-        
-        -- Восстанавливаем авто-поворот
-        humanoid.AutoRotate = true
-        humanoid.AutoJumpEnabled = true
-        
-        print("🔓 AUTOSELL: Движение персонажа восстановлено!")
-    end
-end
-
 -- Функция для перезапуска NoClip после возрождения (выключение и включение)
 local function enableNoClipAfterRespawn()
     print("🚀 AUTOSELL: Перезапускаем NoClip после возрождения...")
@@ -677,140 +611,266 @@ local function checkInventoryForMaxItems()
     return itemsAtMax
 end
 
--- ПОДЗЕМНОЕ перемещение к NPC Shiftplox
+-- Перемещение к NPC Shiftplox
 local function moveToShiftplox(callback)
-    print("🔻 AUTOSELL: Начинаем ПОДЗЕМНЫЙ маршрут к NPC Shiftplox...")
+    print("🤖 AUTOSELL: Летим к NPC Shiftplox...")
     
-    -- Включаем NoClip для подземного полета
+    -- Включаем NoClip для безопасного полета
     if _G.MovementConfig and not _G.MovementConfig.NoClip.Enabled then
-        print("🔻 AUTOSELL: Включаем NoClip для подземного полета...")
+        print("🤖 AUTOSELL: Включаем NoClip для безопасного полета...")
         _G.MovementConfig.NoClip.Enabled = true
         if _G.startNoClip and type(_G.startNoClip) == "function" then
             _G.startNoClip()
         end
     end
     
-    local player = Players.LocalPlayer
-    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
-        print("❌ AUTOSELL: Ошибка - персонаж не найден!")
-        if callback then callback() end
-        return
-    end
-    
-    local humanoidRootPart = player.Character.HumanoidRootPart
-    local humanoid = player.Character:FindFirstChild("Humanoid")
-    
-    -- Полностью отключаем ходьбу
-    if humanoid then
-        humanoid.WalkSpeed = 0
-        humanoid.JumpPower = 0
-        humanoid.JumpHeight = 0
-        humanoid.HipHeight = 0
-        humanoid.Sit = false
-    end
-    
-    -- Очищаем все BodyMovers
-    local allBodyMovers = humanoidRootPart:GetChildren()
-    for _, child in pairs(allBodyMovers) do
-        if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyAngularVelocity") or 
-           child:IsA("BodyThrust") or child:IsA("BodyForce") or child:IsA("BodyGyro") then
-            child:Destroy()
-        end
-    end
-    
-    -- Отключаем гравитацию
-    local originalGravity = workspace.Gravity
-    workspace.Gravity = 0
-    
-    -- Создаем BodyVelocity для полета
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Name = "AutosellUndergroundVelocity"
-    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = humanoidRootPart
-    
-    -- ЭТАП 1: Спуск под землю на Y = -70
-    print("🔻 AUTOSELL: ЭТАП 1 - Спускаемся под землю на Y = -70...")
-    local currentPos = humanoidRootPart.Position
-    local undergroundY = -70
-    local phase1Target = Vector3.new(currentPos.X, undergroundY, currentPos.Z)
-    
-    local phase1Connection
-    phase1Connection = RunService.Heartbeat:Connect(function()
-        local currentPos = humanoidRootPart.Position
-        local distance = math.abs(currentPos.Y - undergroundY)
+    -- ПРИНУДИТЕЛЬНО используем собственный автопилот (не _G.moveToPosition!)
+    print("🤖 AUTOSELL: Используем собственный автопилот с NoClip...")
         
-        if distance > 2 then
-            -- Летим вниз
-            local direction = Vector3.new(0, -1, 0)
-            bodyVelocity.Velocity = direction * 100
-        else
-            -- Достигли глубины -70
-            phase1Connection:Disconnect()
-            print("✅ AUTOSELL: ЭТАП 1 завершен - достигли глубины Y = -70")
+        local player = Players.LocalPlayer
+        if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            print("🤖 AUTOSELL: Ошибка - персонаж не найден!")
+            if callback then callback() end
+            return
+        end
+        
+        local humanoidRootPart = player.Character.HumanoidRootPart
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        
+        -- Останавливаем все текущие движения персонажа
+        if humanoid then
+            humanoid.WalkSpeed = 0
+            humanoid.JumpPower = 0
+            humanoid.JumpHeight = 0
+            humanoid.HipHeight = 0
+            humanoid.Sit = false -- Убираем сидение если есть
+        end
+        
+        -- ПРИНУДИТЕЛЬНАЯ ОЧИСТКА всех BodyMovers
+        local allBodyMovers = humanoidRootPart:GetChildren()
+        for _, child in pairs(allBodyMovers) do
+            if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyAngularVelocity") or 
+               child:IsA("BodyThrust") or child:IsA("BodyForce") or child:IsA("BodyGyro") then
+                print("🤖 AUTOSELL: Удаляем", child.Name, "перед запуском автопилота")
+                child:Destroy()
+            end
+        end
+        
+        task.wait(0.1) -- Даем время для остановки
+        
+        print("🤖 AUTOSELL: Автопилот к NPC Shiftplox активирован (с NoClip)!")
+        -- print("🤖 AUTOSELL: Позиция NPC:", AutosellConfig.ShiftploxPosition) -- Убран спам-лог
+        
+        -- Создаем BodyVelocity для автопилота (как раньше, но с NoClip)
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Name = "AutosellBodyVelocity"
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.Parent = humanoidRootPart
+        
+        -- Сохраняем и отключаем гравитацию
+        local originalGravity = workspace.Gravity
+        workspace.Gravity = 0
+        print("🤖 AUTOSELL: Автопилот fly активирован")
+        
+        -- Движение к NPC
+        local moveConnection
+        local isMoving = true
+        local lastDirectionChange = 0
+        local currentOffset = Vector3.new(0, 0, 0)
+        
+        moveConnection = RunService.Heartbeat:Connect(function()
+            if not isMoving then
+                if moveConnection then
+                    moveConnection:Disconnect()
+                end
+                return
+            end
             
-            -- ЭТАП 2: Подземный полет по X и Z к позиции Shiftplox
-            print("🔻 AUTOSELL: ЭТАП 2 - Подземный полет к координатам Shiftplox...")
-            local shiftploxPos = AutosellConfig.ShiftploxPosition
-            local phase2Target = Vector3.new(shiftploxPos.X, undergroundY, shiftploxPos.Z)
+            local currentPos = humanoidRootPart.Position
+            local distance = (AutosellConfig.ShiftploxPosition - currentPos).Magnitude
             
-            local phase2Connection
-            phase2Connection = RunService.Heartbeat:Connect(function()
-                local currentPos = humanoidRootPart.Position
-                local targetPos = Vector3.new(shiftploxPos.X, currentPos.Y, shiftploxPos.Z) -- Сохраняем текущий Y
-                local distance = (targetPos - currentPos).Magnitude
-                
-                if distance > 3 then
-                    -- Летим по X и Z к Shiftplox
+            -- Добавляем небольшие вариации в траекторию (имитируем человеческое движение)
+            local currentTime = tick()
+            if currentTime - lastDirectionChange > 0.5 then -- Меняем направление каждые 0.5 сек
+                lastDirectionChange = currentTime
+                currentOffset = Vector3.new(
+                    math.random(-2, 2), -- Небольшие отклонения по X
+                    0, -- БЕЗ отклонений по Y - строго горизонтальный полет
+                    math.random(-2, 2)  -- Небольшие отклонения по Z
+                )
+            end
+            
+            if distance > 8 then
+                -- Автопилот: летим к цели умеренной скоростью (безопасно для античита)
+                if bodyVelocity and bodyVelocity.Parent then
+                    local targetPos = AutosellConfig.ShiftploxPosition + currentOffset
                     local direction = (targetPos - currentPos).Unit
-                    bodyVelocity.Velocity = direction * 120
-                else
-                    -- Достигли координат Shiftplox по X и Z
-                    phase2Connection:Disconnect()
-                    print("✅ AUTOSELL: ЭТАП 2 завершен - достигли координат Shiftplox под землей")
-                    
-                    -- ЭТАП 3: Подъем на Y = -35 (к позиции Shiftplox)
-                    print("🔻 AUTOSELL: ЭТАП 3 - Поднимаемся к Shiftplox на Y = -35...")
-                    local finalY = -35
-                    
-                    local phase3Connection
-                    phase3Connection = RunService.Heartbeat:Connect(function()
-                        local currentPos = humanoidRootPart.Position
-                        local distance = math.abs(currentPos.Y - finalY)
+                    -- Увеличиваем скорость для быстрого полета к шифтплоксу
+                    local baseSpeed = 120
+                    local randomOffset = math.random(-10, 10)
+                    local moveVector = direction * (baseSpeed + randomOffset)
+                    bodyVelocity.Velocity = moveVector
+                end
+            elseif distance > 3 then
+                -- ЗАМЕДЛЕНИЕ: приближаемся к цели - снижаем скорость плавно
+                if bodyVelocity and bodyVelocity.Parent then
+                    local direction = (AutosellConfig.ShiftploxPosition - currentPos).Unit
+                    local slowSpeed = math.max(20, distance * 15) -- Увеличенная скорость замедления
+                    local moveVector = direction * slowSpeed
+                    bodyVelocity.Velocity = moveVector
+                    -- print("🤖 AUTOSELL: Замедляемся, расстояние:", math.floor(distance), "скорость:", math.floor(slowSpeed)) -- Убран спам-лог
+                end
+            else
+                -- ЕСТЕСТВЕННОЕ ПРИЗЕМЛЕНИЕ: Летим ближе к земле и переходим на ходьбу
+                print("🤖 AUTOSELL: Приземляемся рядом с NPC и подходим пешком...")
+                isMoving = false
+                
+                -- 1. Снижаемся на землю рядом с NPC (не точно к нему)
+                local landingPosition = AutosellConfig.ShiftploxPosition + Vector3.new(
+                    math.random(-8, 8), -- Случайное место рядом с NPC (увеличил радиус)
+                    0, -- БЕЗ отклонений по Y - точно на уровне NPC
+                    math.random(-8, 8)
+                )
+                
+                if bodyVelocity and bodyVelocity.Parent then
+                    task.spawn(function()
+                        print("🤖 AUTOSELL: Снижаемся для приземления...")
                         
-                        if distance > 1 then
-                            -- Поднимаемся вверх
-                            local direction = Vector3.new(0, 1, 0)
-                            bodyVelocity.Velocity = direction * 60
-                        else
-                            -- Достигли финальной позиции
-                            phase3Connection:Disconnect()
-                            print("✅ AUTOSELL: ЭТАП 3 завершен - достигли позиции Shiftplox!")
-                            
-                            -- Останавливаем движение
-                            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                            task.wait(0.2)
-                            
-                            -- Убираем BodyVelocity
+                        -- Плавно снижаемся к точке приземления
+                        for i = 1, 20 do -- 20 шагов приземления
                             if bodyVelocity and bodyVelocity.Parent then
-                                bodyVelocity:Destroy()
+                                local currentPos = humanoidRootPart.Position
+                                local direction = (landingPosition - currentPos).Unit
+                                local landingSpeed = math.max(20, 50 - i) -- Увеличенная скорость приземления
+                                bodyVelocity.Velocity = direction * landingSpeed
+                                task.wait(0.05)
                             end
+                        end
+                        
+                        -- Завершаем полет
+                        if bodyVelocity and bodyVelocity.Parent then
+                            bodyVelocity:Destroy()
+                            print("🤖 AUTOSELL: Полет завершен, приземлились")
+                        end
+                    end)
+                end
+                
+                -- 2. Восстанавливаем гравитацию для естественного падения
+                workspace.Gravity = originalGravity
+                
+                -- 3. Плавно отключаем системы полета
+                task.spawn(function()
+                    task.wait(0.5) -- Ждем приземления
+                    
+                    if _G.MovementConfig and _G.MovementConfig.Fly and _G.MovementConfig.Fly.Enabled then
+                        print("🤖 AUTOSELL: Отключаем fly после приземления...")
+                        _G.MovementConfig.Fly.Enabled = false
+                        if _G.stopFly and type(_G.stopFly) == "function" then
+                            _G.stopFly()
+                        end
+                    end
+                    
+                    if _G.MovementConfig and _G.MovementConfig.NoClip and _G.MovementConfig.NoClip.Enabled then
+                        print("🤖 AUTOSELL: Отключаем noclip после приземления...")
+                        _G.MovementConfig.NoClip.Enabled = false
+                        if _G.stopNoClip and type(_G.stopNoClip) == "function" then
+                            _G.stopNoClip()
+                        end
+                    end
+                    
+                    -- ПРИНУДИТЕЛЬНО восстанавливаем параметры ходьбы после отключения fly
+                    task.wait(0.2) -- Даем время системе отключиться
+                    if humanoid then
+                        humanoid.WalkSpeed = 16
+                        humanoid.JumpPower = 50
+                        humanoid.JumpHeight = 7.2
+                        humanoid.HipHeight = 2
+                        print("🤖 AUTOSELL: Параметры ходьбы принудительно восстановлены")
+                    end
+                end)
+                
+                -- 4. Восстанавливаем нормальную ходьбу СРАЗУ
+                if humanoid then
+                    humanoid.WalkSpeed = 16
+                    humanoid.JumpPower = 50
+                    humanoid.JumpHeight = 7.2
+                    humanoid.HipHeight = 2 -- Важно! Восстанавливаем HipHeight
+                    humanoid.Sit = false
+                end
+                
+                -- 5. Восстанавливаем коллизию
+                task.spawn(function()
+                    task.wait(0.8) -- Ждем полного приземления
+                    for _, part in pairs(player.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = true
+                        end
+                    end
+                    print("🤖 AUTOSELL: Коллизия восстановлена")
+                end)
+                
+                moveConnection:Disconnect()
+                
+                -- 6. Подходим к NPC пешком после приземления
+                task.spawn(function()
+                    task.wait(1.5) -- Ждем полного приземления и стабилизации
+                    
+                    print("🤖 AUTOSELL: Подходим к NPC пешком...")
+                    
+                    -- Убеждаемся что параметры ходьбы восстановлены
+                    if humanoid then
+                        humanoid.WalkSpeed = 16
+                        humanoid.JumpPower = 50
+                        humanoid.JumpHeight = 7.2
+                        humanoid.HipHeight = 2
+                        humanoid.Sit = false
+                        print("🤖 AUTOSELL: Финальная проверка параметров ходьбы")
+                    end
+                    
+                    -- Простой подход пешком к NPC (с проверками)
+                    local walkToNPC
+                    local walkStartTime = tick()
+                    local lastMoveTime = tick()
+                    
+                    walkToNPC = RunService.Heartbeat:Connect(function()
+                        if not humanoidRootPart or not humanoidRootPart.Parent or not humanoid then
+                            if walkToNPC then walkToNPC:Disconnect() end
+                            return
+                        end
+                        
+                        local currentTime = tick()
+                        local currentPos = humanoidRootPart.Position
+                        local distanceToNPC = (AutosellConfig.ShiftploxPosition - currentPos).Magnitude
+                        
+                        -- Таймаут: если идем слишком долго - завершаем
+                        if currentTime - walkStartTime > 5 then
+                            walkToNPC:Disconnect()
+                            print("🤖 AUTOSELL: Таймаут ходьбы (5 сек), начинаем продажу с текущей позиции")
+                            if callback then callback() end
+                            return
+                        end
+                        
+                        if distanceToNPC > 6 then
+                            -- Идем к NPC обычной ходьбой
+                            if currentTime - lastMoveTime > 0.5 then -- Обновляем путь каждые 0.5 сек
+                                lastMoveTime = currentTime
+                                humanoid:MoveTo(AutosellConfig.ShiftploxPosition)
+                                -- print("🤖 AUTOSELL: Идем к NPC, осталось:", math.floor(distanceToNPC), "единиц") -- Убран спам-лог
+                            end
+                        else
+                            -- Дошли достаточно близко к NPC
+                            walkToNPC:Disconnect()
+                            print("🤖 AUTOSELL: Подошли к NPC пешком, начинаем продажу!")
                             
-                            print("🎯 AUTOSELL: Прибыли к Shiftplox подземным маршрутом! Фиксируем персонажа...")
-                            
-                            -- ФИКСИРУЕМ ПЕРСОНАЖА КАК В АВТОФАРМЕ
-                            freezePlayerAtShiftplox()
-                            
-                            -- Запускаем продажу
                             if callback then
                                 callback()
                             end
                         end
                     end)
-                end
-            end)
-        end
-    end)
+                end)
+            end
+        end)
 end
 
 -- Функции для эмуляции нажатий клавиш
@@ -1065,9 +1125,6 @@ local function sellItemsToNPC(itemsToSell)
             
             isSellingToNPC = false
             
-            -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА ПРИ НЕУДАЧЕ
-            unfreezePlayerFromShiftplox()
-            
             -- Возобновляем автофарм перед перезапуском
             if externalAutofarmConfig.startFunction then
                 print("🤖 AUTOSELL: Возобновляем внешний автофарм перед перезапуском...")
@@ -1089,11 +1146,8 @@ local function sellItemsToNPC(itemsToSell)
             print("🤖 AUTOSELL: Остались предметы для продажи, повторяем цикл...")
             sellItemsToNPC(remainingItems)
         else
-            print("🤖 AUTOSELL: Все предметы проданы, снимаем фиксацию и возобновляем автофарм...")
+            print("🤖 AUTOSELL: Все предметы проданы, возобновляем автофарм...")
             isSellingToNPC = false
-            
-            -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА
-            unfreezePlayerFromShiftplox()
             
             -- Возобновляем автофарм (независимо от флага Enabled)
             if externalAutofarmConfig.startFunction then
@@ -1233,9 +1287,6 @@ local function stopAutosell()
     end
     
     isSellingToNPC = false
-    
-    -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА ПРИ ОСТАНОВКЕ
-    unfreezePlayerFromShiftplox()
     
     -- Убираем все предметы из рук при остановке автоселла
     unequipAllItemsFromHands()
@@ -1400,10 +1451,7 @@ _G.AutosellModule = {
     enableAllItems = enableAllAutosellItems,
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
-    
-    -- Функции фиксации персонажа
-    freezePlayerAtShiftplox = freezePlayerAtShiftplox,
-    unfreezePlayerFromShiftplox = unfreezePlayerFromShiftplox,
+    FlipCharacterAroundFeet = FlipCharacterAroundFeet,
     
     -- Функции для работы с внешним автофармом
     ExternalAutofarm = {
@@ -1432,397 +1480,10 @@ _G.AutosellModule = {
     }
 }
 
--- =========================================================
--- МОДУЛЬ ПЕРЕВОРОТА ПЕРСОНАЖА ДЛЯ АВТОФАРМА
--- =========================================================
 
-local CharacterFlipModule = {}
-
--- Переменные для отслеживания состояния
-local isPlayerFlipped = false
-local originalPlayerPosition = nil
-local autofarmFlipConnections = {}
-local continuousFlipConnection = nil
-local renderSteppedConnection = nil
-local isMapLoaded = false
-
--- ПРОСТАЯ функция для постоянного переворота персонажа
-local function startContinuousFlip()
-    if continuousFlipConnection then
-        task.cancel(continuousFlipConnection)
-    end
-    
-    if renderSteppedConnection then
-        renderSteppedConnection:Disconnect()
-    end
-    
-    print("🔄 FLIP: ПРОСТОЙ переворот - запуск...")
-    
-    -- АГРЕССИВНЫЙ переворот каждый кадр
-    renderSteppedConnection = RunService.RenderStepped:Connect(function()
-        if not isPlayerFlipped then return end
-        
-        local player = Players.LocalPlayer
-        if not player or not player.Character then return end
-        
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return end
-        
-        -- ПРИНУДИТЕЛЬНО переворачиваем каждый кадр
-        local currentPos = humanoidRootPart.Position
-        local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
-        humanoidRootPart.CFrame = flippedCFrame
-    end)
-    
-    -- Дополнительный цикл для создания BodyAngularVelocity
-    continuousFlipConnection = task.spawn(function()
-        while isPlayerFlipped do
-            local player = Players.LocalPlayer
-            if player and player.Character then
-                local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                if humanoidRootPart then
-                    -- Убираем старый BodyAngularVelocity
-                    local oldBAV = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-                    if oldBAV then oldBAV:Destroy() end
-                    
-                    -- Создаем новый агрессивный BodyAngularVelocity
-                    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-                    bodyAngularVelocity.Name = "AutofarmFlipRotation"
-                    bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-                    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
-                    bodyAngularVelocity.Parent = humanoidRootPart
-                end
-            end
-            task.wait(1)
-        end
-    end)
-end
-
--- Функция для остановки постоянного переворота
-local function stopContinuousFlip()
-    if continuousFlipConnection then
-        task.cancel(continuousFlipConnection)
-        continuousFlipConnection = nil
-    end
-    
-    if renderSteppedConnection then
-        renderSteppedConnection:Disconnect()
-        renderSteppedConnection = nil
-    end
-    
-    -- Убираем все BodyMovers для переворота
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-            if flipRotation then flipRotation:Destroy() end
-            
-            local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
-            if flipPosition then flipPosition:Destroy() end
-        end
-    end
-    
-    print("🛑 FLIP: Остановка постоянного переворота")
-end
-
--- Функция для переворота персонажа вниз головой
-local function flipPlayerUpsideDown()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if isPlayerFlipped then
-        print("🔄 FLIP: Персонаж уже перевернут!")
-        return true
-    end
-    
-    print("🔄 FLIP: ПРОСТОЙ переворот - начинаем!")
-    
-    -- Сохраняем оригинальную позицию
-    originalPlayerPosition = humanoidRootPart.Position
-    print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
-    
-    -- СРАЗУ переворачиваем и смещаем вниз
-    local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
-    print("📍 FLIP: Целевая позиция:", targetPosition)
-    
-    humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
-    
-    -- Устанавливаем флаг
-    isPlayerFlipped = true
-    
-    -- Запускаем постоянный переворот
-    startContinuousFlip()
-    
-    print("✅ FLIP: ПРОСТОЙ переворот активирован!")
-    return true
-end
-
--- Функция для возврата персонажа в нормальное положение
-local function unflipPlayer()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if not isPlayerFlipped then
-        return true
-    end
-    
-    print("🔄 FLIP: Возвращаем персонажа в нормальное положение...")
-    
-    -- Останавливаем постоянный переворот
-    stopContinuousFlip()
-    
-    -- Убираем все BodyMovers для переворота
-    local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-    if flipRotation then
-        flipRotation:Destroy()
-    end
-    
-    local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
-    if flipPosition then
-        flipPosition:Destroy()
-    end
-    
-    -- Возвращаем нормальное положение и позицию
-    if originalPlayerPosition then
-        humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition) * CFrame.Angles(0, 0, 0)
-        originalPlayerPosition = nil
-    else
-        -- Если нет сохранённой позиции, просто поворачиваем обратно и поднимаем вверх
-        local currentPosition = humanoidRootPart.Position
-        local upwardOffset = Vector3.new(0, 6, 0) -- Поднимаем на 6 единиц вверх
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(math.rad(180), 0, 0)
-    end
-    
-    -- Сбрасываем флаг
-    isPlayerFlipped = false
-    
-    print("✅ FLIP: Персонаж возвращен в нормальное положение!")
-    return true
-end
-
--- Функция для отслеживания запуска автофарма
-local function monitorAutofarmState()
-    if autofarmFlipConnections.monitor then
-        autofarmFlipConnections.monitor:Disconnect()
-    end
-    
-    print("🔍 FLIP: Запуск мониторинга состояния автофарма...")
-    
-    autofarmFlipConnections.monitor = task.spawn(function()
-        local wasAutofarmEnabled = false
-        
-        while true do
-            task.wait(1) -- Проверяем каждую секунду
-            
-            -- Проверяем состояние автофарма через разные способы
-            local isAutofarmCurrentlyEnabled = false
-            
-            -- Способ 1: через _G.isAutofarmEnabled
-            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
-                local success, result = pcall(_G.isAutofarmEnabled)
-                if success and result then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Способ 2: через внешние функции автофарма
-            if not isAutofarmCurrentlyEnabled and externalAutofarmConfig.isEnabledFunction then
-                local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
-                if success and result then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Способ 3: через глобальные переменные
-            if not isAutofarmCurrentlyEnabled then
-                if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
-                    isAutofarmCurrentlyEnabled = true
-                elseif _G.isAutofarmActive then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Проверяем завершена ли прогрузка карты
-            if not isMapLoaded then
-                -- Ищем сообщение о завершении прогрузки в логах
-                -- Можно проверить через глобальные переменные или другие методы
-                if _G.mapLoadCompleted or 
-                   (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
-                    isMapLoaded = true
-                    print("🗺️ FLIP: Прогрузка карты завершена!")
-                end
-            end
-            
-            -- Если состояние автофарма изменилось
-            if isAutofarmCurrentlyEnabled ~= wasAutofarmEnabled then
-                if isAutofarmCurrentlyEnabled and isMapLoaded then
-                    -- Автофарм включился И карта прогружена - переворачиваем персонажа
-                    print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
-                    
-                    -- МГНОВЕННЫЙ тест переворота
-                    local player = Players.LocalPlayer
-                    if player and player.Character then
-                        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                        if humanoidRootPart then
-                            print("🔄 FLIP: МГНОВЕННЫЙ ТЕСТ - переворачиваем прямо сейчас!")
-                            local pos = humanoidRootPart.Position
-                            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-                            print("🔄 FLIP: ТЕСТ ЗАВЕРШЕН - персонаж должен быть перевернут!")
-                        end
-                    end
-                    
-                    task.spawn(function()
-                        task.wait(3) -- Даем больше времени для стабилизации после прогрузки
-                        flipPlayerUpsideDown()
-                    end)
-                elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
-                    -- Автофарм включился но карта не прогружена - ждем
-                    print("🔄 FLIP: Автофарм включен, но ждем завершения прогрузки карты...")
-                    task.spawn(function()
-                        -- Ждем прогрузки карты
-                        while isAutofarmCurrentlyEnabled and not isMapLoaded do
-                            task.wait(1)
-                            -- Проверяем прогрузку снова
-                            if _G.mapLoadCompleted or 
-                               (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
-                                isMapLoaded = true
-                                print("🗺️ FLIP: Прогрузка карты завершена во время ожидания!")
-                                break
-                            end
-                        end
-                        
-                        -- Если автофарм все еще включен и карта прогружена
-                        if isAutofarmCurrentlyEnabled and isMapLoaded then
-                            print("🚀 FLIP: Прогрузка завершена - переворачиваем персонажа!")
-                            flipPlayerUpsideDown()
-                        end
-                    end)
-                else
-                    -- Автофарм выключился - возвращаем персонажа в норму
-                    print("🛑 FLIP: Обнаружена остановка автофарма - возвращаем персонажа в норму!")
-                    task.spawn(function()
-                        unflipPlayer()
-                    end)
-                end
-                wasAutofarmEnabled = isAutofarmCurrentlyEnabled
-            end
-        end
-    end)
-end
-
--- Функция для обработки смерти и возрождения персонажа
-local function setupCharacterHandling()
-    local player = Players.LocalPlayer
-    
-    -- Обработка смерти
-    local function onCharacterRemoving()
-        print("💀 FLIP: Персонаж умер - сбрасываем состояние переворота")
-        isPlayerFlipped = false
-        originalPlayerPosition = nil
-        isMapLoaded = false -- Сбрасываем флаг прогрузки карты
-        stopContinuousFlip()
-        
-        -- Дополнительная очистка соединений
-        if renderSteppedConnection then
-            renderSteppedConnection:Disconnect()
-            renderSteppedConnection = nil
-        end
-    end
-    
-    -- Обработка возрождения
-    local function onCharacterAdded(character)
-        task.wait(2) -- Даем время персонажу загрузиться
-        print("🔄 FLIP: Персонаж возродился - проверяем нужно ли восстановить переворот")
-        
-        -- Если автофарм активен, переворачиваем персонажа заново
-        task.spawn(function()
-            task.wait(1)
-            local isAutofarmActive = false
-            
-            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
-                local success, result = pcall(_G.isAutofarmEnabled)
-                if success and result then
-                    isAutofarmActive = true
-                end
-            end
-            
-            if isAutofarmActive then
-                print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
-                isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
-                flipPlayerUpsideDown()
-            end
-        end)
-    end
-    
-    -- Подключаем обработчики
-    if player.Character then
-        player.CharacterRemoving:Connect(onCharacterRemoving)
-    end
-    player.CharacterAdded:Connect(onCharacterAdded)
-    player.CharacterRemoving:Connect(onCharacterRemoving)
-end
-
--- Инициализация модуля переворота
-local function initializeFlipModule()
-    print("🔄 FLIP: Инициализация модуля переворота персонажа...")
-    
-    -- Запускаем мониторинг автофарма
-    monitorAutofarmState()
-    
-    -- Настраиваем обработку персонажа
-    setupCharacterHandling()
-    
-    print("✅ FLIP: Модуль переворота персонажа готов к работе!")
-end
-
--- ТЕСТОВАЯ функция для мгновенного переворота
-local function testFlipNow()
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            print("🧪 TEST FLIP: Мгновенный переворот!")
-            local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-            print("🧪 TEST FLIP: Выполнено!")
-            return true
-        end
-    end
-    print("❌ TEST FLIP: Персонаж не найден!")
-    return false
-end
-
--- Экспорт функций в глобальное пространство
-CharacterFlipModule = {
-    flipPlayerUpsideDown = flipPlayerUpsideDown,
-    unflipPlayer = unflipPlayer,
-    isPlayerFlipped = function() return isPlayerFlipped end,
-    startContinuousFlip = startContinuousFlip,
-    stopContinuousFlip = stopContinuousFlip,
-    initialize = initializeFlipModule,
-    testFlipNow = testFlipNow -- ТЕСТОВАЯ функция
-}
-
--- Добавляем модуль в AutosellModule для доступа извне
-_G.AutosellModule.CharacterFlip = CharacterFlipModule
-
--- Автоматически запускаем модуль
-task.spawn(function()
-    task.wait(3) -- Даем время всем системам загрузиться
-    initializeFlipModule()
-end)
 
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
 print("🔗 AUTOFARM LINK: Система связи с внешним автофармом готова!")
-print("🔄 FLIP: Модуль переворота персонажа интегрирован!")
-print("🔒 FREEZE: Система фиксации персонажа у Shiftplox добавлена!")
 print("🎛️ GUI: Автосел интегрирован в основное меню с тумблерами:")
 print("   🟢🔴 Тумблеры Enable/Disable All Items")
 print("   ⚙️ Индивидуальные тумблеры для каждого предмета")
@@ -1831,13 +1492,5 @@ print("   _G.AutosellModule.ExternalAutofarm.findFunctions() - поиск фун
 print("   _G.AutosellModule.ExternalAutofarm.setFunctions(stop, start, isEnabled) - ручная настройка")
 print("   _G.AutosellModule.enableAllItems() - включить ВСЕ предметы автосела")
 print("   _G.AutosellModule.disableAllItems() - отключить ВСЕ предметы автосела")
-print("🔒 Функции фиксации персонажа:")
-print("   _G.AutosellModule.freezePlayerAtShiftplox() - зафиксировать персонажа у Shiftplox")
-print("   _G.AutosellModule.unfreezePlayerFromShiftplox() - снять фиксацию персонажа")
-print("🔄 Функции переворота персонажа:")
-print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
-print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
-print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
-print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
 
 return _G.AutosellModule

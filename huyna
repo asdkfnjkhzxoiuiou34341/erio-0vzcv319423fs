@@ -4130,10 +4130,12 @@ end
 -- ВСПОМОГАТЕЛЬНЫЕ: переворот модели и скрытие визуалов во время автофарма
 -- Перенесено в модуль автоселла: _G.AutosellModule.FlipCharacterAroundFeet(character)
 local function setCharacterUpsideDown(character, enabled)
-    if not character then return end
-    if _G and _G.AutosellModule and _G.AutosellModule.FlipCharacterAroundFeet then
-        -- Вызываем переворот вокруг ног из модуля автоселла
-        _G.AutosellModule.FlipCharacterAroundFeet(character)
+    if _G and _G.AutosellModule and _G.AutosellModule.CharacterFlip then
+        if enabled then
+            _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown()
+        else
+            _G.AutosellModule.CharacterFlip.unflipPlayer()
+        end
     end
 end
 
