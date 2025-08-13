@@ -1720,16 +1720,21 @@ local function monitorAutofarmState()
 					end)
 				else
 					print("🛑 FLIP: Автофарм остановлен — возвращаем персонажа в норму")
-					task.spawn(function() unflipPlayer() end)
+					task.spawn(function()
+						unflipPlayer()
+						startTravelToSafeSpot()
+					end)
 				end
 				wasAutofarmEnabled = isAutofarmCurrentlyEnabled
 			end
 			-- Фолбэк: если автофарм уже был активен до запуска модуля, но переворот не произошел
-			if isAutofarmCurrentlyEnabled and not isPlayerFlipped and (tick() - lastFlipAttempt) > 5 then
-				lastFlipAttempt = tick()
-				print("⏭️ FLIP: Фолбэк-триггер — пробуем переворот при активном автофарме")
-				flipPlayerUpsideDown()
-			end
+					if isAutofarmCurrentlyEnabled and not isPlayerFlipped and (tick() - lastFlipAttempt) > 5 then
+			lastFlipAttempt = tick()
+			print("⏭️ FLIP: Фолбэк-триггер — пробуем переворот при активном автофарме")
+			-- Остановить возможный полет ожидания
+			stopTravelToSafeSpot()
+			flipPlayerUpsideDown()
+		end
 		end
 	end)
 end
@@ -1783,6 +1788,7 @@ local function initializeFlipModule()
 		end
 		if ok and not isPlayerFlipped then
 			print("⏱️ FLIP: Автофарм уже активен — выполняем переворот (инициализация)")
+			stopTravelToSafeSpot()
 			flipPlayerUpsideDown()
 		end
 	end)
@@ -1874,6 +1880,75 @@ ensureMovementMonitor = function()
 					rootMotor6D.Transform = desiredRootTransform
 				end
 			end
+		end
+	end)
+end
+
+local travelConnection = nil
+local travelBodyVelocity = nil
+local isTravelActive = false
+
+local function stopTravelToSafeSpot()
+	if travelConnection then
+		pcall(function() travelConnection:Disconnect() end)
+		travelConnection = nil
+	end
+	if travelBodyVelocity and travelBodyVelocity.Parent then
+		travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+		travelBodyVelocity:Destroy()
+	end
+	travelBodyVelocity = nil
+	isTravelActive = false
+	print("🛑 TRAVEL: Остановлен полет к точке ожидания")
+end
+
+local function startTravelToSafeSpot()
+	if isTravelActive then return end
+	local player = Players.LocalPlayer
+	local character = player and player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	-- Включаем NoClip, если доступно
+	pcall(function()
+		if _G.MovementConfig and _G.MovementConfig.NoClip and not _G.MovementConfig.NoClip.Enabled then
+			_G.MovementConfig.NoClip.Enabled = true
+			if _G.startNoClip and type(_G.startNoClip) == "function" then _G.startNoClip() end
+		end
+	end)
+	-- Создаем собственный BodyVelocity для полета
+	travelBodyVelocity = Instance.new("BodyVelocity")
+	travelBodyVelocity.Name = "AutosellTravelBodyVelocity"
+	travelBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+	travelBodyVelocity.Parent = hrp
+	-- Цель
+	local rawTarget = Vector3.new(8, 0, -783)
+	local target = Vector3.new(rawTarget.X, rawTarget.Y - 1.95, rawTarget.Z) -- легкий подземный оффсет
+	isTravelActive = true
+	print("✈️ TRAVEL: Летим к точке ожидания:", target)
+	travelConnection = RunService.Heartbeat:Connect(function()
+		if not isTravelActive then return end
+		if not player or not player.Character or not hrp or not hrp.Parent then
+			stopTravelToSafeSpot()
+			return
+		end
+		local current = hrp.Position
+		local delta = target - current
+		local distance = delta.Magnitude
+		if distance > 0.75 then
+			local dir = delta.Unit
+			local baseSpeed = 80
+			pcall(function()
+				if _G.AutofarmConfig and _G.AutofarmConfig.FlightSpeed then
+					baseSpeed = math.max(20, _G.AutofarmConfig.FlightSpeed * 8)
+				end
+			end)
+			local dynamicSpeed = math.max(20, math.min(baseSpeed, distance * 25))
+			travelBodyVelocity.Velocity = dir * dynamicSpeed
+		else
+			travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+			print("✅ TRAVEL: Точка ожидания достигнута")
+			stopTravelToSafeSpot()
 		end
 	end)
 end
