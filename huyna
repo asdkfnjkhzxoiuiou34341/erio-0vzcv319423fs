@@ -283,8 +283,7 @@ local autofarmRestartTimer = nil -- Таймер для автоматическ
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
 
--- Новые переменные визуальных эффектов автофарма
-local autofarmVisualsApplied = false
+
 
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
@@ -4127,41 +4126,7 @@ local function getItemKey(item)
     return item.Name .. "_" .. tostring(item.Position.X) .. "_" .. tostring(item.Position.Z)
 end
 
--- ВСПОМОГАТЕЛЬНЫЕ: переворот модели и скрытие визуалов во время автофарма
--- Перенесено в модуль автоселла: _G.AutosellModule.FlipCharacterAroundFeet(character)
-local function setCharacterUpsideDown(character, enabled)
-    if _G and _G.AutosellModule and _G.AutosellModule.CharacterFlip then
-        if enabled then
-            _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown()
-        else
-            _G.AutosellModule.CharacterFlip.unflipPlayer()
-        end
-    end
-end
 
-local function applyAutofarmVisuals()
-    if autofarmVisualsApplied then return end
-    local player = Players.LocalPlayer
-    local character = player and player.Character
-    if not character then return end
-
-    -- Только переворот модели вокруг уровня ног без скрытия визуалов
-    setCharacterUpsideDown(character, true)
-
-    autofarmVisualsApplied = true
-end
-
-local function restoreAutofarmVisuals()
-    if not autofarmVisualsApplied then return end
-    local player = Players.LocalPlayer
-    local character = player and player.Character
-    if character then
-        -- Сбрасываем переворот персонажа (повторный вызов переворота вернет ориентацию)
-        setCharacterUpsideDown(character, false)
-    end
-
-    autofarmVisualsApplied = false
-end
 
 -- Сброс попыток для предмета
 local function resetItemAttempts(itemKey)
@@ -4302,18 +4267,8 @@ local function moveToPosition(targetPosition, callback)
     end
     
     -- НОВАЯ ЛОГИКА: Перемещаемся под землю к предмету для скрытности
-    local flipOffset = 0
-    if _G and _G.AutosellModule and _G.AutosellModule.CharacterFlip and _G.AutosellModule.CharacterFlip.isPlayerFlipped() then
-        local ok, res = pcall(_G.AutosellModule.CharacterFlip.getUndergroundOffset)
-        if ok and type(res) == "number" then
-            flipOffset = res
-        else
-            flipOffset = -6
-        end
-    else
-        flipOffset = -2
-    end
-    local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + flipOffset, targetPosition.Z)
+    local undergroundOffset = -1.95 -- На 1.5 единицы под землей для скрытности 
+    local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + undergroundOffset, targetPosition.Z)
     
     print("AUTOFARM: 🔥 ПОДЗЕМНЫЙ полет к позиции", targetPosition, "-> под землю:", adjustedTarget)
     
@@ -5100,8 +5055,7 @@ function startAutofarm()
         end
     end)
     
-    -- Применяем визуальные эффекты автофарма
-    applyAutofarmVisuals()
+
 end
 
 function stopAutofarm()
@@ -5202,8 +5156,7 @@ function stopAutofarm()
     
     print("AUTOFARM: Полностью остановлен")
     
-    -- Восстанавливаем визуальные эффекты автофарма
-    restoreAutofarmVisuals()
+
 end
 
 -- Экспорт функций автофарма для модуля автоселла  
