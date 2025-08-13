@@ -1911,6 +1911,122 @@ local function getAllPlayers()
     return playerList
 end
 
+-- Функция ручного создания клона
+local function createManualClone(originalCharacter, playerName)
+    print("🎯 DISTANCE KILL: Создание ручного клона для", playerName)
+    
+    -- Создаем новую модель
+    local clonedCharacter = Instance.new("Model")
+    clonedCharacter.Name = playerName .. "_ManualClone"
+    
+    -- Копируем основные части
+    local partsToCopy = {"HumanoidRootPart", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+    
+    for _, partName in ipairs(partsToCopy) do
+        local originalPart = originalCharacter:FindFirstChild(partName)
+        if originalPart and originalPart:IsA("BasePart") then
+            local newPart = Instance.new("Part")
+            newPart.Name = partName
+            newPart.Size = originalPart.Size
+            newPart.Color = originalPart.Color
+            newPart.Material = originalPart.Material
+            newPart.Shape = originalPart.Shape
+            newPart.TopSurface = Enum.SurfaceType.Smooth
+            newPart.BottomSurface = Enum.SurfaceType.Smooth
+            newPart.Parent = clonedCharacter
+            
+            -- Копируем аксессуары для головы
+            if partName == "Head" then
+                for _, child in ipairs(originalPart:GetChildren()) do
+                    if child:IsA("SpecialMesh") or child:IsA("Decal") then
+                        local clonedChild = child:Clone()
+                        clonedChild.Parent = newPart
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Добавляем Humanoid
+    local humanoid = Instance.new("Humanoid")
+    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    humanoid.Parent = clonedCharacter
+    
+    -- Устанавливаем PrimaryPart
+    local hrp = clonedCharacter:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        clonedCharacter.PrimaryPart = hrp
+    end
+    
+    return clonedCharacter
+end
+
+-- Функция создания простого клона-заменителя
+local function createSimpleClone(playerName)
+    print("🎯 DISTANCE KILL: Создание простого клона для", playerName)
+    
+    -- Создаем простую модель с базовыми частями
+    local clonedCharacter = Instance.new("Model")
+    clonedCharacter.Name = playerName .. "_SimpleClone"
+    
+    -- Основное тело (HumanoidRootPart)
+    local hrp = Instance.new("Part")
+    hrp.Name = "HumanoidRootPart"
+    hrp.Size = Vector3.new(2, 2, 1)
+    hrp.Color = Color3.fromRGB(163, 162, 165)
+    hrp.Material = Enum.Material.Plastic
+    hrp.TopSurface = Enum.SurfaceType.Smooth
+    hrp.BottomSurface = Enum.SurfaceType.Smooth
+    hrp.Parent = clonedCharacter
+    
+    -- Голова
+    local head = Instance.new("Part")
+    head.Name = "Head"
+    head.Size = Vector3.new(2, 1, 1)
+    head.Color = Color3.fromRGB(254, 243, 187)
+    head.Material = Enum.Material.Plastic
+    head.Shape = Enum.PartType.Block
+    head.TopSurface = Enum.SurfaceType.Smooth
+    head.BottomSurface = Enum.SurfaceType.Smooth
+    head.Parent = clonedCharacter
+    
+    -- Позиционируем голову
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = hrp
+    weld.Part1 = head
+    weld.Parent = hrp
+    head.CFrame = hrp.CFrame * CFrame.new(0, 1.5, 0)
+    
+    -- Торс (для совместимости)
+    local torso = Instance.new("Part")
+    torso.Name = "Torso"
+    torso.Size = Vector3.new(2, 2, 1)
+    torso.Color = Color3.fromRGB(13, 105, 172)
+    torso.Material = Enum.Material.Plastic
+    torso.TopSurface = Enum.SurfaceType.Smooth
+    torso.BottomSurface = Enum.SurfaceType.Smooth
+    torso.Parent = clonedCharacter
+    
+    -- Позиционируем торс
+    local torsoWeld = Instance.new("WeldConstraint")
+    torsoWeld.Part0 = hrp
+    torsoWeld.Part1 = torso
+    torsoWeld.Parent = hrp
+    torso.CFrame = hrp.CFrame
+    
+    -- Добавляем Humanoid
+    local humanoid = Instance.new("Humanoid")
+    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    humanoid.MaxHealth = 100
+    humanoid.Health = 100
+    humanoid.Parent = clonedCharacter
+    
+    -- Устанавливаем PrimaryPart
+    clonedCharacter.PrimaryPart = hrp
+    
+    return clonedCharacter
+end
+
 -- Функция создания визуального клона игрока
 local function createVisualClone(targetPlayer)
     if not targetPlayer or not targetPlayer.Character then 
@@ -1930,17 +2046,55 @@ local function createVisualClone(targetPlayer)
     local originalCharacter = targetPlayer.Character
     local clonedCharacter
     
-    -- Безопасное клонирование с обработкой ошибок
+    -- Ждем полной загрузки персонажа
+    print("🎯 DISTANCE KILL: Ожидание полной загрузки персонажа", targetPlayer.Name)
+    local waitAttempts = 0
+    while waitAttempts < 10 do
+        local humanoid = originalCharacter:FindFirstChild("Humanoid")
+        local humanoidRootPart = originalCharacter:FindFirstChild("HumanoidRootPart")
+        local head = originalCharacter:FindFirstChild("Head")
+        
+        if humanoid and humanoidRootPart and head then
+            break
+        end
+        
+        waitAttempts = waitAttempts + 1
+        task.wait(0.5)
+        print("🎯 DISTANCE KILL: Ожидание загрузки...", waitAttempts, "/10")
+    end
+    
+    -- Метод 1: Прямое клонирование
     local success, result = pcall(function()
         return originalCharacter:Clone()
     end)
     
-    if not success or not result then
-        print("🎯 DISTANCE KILL: Ошибка клонирования для", targetPlayer.Name, ":", tostring(result))
-        return nil
+    if success and result then
+        clonedCharacter = result
+        print("🎯 DISTANCE KILL: Клон создан методом 1 (прямое клонирование)")
+    else
+        print("🎯 DISTANCE KILL: Метод 1 не сработал:", tostring(result))
+        
+        -- Метод 2: Ручное создание клона
+        success, result = pcall(function()
+            return createManualClone(originalCharacter, targetPlayer.Name)
+        end)
+        
+        if success and result then
+            clonedCharacter = result
+            print("🎯 DISTANCE KILL: Клон создан методом 2 (ручное создание)")
+        else
+            print("🎯 DISTANCE KILL: Метод 2 не сработал:", tostring(result))
+            
+            -- Метод 3: Простой куб-заменитель
+            clonedCharacter = createSimpleClone(targetPlayer.Name)
+            print("🎯 DISTANCE KILL: Используем простой клон-заменитель")
+        end
     end
     
-    clonedCharacter = result
+    if not clonedCharacter then
+        print("🎯 DISTANCE KILL: Все методы клонирования провалились для", targetPlayer.Name)
+        return nil
+    end
     
     -- Настраиваем клон
     clonedCharacter.Name = targetPlayer.Name .. "_DistanceKillClone"
