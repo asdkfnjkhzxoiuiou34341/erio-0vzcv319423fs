@@ -1456,10 +1456,218 @@ _G.AutosellModule = {
     }
 }
 
+-- =========================================================
+-- МОДУЛЬ ПЕРЕВОРОТА ПЕРСОНАЖА ДЛЯ АВТОФАРМА
+-- =========================================================
 
+local CharacterFlipModule = {}
+
+-- Переменные для отслеживания состояния
+local isPlayerFlipped = false
+local autofarmFlipConnections = {}
+
+-- Функция для переворота персонажа вниз головой
+local function flipPlayerUpsideDown()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    if isPlayerFlipped then
+        print("🔄 FLIP: Персонаж уже перевернут!")
+        return true
+    end
+    
+    print("🔄 FLIP: Переворачиваем персонажа вниз головой...")
+    
+    -- Создаем BodyAngularVelocity для переворота
+    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+    bodyAngularVelocity.Name = "AutofarmFlipRotation"
+    bodyAngularVelocity.MaxTorque = Vector3.new(0, 0, math.huge)
+    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+    bodyAngularVelocity.Parent = humanoidRootPart
+    
+    -- Поворачиваем персонажа на 180 градусов по оси Z (переворот вниз головой)
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
+    
+    -- Устанавливаем флаг
+    isPlayerFlipped = true
+    
+    print("✅ FLIP: Персонаж успешно перевернут вниз головой!")
+    return true
+end
+
+-- Функция для возврата персонажа в нормальное положение
+local function unflipPlayer()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    if not isPlayerFlipped then
+        return true
+    end
+    
+    print("🔄 FLIP: Возвращаем персонажа в нормальное положение...")
+    
+    -- Убираем BodyAngularVelocity если есть
+    local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
+    if flipRotation then
+        flipRotation:Destroy()
+    end
+    
+    -- Возвращаем нормальное положение
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, 0, math.rad(180))
+    
+    -- Сбрасываем флаг
+    isPlayerFlipped = false
+    
+    print("✅ FLIP: Персонаж возвращен в нормальное положение!")
+    return true
+end
+
+-- Функция для отслеживания запуска автофарма
+local function monitorAutofarmState()
+    if autofarmFlipConnections.monitor then
+        autofarmFlipConnections.monitor:Disconnect()
+    end
+    
+    print("🔍 FLIP: Запуск мониторинга состояния автофарма...")
+    
+    autofarmFlipConnections.monitor = task.spawn(function()
+        local wasAutofarmEnabled = false
+        
+        while true do
+            task.wait(1) -- Проверяем каждую секунду
+            
+            -- Проверяем состояние автофарма через разные способы
+            local isAutofarmCurrentlyEnabled = false
+            
+            -- Способ 1: через _G.isAutofarmEnabled
+            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
+                local success, result = pcall(_G.isAutofarmEnabled)
+                if success and result then
+                    isAutofarmCurrentlyEnabled = true
+                end
+            end
+            
+            -- Способ 2: через внешние функции автофарма
+            if not isAutofarmCurrentlyEnabled and externalAutofarmConfig.isEnabledFunction then
+                local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
+                if success and result then
+                    isAutofarmCurrentlyEnabled = true
+                end
+            end
+            
+            -- Способ 3: через глобальные переменные
+            if not isAutofarmCurrentlyEnabled then
+                if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
+                    isAutofarmCurrentlyEnabled = true
+                elseif _G.isAutofarmActive then
+                    isAutofarmCurrentlyEnabled = true
+                end
+            end
+            
+            -- Если состояние автофарма изменилось
+            if isAutofarmCurrentlyEnabled ~= wasAutofarmEnabled then
+                if isAutofarmCurrentlyEnabled then
+                    -- Автофарм включился - переворачиваем персонажа
+                    print("🚀 FLIP: Обнаружен запуск автофарма - переворачиваем персонажа!")
+                    task.spawn(function()
+                        task.wait(1) -- Даем время автофарму стабилизироваться
+                        flipPlayerUpsideDown()
+                    end)
+                else
+                    -- Автофарм выключился - возвращаем персонажа в норму
+                    print("🛑 FLIP: Обнаружена остановка автофарма - возвращаем персонажа в норму!")
+                    task.spawn(function()
+                        unflipPlayer()
+                    end)
+                end
+                wasAutofarmEnabled = isAutofarmCurrentlyEnabled
+            end
+        end
+    end)
+end
+
+-- Функция для обработки смерти и возрождения персонажа
+local function setupCharacterHandling()
+    local player = Players.LocalPlayer
+    
+    -- Обработка смерти
+    local function onCharacterRemoving()
+        print("💀 FLIP: Персонаж умер - сбрасываем состояние переворота")
+        isPlayerFlipped = false
+    end
+    
+    -- Обработка возрождения
+    local function onCharacterAdded(character)
+        task.wait(2) -- Даем время персонажу загрузиться
+        print("🔄 FLIP: Персонаж возродился - проверяем нужно ли восстановить переворот")
+        
+        -- Если автофарм активен, переворачиваем персонажа заново
+        task.spawn(function()
+            task.wait(1)
+            local isAutofarmActive = false
+            
+            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
+                local success, result = pcall(_G.isAutofarmEnabled)
+                if success and result then
+                    isAutofarmActive = true
+                end
+            end
+            
+            if isAutofarmActive then
+                print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
+                isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
+                flipPlayerUpsideDown()
+            end
+        end)
+    end
+    
+    -- Подключаем обработчики
+    if player.Character then
+        player.CharacterRemoving:Connect(onCharacterRemoving)
+    end
+    player.CharacterAdded:Connect(onCharacterAdded)
+    player.CharacterRemoving:Connect(onCharacterRemoving)
+end
+
+-- Инициализация модуля переворота
+local function initializeFlipModule()
+    print("🔄 FLIP: Инициализация модуля переворота персонажа...")
+    
+    -- Запускаем мониторинг автофарма
+    monitorAutofarmState()
+    
+    -- Настраиваем обработку персонажа
+    setupCharacterHandling()
+    
+    print("✅ FLIP: Модуль переворота персонажа готов к работе!")
+end
+
+-- Экспорт функций в глобальное пространство
+CharacterFlipModule = {
+    flipPlayerUpsideDown = flipPlayerUpsideDown,
+    unflipPlayer = unflipPlayer,
+    isPlayerFlipped = function() return isPlayerFlipped end,
+    initialize = initializeFlipModule
+}
+
+-- Добавляем модуль в AutosellModule для доступа извне
+_G.AutosellModule.CharacterFlip = CharacterFlipModule
+
+-- Автоматически запускаем модуль
+task.spawn(function()
+    task.wait(3) -- Даем время всем системам загрузиться
+    initializeFlipModule()
+end)
 
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
 print("🔗 AUTOFARM LINK: Система связи с внешним автофармом готова!")
+print("🔄 FLIP: Модуль переворота персонажа интегрирован!")
 print("🎛️ GUI: Автосел интегрирован в основное меню с тумблерами:")
 print("   🟢🔴 Тумблеры Enable/Disable All Items")
 print("   ⚙️ Индивидуальные тумблеры для каждого предмета")
@@ -1468,5 +1676,9 @@ print("   _G.AutosellModule.ExternalAutofarm.findFunctions() - поиск фун
 print("   _G.AutosellModule.ExternalAutofarm.setFunctions(stop, start, isEnabled) - ручная настройка")
 print("   _G.AutosellModule.enableAllItems() - включить ВСЕ предметы автосела")
 print("   _G.AutosellModule.disableAllItems() - отключить ВСЕ предметы автосела")
+print("🔄 Функции переворота персонажа:")
+print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
+print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
+print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
 
 return _G.AutosellModule
