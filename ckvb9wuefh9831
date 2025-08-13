@@ -515,6 +515,95 @@ local function restartExternalAutofarm()
     return startExternalAutofarm()
 end
 
+-- Функции для фиксации персонажа (как в автофарме из huyna)
+local function freezePlayerAtShiftplox()
+    local player = Players.LocalPlayer
+    local char = player.Character
+    if not char then return end
+    
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChild("Humanoid")
+    
+    if root then
+        -- Сохраняем оригинальную позицию
+        local originalPosition = root.Position
+        local originalCFrame = root.CFrame
+        
+        -- Создаем BodyVelocity для фиксации
+        local bv = root:FindFirstChild("ShiftploxFreezeBodyVelocity")
+        if not bv then
+            bv = Instance.new("BodyVelocity", root)
+            bv.Name = "ShiftploxFreezeBodyVelocity"
+            bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+        end
+        bv.Velocity = Vector3.new(0, 0, 0)
+        
+        -- Создаем BodyGyro для фиксации поворота
+        local gyro = root:FindFirstChild("ShiftploxFreezeBodyGyro")
+        if not gyro then
+            gyro = Instance.new("BodyGyro", root)
+            gyro.Name = "ShiftploxFreezeBodyGyro"
+            gyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+        end
+        gyro.CFrame = root.CFrame
+        
+        print("🔒 AUTOSELL: Персонаж зафиксирован у Shiftplox!")
+    end
+    
+    if humanoid then
+        -- Сохраняем оригинальные параметры
+        local originalWalkSpeed = humanoid.WalkSpeed
+        local originalJumpPower = humanoid.JumpPower
+        
+        -- Отключаем движение
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        
+        -- Отключаем авто-поворот
+        humanoid.AutoRotate = false
+        humanoid.AutoJumpEnabled = false
+        
+        print("🔒 AUTOSELL: Движение персонажа отключено!")
+    end
+end
+
+local function unfreezePlayerFromShiftplox()
+    local player = Players.LocalPlayer
+    local char = player.Character
+    if not char then return end
+    
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChild("Humanoid")
+    
+    if root then
+        -- Убираем BodyVelocity
+        local bv = root:FindFirstChild("ShiftploxFreezeBodyVelocity")
+        if bv then
+            bv:Destroy()
+        end
+        
+        -- Убираем BodyGyro
+        local gyro = root:FindFirstChild("ShiftploxFreezeBodyGyro")
+        if gyro then
+            gyro:Destroy()
+        end
+        
+        print("🔓 AUTOSELL: Фиксация персонажа снята!")
+    end
+    
+    if humanoid then
+        -- Восстанавливаем параметры движения
+        humanoid.WalkSpeed = 16
+        humanoid.JumpPower = 50
+        
+        -- Восстанавливаем авто-поворот
+        humanoid.AutoRotate = true
+        humanoid.AutoJumpEnabled = true
+        
+        print("🔓 AUTOSELL: Движение персонажа восстановлено!")
+    end
+end
+
 -- Функция для перезапуска NoClip после возрождения (выключение и включение)
 local function enableNoClipAfterRespawn()
     print("🚀 AUTOSELL: Перезапускаем NoClip после возрождения...")
@@ -707,7 +796,10 @@ local function moveToShiftplox(callback)
                                 bodyVelocity:Destroy()
                             end
                             
-                            print("🎯 AUTOSELL: Прибыли к Shiftplox подземным маршрутом! Начинаем продажу...")
+                            print("🎯 AUTOSELL: Прибыли к Shiftplox подземным маршрутом! Фиксируем персонажа...")
+                            
+                            -- ФИКСИРУЕМ ПЕРСОНАЖА КАК В АВТОФАРМЕ
+                            freezePlayerAtShiftplox()
                             
                             -- Запускаем продажу
                             if callback then
@@ -973,6 +1065,9 @@ local function sellItemsToNPC(itemsToSell)
             
             isSellingToNPC = false
             
+            -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА ПРИ НЕУДАЧЕ
+            unfreezePlayerFromShiftplox()
+            
             -- Возобновляем автофарм перед перезапуском
             if externalAutofarmConfig.startFunction then
                 print("🤖 AUTOSELL: Возобновляем внешний автофарм перед перезапуском...")
@@ -994,8 +1089,11 @@ local function sellItemsToNPC(itemsToSell)
             print("🤖 AUTOSELL: Остались предметы для продажи, повторяем цикл...")
             sellItemsToNPC(remainingItems)
         else
-            print("🤖 AUTOSELL: Все предметы проданы, возобновляем автофарм...")
+            print("🤖 AUTOSELL: Все предметы проданы, снимаем фиксацию и возобновляем автофарм...")
             isSellingToNPC = false
+            
+            -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА
+            unfreezePlayerFromShiftplox()
             
             -- Возобновляем автофарм (независимо от флага Enabled)
             if externalAutofarmConfig.startFunction then
@@ -1135,6 +1233,9 @@ local function stopAutosell()
     end
     
     isSellingToNPC = false
+    
+    -- СНИМАЕМ ФИКСАЦИЮ ПЕРСОНАЖА ПРИ ОСТАНОВКЕ
+    unfreezePlayerFromShiftplox()
     
     -- Убираем все предметы из рук при остановке автоселла
     unequipAllItemsFromHands()
@@ -1299,6 +1400,10 @@ _G.AutosellModule = {
     enableAllItems = enableAllAutosellItems,
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
+    
+    -- Функции фиксации персонажа
+    freezePlayerAtShiftplox = freezePlayerAtShiftplox,
+    unfreezePlayerFromShiftplox = unfreezePlayerFromShiftplox,
     
     -- Функции для работы с внешним автофармом
     ExternalAutofarm = {
@@ -1717,6 +1822,7 @@ end)
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
 print("🔗 AUTOFARM LINK: Система связи с внешним автофармом готова!")
 print("🔄 FLIP: Модуль переворота персонажа интегрирован!")
+print("🔒 FREEZE: Система фиксации персонажа у Shiftplox добавлена!")
 print("🎛️ GUI: Автосел интегрирован в основное меню с тумблерами:")
 print("   🟢🔴 Тумблеры Enable/Disable All Items")
 print("   ⚙️ Индивидуальные тумблеры для каждого предмета")
@@ -1725,6 +1831,9 @@ print("   _G.AutosellModule.ExternalAutofarm.findFunctions() - поиск фун
 print("   _G.AutosellModule.ExternalAutofarm.setFunctions(stop, start, isEnabled) - ручная настройка")
 print("   _G.AutosellModule.enableAllItems() - включить ВСЕ предметы автосела")
 print("   _G.AutosellModule.disableAllItems() - отключить ВСЕ предметы автосела")
+print("🔒 Функции фиксации персонажа:")
+print("   _G.AutosellModule.freezePlayerAtShiftplox() - зафиксировать персонажа у Shiftplox")
+print("   _G.AutosellModule.unfreezePlayerFromShiftplox() - снять фиксацию персонажа")
 print("🔄 Функции переворота персонажа:")
 print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
 print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
