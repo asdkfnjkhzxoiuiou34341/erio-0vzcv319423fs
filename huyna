@@ -1479,8 +1479,23 @@ end
 -- FLIP exports removed
 
 task.spawn(function()
-	task.wait(3)
-	initializeTravelMonitor()
+		task.wait(3)
+		initializeTravelMonitor()
+	end)
+
+-- Автоперелёт к точке ожидания после загрузки карты
+task.spawn(function()
+	if not game:IsLoaded() then
+		game.Loaded:Wait()
+	end
+	local player = Players.LocalPlayer
+	local character = player and (player.Character or player.CharacterAdded:Wait())
+	if character then
+		character:WaitForChild("HumanoidRootPart", 10)
+	end
+	-- небольшая стабилизирующая задержка
+	task.wait(0.5)
+	startTravelToSafeSpot()
 end)
 
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
@@ -1594,7 +1609,13 @@ local function startTravelToSafeSpot()
 			travelBodyVelocity.Velocity = dir * dynamicSpeed
 		else
 			travelBodyVelocity.Velocity = Vector3.new(0,0,0)
-			print("✅ TRAVEL: Точка ожидания достигнута")
+			print("✅ TRAVEL: Точка ожидания достигнута, фиксируемся на 1 секунду для сброса скорости")
+			pcall(function()
+				freezePlayerAtShiftplox()
+				task.delay(1.0, function()
+					unfreezePlayerFromShiftplox()
+				end)
+			end)
 			stopTravelToSafeSpot()
 		end
 	end)
