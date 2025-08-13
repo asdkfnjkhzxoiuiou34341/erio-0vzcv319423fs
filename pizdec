@@ -32,8 +32,6 @@ startAntiAFK()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
 
 -- Конфигурация автоселла с правильными лимитами
 local AutosellConfig = {
@@ -1383,69 +1381,6 @@ local function createAutosellGUI(functionsContainer, currentY, createToggleSlide
     createAutosellItemToggle("DIO's Diary", AutosellConfig.Items["DIO's Diary"])
     print("🤖 AUTOSELL: Все индивидуальные тумблеры созданы!")
     
-    -- DISTANCE KILL секция
-    createDivider()
-    createSectionHeader("☠️ DISTANCE KILL")
-    
-    -- Кнопка включения/выключения Distance Kill
-    local initialState = (_G and _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled()) or false
-    if createButton and type(createButton) == "function" then
-        local function refreshDistanceKillButton(btn, state)
-            if not btn then return end
-            btn.Text = state and "🛑 STOP DISTANCE KILL" or "☠️ START DISTANCE KILL"
-        end
-        local btn
-        btn = createButton("", function()
-            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
-                local state = _G.AutosellModule.DistanceKill.isEnabled and _G.AutosellModule.DistanceKill.isEnabled() or false
-                if state then
-                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
-                    refreshDistanceKillButton(btn, false)
-                else
-                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
-                    refreshDistanceKillButton(btn, true)
-                end
-            end
-        end)
-        refreshDistanceKillButton(btn, initialState)
-    else
-        -- Fallback: если createButton недоступно, используем тумблер
-        createToggleSlider("Distance Kill Enabled", initialState, function(v)
-            if _G.AutosellModule and _G.AutosellModule.DistanceKill then
-                if v then
-                    if _G.AutosellModule.DistanceKill.start then _G.AutosellModule.DistanceKill.start() end
-                else
-                    if _G.AutosellModule.DistanceKill.stop then _G.AutosellModule.DistanceKill.stop() end
-                end
-            end
-        end)
-    end
-    
-    -- Подпись для списка игроков
-    local playersLabel = Instance.new("TextLabel", functionsContainer)
-    playersLabel.Text = "Select Players for Distance Kill:"
-    playersLabel.TextColor3 = Color3.new(1,1,1)
-    playersLabel.BackgroundTransparency = 1
-    playersLabel.Size = UDim2.new(1, -10, 0, 20)
-    playersLabel.Position = UDim2.new(0, 5, 0, currentY)
-    playersLabel.Font = Enum.Font.GothamBold
-    playersLabel.TextSize = 14
-    playersLabel.TextXAlignment = Enum.TextXAlignment.Left
-    currentY = currentY + 25
-
-    -- Тумблеры напротив каждого игрока (кроме вас)
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if Players.LocalPlayer and plr ~= Players.LocalPlayer then
-            local userId = plr.UserId
-            local defaultState = (_G and _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.config and _G.AutosellModule.DistanceKill.config.SelectedPlayers and _G.AutosellModule.DistanceKill.config.SelectedPlayers[userId] == true) or false
-            createToggleSlider(string.format("Player: %s (%d)", plr.Name, userId), defaultState, function(v)
-                if _G.AutosellModule and _G.AutosellModule.DistanceKill and _G.AutosellModule.DistanceKill.setTarget then
-                    _G.AutosellModule.DistanceKill.setTarget(userId, v)
-                end
-            end)
-        end
-    end
-    
     print("🤖 AUTOSELL: GUI создание завершено! Возвращаем currentY =", currentY)
     -- Возвращаем обновленный currentY (функции создания элементов обычно обновляют currentY внутренне)
     return currentY
@@ -1465,7 +1400,7 @@ _G.AutosellModule = {
     enableAllItems = enableAllAutosellItems,
     disableAllItems = disableAllAutosellItems,
     createGUI = createAutosellGUI,
-
+    
     -- Функции фиксации персонажа
     freezePlayerAtShiftplox = freezePlayerAtShiftplox,
     unfreezePlayerFromShiftplox = unfreezePlayerFromShiftplox,
@@ -1510,8 +1445,9 @@ local autofarmFlipConnections = {}
 local continuousFlipConnection = nil
 local renderSteppedConnection = nil
 local isMapLoaded = false
+local gameStartTime = tick() -- Время запуска скрипта для определения прогрузки
 
--- ПРОСТАЯ функция для постоянного переворота персонажа
+-- УЛУЧШЕННАЯ функция для постоянного переворота персонажа
 local function startContinuousFlip()
     if continuousFlipConnection then
         task.cancel(continuousFlipConnection)
@@ -1521,9 +1457,9 @@ local function startContinuousFlip()
         renderSteppedConnection:Disconnect()
     end
     
-    print("🔄 FLIP: ПРОСТОЙ переворот - запуск...")
+    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - запуск...")
     
-    -- АГРЕССИВНЫЙ переворот каждый кадр
+    -- СТАБИЛЬНЫЙ переворот каждый кадр
     renderSteppedConnection = RunService.RenderStepped:Connect(function()
         if not isPlayerFlipped then return end
         
@@ -1531,12 +1467,26 @@ local function startContinuousFlip()
         if not player or not player.Character then return end
         
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
         if not humanoidRootPart then return end
         
-        -- ПРИНУДИТЕЛЬНО переворачиваем каждый кадр
-        local currentPos = humanoidRootPart.Position
-        local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
-        humanoidRootPart.CFrame = flippedCFrame
+        -- Рассчитываем правильную позицию с учетом высоты персонажа
+        local humanoidHeight = 5
+        if humanoid then
+            humanoidHeight = humanoid.HipHeight + 3
+        end
+        
+        -- Если есть исходная позиция, используем её для расчета
+        if originalPlayerPosition then
+            local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
+            local flippedCFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
+            humanoidRootPart.CFrame = flippedCFrame
+        else
+            -- Если исходной позиции нет, просто переворачиваем на текущем месте
+            local currentPos = humanoidRootPart.Position
+            local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
+            humanoidRootPart.CFrame = flippedCFrame
+        end
     end)
     
     -- Дополнительный цикл для создания BodyAngularVelocity
@@ -1597,6 +1547,7 @@ local function flipPlayerUpsideDown()
     if not player or not player.Character then return false end
     
     local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoidRootPart then return false end
     
     if isPlayerFlipped then
@@ -1604,16 +1555,24 @@ local function flipPlayerUpsideDown()
         return true
     end
     
-    print("🔄 FLIP: ПРОСТОЙ переворот - начинаем!")
+    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - начинаем!")
     
     -- Сохраняем оригинальную позицию
     originalPlayerPosition = humanoidRootPart.Position
     print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
     
-    -- СРАЗУ переворачиваем и смещаем вниз
-    local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
-    print("📍 FLIP: Целевая позиция:", targetPosition)
+    -- Рассчитываем правильную позицию для переворота
+    -- Персонаж должен быть перевернут так, чтобы его голова была ниже исходного уровня ног
+    local humanoidHeight = 5 -- Примерная высота персонажа
+    if humanoid then
+        humanoidHeight = humanoid.HipHeight + 3 -- Более точный расчет высоты
+    end
     
+    -- Смещаем персонажа вниз на полную высоту + дополнительное смещение
+    local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
+    print("📍 FLIP: Целевая позиция (голова ниже исходных ног):", targetPosition)
+    
+    -- Переворачиваем персонажа на 180 градусов по оси X и перемещаем
     humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
     
     -- Устанавливаем флаг
@@ -1622,7 +1581,7 @@ local function flipPlayerUpsideDown()
     -- Запускаем постоянный переворот
     startContinuousFlip()
     
-    print("✅ FLIP: ПРОСТОЙ переворот активирован!")
+    print("✅ FLIP: УЛУЧШЕННЫЙ переворот активирован! Голова теперь ниже исходного уровня ног!")
     return true
 end
 
@@ -1657,12 +1616,21 @@ local function unflipPlayer()
     -- Возвращаем нормальное положение и позицию
     if originalPlayerPosition then
         humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition) * CFrame.Angles(0, 0, 0)
+        print("📍 FLIP: Возврат к исходной позиции:", originalPlayerPosition)
         originalPlayerPosition = nil
     else
-        -- Если нет сохранённой позиции, просто поворачиваем обратно и поднимаем вверх
+        -- Если нет сохранённой позиции, рассчитываем правильное смещение вверх
         local currentPosition = humanoidRootPart.Position
-        local upwardOffset = Vector3.new(0, 6, 0) -- Поднимаем на 6 единиц вверх
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(math.rad(180), 0, 0)
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local humanoidHeight = 5
+        if humanoid then
+            humanoidHeight = humanoid.HipHeight + 3
+        end
+        
+        -- Поднимаем персонажа на полную высоту * 2 (компенсируем смещение при перевороте)
+        local upwardOffset = Vector3.new(0, humanoidHeight * 2, 0)
+        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(0, 0, 0)
+        print("📍 FLIP: Возврат с расчетным смещением:", currentPosition + upwardOffset)
     end
     
     -- Сбрасываем флаг
@@ -1694,6 +1662,7 @@ local function monitorAutofarmState()
                 local success, result = pcall(_G.isAutofarmEnabled)
                 if success and result then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.isAutofarmEnabled")
                 end
             end
             
@@ -1702,6 +1671,7 @@ local function monitorAutofarmState()
                 local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
                 if success and result then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через внешние функции")
                 end
             end
             
@@ -1709,19 +1679,68 @@ local function monitorAutofarmState()
             if not isAutofarmCurrentlyEnabled then
                 if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.AutofarmConfig.Enabled")
                 elseif _G.isAutofarmActive then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.isAutofarmActive")
+                end
+            end
+            
+            -- Способ 4: через проверку переменных в файле huyna
+            if not isAutofarmCurrentlyEnabled then
+                -- Проверяем локальные переменные автофарма из huyna
+                if _G.isAutofarmEnabled_huyna or _G.autofarmEnabled or _G.farmEnabled then
+                    isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через huyna переменные")
                 end
             end
             
             -- Проверяем завершена ли прогрузка карты
             if not isMapLoaded then
-                -- Ищем сообщение о завершении прогрузки в логах
-                -- Можно проверить через глобальные переменные или другие методы
-                if _G.mapLoadCompleted or 
-                   (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
+                -- Множественные способы определения прогрузки карты
+                local mapLoadIndicators = {
+                    -- Стандартные глобальные переменные
+                    _G.mapLoadCompleted,
+                    _G.AutofarmConfig and _G.AutofarmConfig.mapLoaded,
+                    
+                    -- Проверка через рабочее пространство
+                    workspace.CurrentCamera and workspace.CurrentCamera.CameraType ~= Enum.CameraType.Scriptable,
+                    
+                    -- Проверка загрузки игрока
+                    Players.LocalPlayer and Players.LocalPlayer.Character and 
+                    Players.LocalPlayer.Character:FindFirstChild("Humanoid") and
+                    Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart"),
+                    
+                    -- Проверка, что игра полностью загружена
+                    game:IsLoaded(),
+                    
+                    -- Дополнительная проверка через время (минимум 10 секунд после запуска)
+                    tick() - gameStartTime > 10,
+                    
+                    -- Проверка что персонаж стабилен и не падает
+                    (function()
+                        local player = Players.LocalPlayer
+                        if player and player.Character then
+                            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                            local humanoid = player.Character:FindFirstChild("Humanoid")
+                            if humanoidRootPart and humanoid then
+                                local velocity = humanoidRootPart.AssemblyLinearVelocity or humanoidRootPart.Velocity
+                                return velocity.Magnitude < 10 and humanoid.Health > 0
+                            end
+                        end
+                        return false
+                    end)()
+                }
+                
+                -- Если хотя бы несколько индикаторов говорят о загрузке
+                local loadedCount = 0
+                for _, indicator in ipairs(mapLoadIndicators) do
+                    if indicator then loadedCount = loadedCount + 1 end
+                end
+                
+                if loadedCount >= 4 then -- Требуем минимум 4 положительных индикатора
                     isMapLoaded = true
-                    print("🗺️ FLIP: Прогрузка карты завершена!")
+                    print("🗺️ FLIP: Прогрузка карты завершена! (Подтверждено " .. loadedCount .. " индикаторами)")
                 end
             end
             
@@ -1731,23 +1750,72 @@ local function monitorAutofarmState()
                     -- Автофарм включился И карта прогружена - переворачиваем персонажа
                     print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
                     
-                    -- Выполняем переворот только после небольшой задержки, без мгновенного изменения
                     task.spawn(function()
-                        task.wait(3) -- Даем больше времени для стабилизации после прогрузки
+                        -- Дополнительная проверка стабильности перед переворотом
+                        local stableChecks = 0
+                        local maxStableChecks = 3
+                        
+                        while stableChecks < maxStableChecks do
+                            task.wait(1)
+                            
+                            -- Проверяем что персонаж стабилен
+                            local player = Players.LocalPlayer
+                            if player and player.Character then
+                                local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                                local humanoid = player.Character:FindFirstChild("Humanoid")
+                                
+                                if humanoidRootPart and humanoid then
+                                    -- Проверяем что персонаж не движется быстро и не в воздухе
+                                    local velocity = humanoidRootPart.AssemblyLinearVelocity or humanoidRootPart.Velocity
+                                    local isStable = velocity.Magnitude < 50 and humanoid.FloorMaterial ~= Enum.Material.Air
+                                    
+                                    if isStable then
+                                        stableChecks = stableChecks + 1
+                                        print("🔄 FLIP: Проверка стабильности " .. stableChecks .. "/" .. maxStableChecks)
+                                    else
+                                        stableChecks = 0 -- Сбрасываем если персонаж нестабилен
+                                        print("🔄 FLIP: Персонаж нестабилен, ждем стабилизации...")
+                                    end
+                                else
+                                    print("🔄 FLIP: Персонаж не найден, ждем...")
+                                    task.wait(2)
+                                end
+                            else
+                                print("🔄 FLIP: Игрок не найден, ждем...")
+                                task.wait(2)
+                            end
+                        end
+                        
+                        print("🔄 FLIP: Персонаж стабилен, выполняем переворот!")
                         flipPlayerUpsideDown()
                     end)
                 elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
                     -- Автофарм включился но карта не прогружена - ждем
                     print("🔄 FLIP: Автофарм включен, но ждем завершения прогрузки карты...")
                     task.spawn(function()
-                        -- Ждем прогрузки карты
+                        -- Ждем прогрузки карты с улучшенной проверкой
                         while isAutofarmCurrentlyEnabled and not isMapLoaded do
                             task.wait(1)
-                            -- Проверяем прогрузку снова
-                            if _G.mapLoadCompleted or 
-                               (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
+                            -- Используем ту же логику проверки что и в основном цикле
+                            local mapLoadIndicators = {
+                                _G.mapLoadCompleted,
+                                _G.AutofarmConfig and _G.AutofarmConfig.mapLoaded,
+                                workspace.CurrentCamera and workspace.CurrentCamera.CameraType ~= Enum.CameraType.Scriptable,
+                                Players.LocalPlayer and Players.LocalPlayer.Character and 
+                                Players.LocalPlayer.Character:FindFirstChild("Humanoid") and
+                                Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart"),
+                                game:IsLoaded(),
+                                tick() - gameStartTime > 5
+                            }
+                            
+                            local loadedCount = 0
+                            for _, indicator in ipairs(mapLoadIndicators) do
+                                if indicator then loadedCount = loadedCount + 1 end
+                            end
+                            
+                            if loadedCount >= 3 then
                                 isMapLoaded = true
-                                print("🗺️ FLIP: Прогрузка карты завершена во время ожидания!")
+                                print("🗺️ FLIP: Прогрузка карты завершена во время ожидания! (Подтверждено " .. loadedCount .. " индикаторами)")
                                 break
                             end
                         end
@@ -1808,27 +1876,9 @@ local function setupCharacterHandling()
             end
             
             if isAutofarmActive then
-                print("🔄 FLIP: Автофарм активен после возрождения - ждем прогрузки карты перед переворотом...")
+                print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
                 isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
-                
-                -- Ждем прогрузки карты и только потом переворачиваем
-                task.spawn(function()
-                    local maxWaitSeconds = 20
-                    local waited = 0
-                    while waited < maxWaitSeconds and not isMapLoaded do
-                        task.wait(1)
-                        waited = waited + 1
-                        if _G.mapLoadCompleted or (_G.AutofarmConfig and _G.AutofarmConfig.mapLoaded) then
-                            isMapLoaded = true
-                        end
-                    end
-                    
-                    if isMapLoaded then
-                        flipPlayerUpsideDown()
-                    else
-                        print("⏭️ FLIP: Прогрузка карты не подтверждена в течение таймаута, переворот пропущен.")
-                    end
-                end)
+                flipPlayerUpsideDown()
             end
         end)
     end
@@ -1859,16 +1909,59 @@ local function testFlipNow()
     local player = Players.LocalPlayer
     if player and player.Character then
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoidRootPart then
-            print("🧪 TEST FLIP: Мгновенный переворот!")
+            print("🧪 TEST FLIP: УЛУЧШЕННЫЙ мгновенный переворот!")
             local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-            print("🧪 TEST FLIP: Выполнено!")
+            
+            -- Рассчитываем правильное смещение
+            local humanoidHeight = 5
+            if humanoid then
+                humanoidHeight = humanoid.HipHeight + 3
+            end
+            
+            local targetPos = pos + Vector3.new(0, -(humanoidHeight * 2), 0)
+            humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
+            print("🧪 TEST FLIP: Выполнено! Исходная позиция:", pos, "Новая позиция:", targetPos)
             return true
         end
     end
     print("❌ TEST FLIP: Персонаж не найден!")
     return false
+end
+
+-- ТЕСТОВАЯ функция для проверки состояния автофарма
+local function testAutofarmDetection()
+    print("🧪 TEST AUTOFARM: Проверка обнаружения автофарма...")
+    
+    local detectionMethods = {
+        {"_G.isAutofarmEnabled", _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" and _G.isAutofarmEnabled()},
+        {"_G.AutofarmConfig.Enabled", _G.AutofarmConfig and _G.AutofarmConfig.Enabled},
+        {"_G.isAutofarmActive", _G.isAutofarmActive},
+        {"_G.isAutofarmEnabled_huyna", _G.isAutofarmEnabled_huyna},
+        {"_G.autofarmEnabled", _G.autofarmEnabled},
+        {"_G.farmEnabled", _G.farmEnabled},
+        {"External Autofarm", externalAutofarmConfig.isEnabledFunction and externalAutofarmConfig.isEnabledFunction()}
+    }
+    
+    local foundActive = false
+    for _, method in ipairs(detectionMethods) do
+        local name, result = method[1], method[2]
+        if result then
+            print("✅", name, "- АКТИВЕН")
+            foundActive = true
+        else
+            print("❌", name, "- неактивен")
+        end
+    end
+    
+    if not foundActive then
+        print("⚠️ TEST AUTOFARM: НИ ОДИН метод обнаружения автофарма не сработал!")
+    else
+        print("✅ TEST AUTOFARM: Автофарм обнаружен!")
+    end
+    
+    return foundActive
 end
 
 -- Экспорт функций в глобальное пространство
@@ -1879,7 +1972,13 @@ CharacterFlipModule = {
     startContinuousFlip = startContinuousFlip,
     stopContinuousFlip = stopContinuousFlip,
     initialize = initializeFlipModule,
-    testFlipNow = testFlipNow -- ТЕСТОВАЯ функция
+    testFlipNow = testFlipNow, -- ТЕСТОВАЯ функция
+    testAutofarmDetection = testAutofarmDetection, -- ТЕСТОВАЯ функция для проверки автофарма
+    
+    -- Функции для отладки
+    getOriginalPosition = function() return originalPlayerPosition end,
+    isMapLoaded = function() return isMapLoaded end,
+    forceMapLoaded = function() isMapLoaded = true; print("🗺️ FLIP: Принудительно установлена прогрузка карты") end
 }
 
 -- Добавляем модуль в AutosellModule для доступа извне
@@ -1910,605 +2009,10 @@ print("🔄 Функции переворота персонажа:")
 print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
 print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
-print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
-
--- =========================================================
--- DISTANCE KILL MODULE (ВИЗУАЛЬНОЕ ПРИБЛИЖЕНИЕ ИГРОКОВ К ВАМ)
--- =========================================================
-local DistanceKillConfig = {
-    Enabled = false,
-    Radius = 1.0,          -- радиус расстановки игроков вокруг вас (оптимизировано для YBA)
-    HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
-    SelectedPlayers = {},  -- [userId] = true/false
-    UseConstraints = true, -- включаем констрейнты для более стабильной телепортации в YBA
-    YBAMode = true,        -- специальный режим для YBA - убирает ограничения дистанции
-    AntiCheatSafe = true,  -- БЕЗОПАСНЫЙ РЕЖИМ: телепортируются только враги, игрок остается на месте
-    AttackMode = "hybrid", -- "constraints" (только констрейнты), "cframe" (только CFrame), "hybrid" (оба метода)
-    MicroTeleport = false, -- ОТКЛЮЧЕНО: Любые телепорты детектируются античитом
-    MicroTeleportFrames = 2, -- Количество кадров для микро-телепортации (1-3 кадра)
-    
-    -- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ REMOTE DAMAGE
-    ExtendedReach = true,   -- Попытка расширить дальность атак через модификацию рейкастов
-    ReachDistance = 1000,   -- Максимальная дальность атак (в стадах)
-    HitboxMultiplier = 5.0  -- Множитель размера хитбоксов для лучшего попадания
-}
-
-local isDistanceKillEnabled = false
-local distanceKillHeartbeatConnection = nil
-local distanceKillRenderConnection = nil
-local distanceKillConstraintsByUserId = {}
-
-local function destroyConstraintRecord(rec)
-    if not rec then return end
-    pcall(function()
-        if rec.bodyPosition and rec.bodyPosition.Destroy then rec.bodyPosition:Destroy() end
-    end)
-    pcall(function()
-        if rec.bodyGyro and rec.bodyGyro.Destroy then rec.bodyGyro:Destroy() end
-    end)
-end
-
-local function cleanupConstraintsForUserId(userId)
-    local rec = distanceKillConstraintsByUserId[userId]
-    if rec then
-        destroyConstraintRecord(rec)
-        distanceKillConstraintsByUserId[userId] = nil
-    end
-end
-
-local function cleanupAllDistanceKillConstraints()
-    for userId, rec in pairs(distanceKillConstraintsByUserId) do
-        destroyConstraintRecord(rec)
-        distanceKillConstraintsByUserId[userId] = nil
-    end
-end
-
-local function ensureConstraintsForTarget(userId, character)
-    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return nil end
-    local rec = distanceKillConstraintsByUserId[userId]
-    -- recreate if character changed
-    if rec and rec.character ~= character then
-        destroyConstraintRecord(rec)
-        rec = nil
-    end
-    if not rec then
-        rec = { character = character }
-        -- BodyPosition для фиксации позиции (оптимизировано для YBA)
-        local bp = Instance.new("BodyPosition")
-        bp.Name = "DK_BodyPosition"
-        if DistanceKillConfig.YBAMode then
-            -- Более мощные настройки для YBA
-            bp.MaxForce = Vector3.new(1e10, 1e10, 1e10)
-            bp.P = 100000  -- Увеличенная мощность
-            bp.D = 5000    -- Увеличенное демпфирование
-        else
-            bp.MaxForce = Vector3.new(2e9, 2e9, 2e9)
-            bp.P = 40000
-            bp.D = 2000
-        end
-        bp.Parent = humanoidRootPart
-        rec.bodyPosition = bp
-        -- BodyGyro для фиксации ориентации к вам (оптимизировано для YBA)
-        local bg = Instance.new("BodyGyro")
-        bg.Name = "DK_BodyGyro"
-        if DistanceKillConfig.YBAMode then
-            -- Более мощные настройки для YBA
-            bg.MaxTorque = Vector3.new(1e10, 1e10, 1e10)
-            bg.P = 80000   -- Увеличенная мощность поворота
-            bg.D = 4000    -- Увеличенное демпфирование
-        else
-            bg.MaxTorque = Vector3.new(2e9, 2e9, 2e9)
-            bg.P = 30000
-            bg.D = 1500
-        end
-        bg.Parent = humanoidRootPart
-        rec.bodyGyro = bg
-        distanceKillConstraintsByUserId[userId] = rec
-    end
-    return rec
-end
-
-local function getLocalHumanoidRootPart()
-    local me = Players.LocalPlayer
-    if not me or not me.Character then return nil end
-    return me.Character:FindFirstChild("HumanoidRootPart")
-end
-
-local function iterateSelectedTargets()
-    local targets = {}
-    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
-        if enabled then
-            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
-            if plr then table.insert(targets, plr) end
-        end
-    end
-    return targets
-end
-
-local function computeOffsets(count, radius)
-    local offsets = {}
-    if count <= 0 then return offsets end
-    -- Принудительно ограничим радиус ближним значением
-    local r = math.max(0.5, math.min(radius or 1.5, 2.0))
-    for i = 1, count do
-        -- смещаем первый слот прямо перед игроком
-        local angle = (2 * math.pi) * ((i - 1) / count)
-        local x = math.cos(angle) * radius
-        local z = math.sin(angle) * radius
-        offsets[i] = Vector3.new((x / (radius ~= 0 and radius or 1)) * r, DistanceKillConfig.HeightOffset, (z / (radius ~= 0 and radius or 1)) * r)
-    end
-    return offsets
-end
-
-local function setCharacterCFrameSafely(character, cframe)
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    -- АГРЕССИВНАЯ телепортация для реального изменения позиции в YBA
-    pcall(function()
-        -- Попытка получить Network Ownership для более реальной телепортации
-        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
-        
-        -- Обнуляем все скорости
-        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
-        if hrp.Velocity then hrp.Velocity = Vector3.new(0, 0, 0) end
-        
-        -- Устанавливаем позицию через разные методы для максимальной совместимости
-        hrp.CFrame = cframe
-        
-        -- Попытка через PivotTo если доступно
-        if character.PivotTo then
-            pcall(function() character:PivotTo(cframe) end)
-        end
-        
-        -- Дополнительная фиксация для YBA
-        if DistanceKillConfig.YBAMode then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.PlatformStand = true
-                -- Принудительно устанавливаем состояние Physics для лучшего контроля
-                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-            end
-        end
-        
-        -- Дополнительное принудительное обновление позиции (без wait)
-        spawn(function()
-            wait(0.01)
-            if hrp and hrp.Parent then
-                hrp.CFrame = cframe
-            end
-        end)
-    end)
-end
-
-local function updateDistanceKillPositions()
-    if not isDistanceKillEnabled then return end
-    local myRoot = getLocalHumanoidRootPart()
-    if not myRoot then return end
-
-    local targets = iterateSelectedTargets()
-    if #targets == 0 then return end
-
-    local offsets = computeOffsets(#targets, DistanceKillConfig.Radius)
-    local activeUserIds = {}
-    for index, targetPlayer in ipairs(targets) do
-        local targetCharacter = targetPlayer.Character
-        if targetCharacter then
-            local targetPos = myRoot.Position + offsets[index]
-            local userId = targetPlayer.UserId
-            activeUserIds[userId] = true
-            
-            if DistanceKillConfig.UseConstraints then
-                local rec = ensureConstraintsForTarget(userId, targetCharacter)
-                local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
-                if rec and rec.bodyPosition and rec.bodyGyro and hrp then
-                    -- Агрессивный сброс скоростей и фиксация для YBA режима
-                    pcall(function()
-                        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-                        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
-                        if hrp.Velocity then hrp.Velocity = Vector3.new(0, 0, 0) end
-                        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-                        if humanoid then
-                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                            humanoid.PlatformStand = true
-                            -- Дополнительная фиксация для YBA
-                            if DistanceKillConfig.YBAMode then
-                                humanoid.Sit = false
-                                humanoid.Jump = false
-                            end
-                        end
-                        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
-                    end)
-                    rec.bodyPosition.Position = targetPos
-                    rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
-                else
-                    setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-                end
-            else
-                -- Простой надежный режим: жестко телепортируем цели CFrame-ом
-                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-            end
-            -- Дополнительный жесткий снап для YBA режима (чаще обновления)
-            local snapInterval = DistanceKillConfig.YBAMode and 0.05 or 0.15
-            if (tick() % snapInterval) < 0.016 then
-                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-            end
-        end
-        end
-    end
-    -- Убираем констрейнты у игроков, которые сейчас не активны (только в режиме констрейнтов)
-    if DistanceKillConfig.UseConstraints then
-        for userId, rec in pairs(distanceKillConstraintsByUserId) do
-            if not activeUserIds[userId] then
-                cleanupConstraintsForUserId(userId)
-            end
-        end
-    end
-end
-
-local function startDistanceKill()
-    if isDistanceKillEnabled then return end
-    isDistanceKillEnabled = true
-    DistanceKillConfig.Enabled = true
-
-    if distanceKillHeartbeatConnection then
-        distanceKillHeartbeatConnection:Disconnect()
-        distanceKillHeartbeatConnection = nil
-    end
-    
-    -- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ
-    hookRaycastMethods()
-    manipulateHitboxes()
-    createPhantomParts()
-    if distanceKillRenderConnection then
-        distanceKillRenderConnection:Disconnect()
-        distanceKillRenderConnection = nil
-    end
-
-    -- Обновляем позиции на каждом кадре, чтобы фиксация была стабильной
-    distanceKillRenderConnection = RunService.RenderStepped:Connect(function()
-        updateDistanceKillPositions()
-    end)
-
-    -- Мгновенно подтянем выбранные цели к вам один раз при старте
-    task.defer(function()
-        updateDistanceKillPositions()
-    end)
-
-    print("☠️ DISTANCE KILL: ВКЛЮЧЕНО. Выбранные игроки будут визуально перемещены к вам.")
-end
-
-local function stopDistanceKill()
-    if not isDistanceKillEnabled then return end
-    isDistanceKillEnabled = false
-    DistanceKillConfig.Enabled = false
-
-    if distanceKillHeartbeatConnection then
-        distanceKillHeartbeatConnection:Disconnect()
-        distanceKillHeartbeatConnection = nil
-    end
-    
-    -- ОТКЛЮЧЕНИЕ ЭКСПЕРИМЕНТАЛЬНЫХ МЕТОДОВ
-    unhookRaycastMethods()
-    if distanceKillRenderConnection then
-        distanceKillRenderConnection:Disconnect()
-        distanceKillRenderConnection = nil
-    end
-
-    cleanupAllDistanceKillConstraints()
-    print("☠️ DISTANCE KILL: ВЫКЛЮЧЕНО.")
-end
-
-local function setDistanceKillTarget(userId, enabled)
-    if type(userId) ~= "number" then
-        -- Попытка преобразовать строку в число, если передали строковый userId
-        local maybe = tonumber(userId)
-        if maybe then userId = maybe end
-    end
-    if type(userId) ~= "number" then return end
-    DistanceKillConfig.SelectedPlayers[userId] = enabled and true or false
-    if not enabled then
-        cleanupConstraintsForUserId(userId)
-    end
-    print("☠️ DISTANCE KILL:", "Игрок", userId, enabled and "ДОБАВЛЕН" or "УДАЛЕН", "из списка целей")
-end
-
-_G.AutosellModule.DistanceKill = {
-    config = DistanceKillConfig,
-    start = startDistanceKill,
-    stop = stopDistanceKill,
-    setTarget = setDistanceKillTarget,
-    isEnabled = function() return isDistanceKillEnabled end,
-}
-
--- ОТКЛЮЧЕНО: Переменные для attack blink больше не нужны (телепортация игрока детектится)
--- local dkAttackConnections = {}
--- local attackBlinkActive = false  
--- local attackBlinkEndTime = 0
--- local savedOriginalCFrame = nil
-
-local function setMyCFrame(cf)
-    -- ОТКЛЮЧЕНО: Функция телепортации игрока отключена для избежания детекта античитом
-    -- Оставлена только для совместимости, но ничего не делает
-    return
-end
-
-local function getNearestSelectedTargetPosition()
-    local myRoot = getLocalHumanoidRootPart()
-    if not myRoot then return nil end
-    local nearestDist, nearestPos = math.huge, nil
-    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
-        if enabled then
-            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
-            local char = plr and plr.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local d = (hrp.Position - myRoot.Position).Magnitude
-                if d < nearestDist then
-                    nearestDist, nearestPos = d, hrp.Position
-                end
-            end
-        end
-    end
-    return nearestPos
-end
-
--- ЭКСПЕРИМЕНТАЛЬНЫЕ МЕТОДЫ REMOTE DAMAGE
-local originalWorkspaceRaycast = nil
-local originalFindPartsInRegion3 = nil
-local originalGetPartBoundsInBox = nil
-
--- Функция для перехвата рейкастов и расширения их дальности
-local function hookRaycastMethods()
-    if not DistanceKillConfig.ExtendedReach then return end
-    
-    pcall(function()
-        -- Перехватываем workspace:Raycast
-        if not originalWorkspaceRaycast then
-            originalWorkspaceRaycast = workspace.Raycast
-            workspace.Raycast = function(self, origin, direction, raycastParams)
-                -- Расширяем направление рейкаста для увеличения дальности
-                local extendedDirection = direction.Unit * DistanceKillConfig.ReachDistance
-                return originalWorkspaceRaycast(self, origin, extendedDirection, raycastParams)
-            end
-        end
-        
-        -- Перехватываем workspace:GetPartBoundsInBox для расширения области поиска
-        if workspace.GetPartBoundsInBox and not originalGetPartBoundsInBox then
-            originalGetPartBoundsInBox = workspace.GetPartBoundsInBox
-            workspace.GetPartBoundsInBox = function(self, cframe, size, overlapParams)
-                -- Увеличиваем размер области поиска
-                local extendedSize = size * DistanceKillConfig.HitboxMultiplier
-                return originalGetPartBoundsInBox(self, cframe, extendedSize, overlapParams)
-            end
-        end
-    end)
-    
-    print("Distance Kill: Перехват рейкастов активирован (дальность: " .. DistanceKillConfig.ReachDistance .. ")")
-end
-
--- Функция для восстановления оригинальных методов
-local function unhookRaycastMethods()
-    pcall(function()
-        if originalWorkspaceRaycast then
-            workspace.Raycast = originalWorkspaceRaycast
-            originalWorkspaceRaycast = nil
-        end
-        if originalGetPartBoundsInBox then
-            workspace.GetPartBoundsInBox = originalGetPartBoundsInBox
-            originalGetPartBoundsInBox = nil
-        end
-    end)
-    print("Distance Kill: Перехват рейкастов отключен")
-end
-
--- Функция для попытки манипуляции хитбоксов
-local function manipulateHitboxes()
-    if not DistanceKillConfig.ExtendedReach then return end
-    
-    spawn(function()
-        while isDistanceKillEnabled do
-            wait(0.1)
-            
-            for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
-                if enabled then
-                    local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
-                    local char = plr and plr.Character
-                    if char then
-                        -- Попытка увеличить размер хитбоксов
-                        for _, part in pairs(char:GetChildren()) do
-                            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                pcall(function()
-                                    local originalSize = part:GetAttribute("OriginalSize")
-                                    if not originalSize then
-                                        part:SetAttribute("OriginalSize", part.Size)
-                                        originalSize = part.Size
-                                    end
-                                    -- Увеличиваем размер хитбокса
-                                    part.Size = originalSize * DistanceKillConfig.HitboxMultiplier
-                                    part.Transparency = 0.8 -- Делаем полупрозрачным для отладки
-                                end)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    
-    print("Distance Kill: Манипуляция хитбоксов активирована (множитель: " .. DistanceKillConfig.HitboxMultiplier .. ")")
-end
-
--- Функция для создания "фантомных" частей для перехвата атак
-local function createPhantomParts()
-    if not DistanceKillConfig.ExtendedReach then return end
-    
-    local myPlayer = Players.LocalPlayer
-    if not myPlayer or not myPlayer.Character then return end
-    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
-    spawn(function()
-        while isDistanceKillEnabled do
-            wait(0.1)
-            
-            for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
-                if enabled then
-                    local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
-                    local char = plr and plr.Character
-                    local targetRoot = char and char:FindFirstChild("HumanoidRootPart")
-                    
-                    if targetRoot then
-                        -- Создаем невидимую часть рядом с игроком, которая "представляет" далекую цель
-                        local phantomName = "PhantomPart_" .. userId
-                        local existingPhantom = myRoot.Parent:FindFirstChild(phantomName)
-                        
-                        if not existingPhantom then
-                            local phantom = Instance.new("Part")
-                            phantom.Name = phantomName
-                            phantom.Size = Vector3.new(4, 6, 1) -- Размер как у игрока
-                            phantom.Transparency = 1 -- Полностью невидимая
-                            phantom.CanCollide = false
-                            phantom.Anchored = true
-                            phantom.Parent = myRoot.Parent
-                            
-                            -- Устанавливаем позицию рядом с игроком
-                            local offset = Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
-                            phantom.CFrame = myRoot.CFrame + offset
-                            
-                            -- Привязываем к реальному игроку через атрибуты
-                            phantom:SetAttribute("TargetUserId", userId)
-                            phantom:SetAttribute("IsPhantomPart", true)
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    
-    print("Distance Kill: Фантомные части активированы")
-end
-
-local function beginAttackBlink()
-    if not isDistanceKillEnabled then return end
-    
-    -- Проверяем включена ли микро-телепортация
-    if not DistanceKillConfig.MicroTeleport then 
-        print("Distance Kill: Микро-телепортация отключена в конфигурации")
-        return 
-    end
-    
-    -- МИКРО-ТЕЛЕПОРТАЦИЯ: очень быстрая телепортация на несколько кадров для регистрации атаки
-    local myPlayer = Players.LocalPlayer
-    if not myPlayer or not myPlayer.Character then return end
-    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
-    local targetPos = getNearestSelectedTargetPosition()
-    if not targetPos then 
-        print("Distance Kill: Нет целей для микро-телепортации")
-        return 
-    end
-    
-    local originalPos = myRoot.CFrame
-    local toward = (targetPos - myRoot.Position)
-    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
-    local attackPos = targetPos - toward.Unit * 1.5 -- чуть дальше от цели
-    
-    local frames = DistanceKillConfig.MicroTeleportFrames or 2
-    local waitTime = (1/60) * frames -- время на основе количества кадров
-    
-    print("Distance Kill: Микро-телепортация для атаки (" .. frames .. " кадра)")
-    
-    -- Телепортация
-    pcall(function()
-        if myPlayer.Character.PivotTo then
-            myPlayer.Character:PivotTo(CFrame.new(attackPos, targetPos))
-        else
-            myRoot.CFrame = CFrame.new(attackPos, targetPos)
-        end
-    end)
-    
-    -- Возврат через указанное количество кадров
-    spawn(function()
-        wait(waitTime)
-        pcall(function()
-            if myRoot and myRoot.Parent then
-                if myPlayer.Character.PivotTo then
-                    myPlayer.Character:PivotTo(originalPos)
-                else
-                    myRoot.CFrame = originalPos
-                end
-                print("Distance Kill: Возврат на исходную позицию")
-            end
-        end)
-    end)
-end
-
-local function handleAttackBlink()
-    if not isDistanceKillEnabled then return end
-    local targetPos = getNearestSelectedTargetPosition()
-    if not targetPos then return end
-    -- Используем существующую логику beginAttackBlink вместо несуществующей blinkToPositionAndBack
-    beginAttackBlink()
-end
-
-local function bindDistanceKillAttack()
-    -- Привязка для МИКРО-ТЕЛЕПОРТАЦИИ при атаке (очень быстрая, 2 кадра)
-    local dkAttackConnections = {}
-    if not dkAttackConnections.inputBegan then
-        dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end -- игнорируем если GUI в фокусе
-            
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                beginAttackBlink()
-            elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or 
-                   input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
-                beginAttackBlink()
-            end
-        end)
-        
-        -- Сохраняем соединение для последующего отключения
-        _G.DistanceKillConnections = _G.DistanceKillConnections or {}
-        _G.DistanceKillConnections.inputBegan = dkAttackConnections.inputBegan
-    end
-    print("Distance Kill: Микро-телепортация при атаке активирована")
-end
-
-local function unbindDistanceKillAttack()
-    -- Отключаем соединения микро-телепортации
-    if _G.DistanceKillConnections then
-        for k, conn in pairs(_G.DistanceKillConnections) do
-            if typeof(conn) == "RBXScriptConnection" then
-                pcall(function() conn:Disconnect() end)
-            end
-        end
-        _G.DistanceKillConnections = {}
-    end
-    print("Distance Kill: Микро-телепортация отключена")
-end
-
--- Активируем/деактивируем перехват при старте/стопе Distance Kill
-local oldStartDistanceKill = startDistanceKill
-startDistanceKill = function()
-    oldStartDistanceKill()
-    bindDistanceKillAttack()
-end
-
-local oldStopDistanceKill = stopDistanceKill
-stopDistanceKill = function()
-    oldStopDistanceKill()
-    unbindDistanceKillAttack()
-end
-
--- ОТКЛЮЧЕНО: Логика удержания позиции игрока больше не нужна
--- Теперь updateDistanceKillPositions работает только с телепортацией врагов
-
--- Обновляем API после переопределений
-if _G and _G.AutosellModule and _G.AutosellModule.DistanceKill then
-    _G.AutosellModule.DistanceKill.start = startDistanceKill
-    _G.AutosellModule.DistanceKill.stop = stopDistanceKill
-end
+print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: улучшенный мгновенный переворот")
+print("🧪 Функции отладки переворота:")
+print("   _G.AutosellModule.CharacterFlip.testAutofarmDetection() - проверить обнаружение автофарма")
+print("   _G.AutosellModule.CharacterFlip.isMapLoaded() - проверить прогрузку карты")
+print("   _G.AutosellModule.CharacterFlip.forceMapLoaded() - принудительно установить прогрузку карты")
 
 return _G.AutosellModule
