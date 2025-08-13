@@ -2158,6 +2158,25 @@ _G.AutosellModule.DistanceKill = {
 
 -- Перехват атаки для Distance Kill: микро-блинк к цели и обратно
 local dkAttackConnections = {}
+local attackBlinkActive = false
+local attackBlinkEndTime = 0
+local savedOriginalCFrame = nil
+
+local function setMyCFrame(cf)
+    local me = Players.LocalPlayer
+    if not me or not me.Character then return end
+    local char = me.Character
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    pcall(function()
+        if char.PivotTo then
+            char:PivotTo(cf)
+        else
+            hrp.CFrame = cf
+        end
+    end)
+end
+
 local function getNearestSelectedTargetPosition()
     local myRoot = getLocalHumanoidRootPart()
     if not myRoot then return nil end
@@ -2178,21 +2197,17 @@ local function getNearestSelectedTargetPosition()
     return nearestPos
 end
 
-local function blinkToPositionAndBack(targetPosition)
+local function beginAttackBlink()
+    if not isDistanceKillEnabled then return end
     local myPlayer = Players.LocalPlayer
     if not myPlayer or not myPlayer.Character then return end
     local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot or not targetPosition then return end
-
-    local originalCFrame = myRoot.CFrame
-    -- Телепорт к цели на очень близкую дистанцию
-    local toward = (targetPosition - originalCFrame.Position)
-    if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
-    local nearPos = targetPosition - toward.Unit * 1.0 + Vector3.new(0, 0.2, 0)
-    myRoot.CFrame = CFrame.new(nearPos, targetPosition)
-    task.wait(0.02)
-    -- Возврат на исходную позицию
-    myRoot.CFrame = originalCFrame
+    if not myRoot then return end
+    local targetPos = getNearestSelectedTargetPosition()
+    if not targetPos then return end
+    savedOriginalCFrame = myRoot.CFrame
+    attackBlinkActive = true
+    attackBlinkEndTime = tick() + 0.15
 end
 
 local function handleAttackBlink()
@@ -2208,9 +2223,9 @@ local function bindDistanceKillAttack()
         dkAttackConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, gp)
             if gp then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                handleAttackBlink()
+                beginAttackBlink()
             elseif input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.Q then
-                handleAttackBlink()
+                beginAttackBlink()
             end
         end)
     end
@@ -2236,6 +2251,38 @@ local oldStopDistanceKill = stopDistanceKill
 stopDistanceKill = function()
     oldStopDistanceKill()
     unbindDistanceKillAttack()
+end
+
+-- Встраиваем удержание позиции в render-цикл Distance Kill
+local oldUpdateDistanceKillPositions = updateDistanceKillPositions
+updateDistanceKillPositions = function()
+    oldUpdateDistanceKillPositions()
+    if not attackBlinkActive then return end
+    local now = tick()
+    local myPlayer = Players.LocalPlayer
+    if not myPlayer or not myPlayer.Character then attackBlinkActive = false return end
+    local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then attackBlinkActive = false return end
+    local targetPos = getNearestSelectedTargetPosition()
+    if not targetPos then attackBlinkActive = false return end
+    if now < attackBlinkEndTime then
+        local toward = (targetPos - myRoot.Position)
+        if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
+        local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
+        setMyCFrame(CFrame.new(nearPos, targetPos))
+    else
+        attackBlinkActive = false
+        if savedOriginalCFrame then
+            setMyCFrame(savedOriginalCFrame)
+            savedOriginalCFrame = nil
+        end
+    end
+end
+
+-- Обновляем API после переопределений
+if _G and _G.AutosellModule and _G.AutosellModule.DistanceKill then
+    _G.AutosellModule.DistanceKill.start = startDistanceKill
+    _G.AutosellModule.DistanceKill.stop = stopDistanceKill
 end
 
 return _G.AutosellModule
