@@ -1436,450 +1436,56 @@ _G.AutosellModule = {
 -- МОДУЛЬ ПЕРЕВОРОТА ПЕРСОНАЖА ДЛЯ АВТОФАРМА
 -- =========================================================
 
-local CharacterFlipModule = {}
+-- FLIP removed
 
--- Переменные для отслеживания состояния
-local isPlayerFlipped = false
-local originalPlayerPosition = nil
-local autofarmFlipConnections = {}
-local continuousFlipConnection = nil
-local renderSteppedConnection = nil
-local isMapLoaded = false
-local gameStartTime = tick() -- Время запуска скрипта для определения прогрузки
-local flipTargetY = nil
+-- FLIP state removed
 
--- ПРОСТАЯ функция для постоянного переворота персонажа
-local function startContinuousFlip()
-    if continuousFlipConnection then
-        task.cancel(continuousFlipConnection)
-    end
-    
-    if renderSteppedConnection then
-        renderSteppedConnection:Disconnect()
-    end
-    
-    print("🔄 FLIP: ПРОСТОЙ переворот - запуск...")
-    
-    -- АГРЕССИВНЫЙ переворот каждый кадр
-    renderSteppedConnection = RunService.RenderStepped:Connect(function()
-        if not isPlayerFlipped then return end
-        
-        local player = Players.LocalPlayer
-        if not player or not player.Character then return end
-        
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return end
-        
-        -- ПРИНУДИТЕЛЬНО переворачиваем каждый кадр
-        local currentPos = humanoidRootPart.Position
-        local targetPos = currentPos
-        if flipTargetY then
-            targetPos = Vector3.new(currentPos.X, flipTargetY, currentPos.Z)
-        end
-        local flippedCFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
-        humanoidRootPart.CFrame = flippedCFrame
-    end)
-    
-    -- Дополнительный цикл для создания BodyAngularVelocity
-    continuousFlipConnection = task.spawn(function()
-        while isPlayerFlipped do
-            local player = Players.LocalPlayer
-            if player and player.Character then
-                local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-                if humanoidRootPart then
-                    -- Убираем старый BodyAngularVelocity
-                    local oldBAV = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-                    if oldBAV then oldBAV:Destroy() end
-                    
-                    -- Создаем новый агрессивный BodyAngularVelocity
-                    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-                    bodyAngularVelocity.Name = "AutofarmFlipRotation"
-                    bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, 0, 0)
-                    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
-                    bodyAngularVelocity.Parent = humanoidRootPart
-                end
-            end
-            task.wait(1)
-        end
-    end)
-end
 
--- Функция для остановки постоянного переворота
-local function stopContinuousFlip()
-    if continuousFlipConnection then
-        task.cancel(continuousFlipConnection)
-        continuousFlipConnection = nil
-    end
-    
-    if renderSteppedConnection then
-        renderSteppedConnection:Disconnect()
-        renderSteppedConnection = nil
-    end
-    
-    -- Убираем все BodyMovers для переворота
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-            if flipRotation then flipRotation:Destroy() end
-            
-            local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
-            if flipPosition then flipPosition:Destroy() end
-        end
-    end
-    flipTargetY = nil
-    
-    print("🛑 FLIP: Остановка постоянного переворота")
-end
 
--- Функция для переворота персонажа вниз головой
-local function flipPlayerUpsideDown()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if isPlayerFlipped then
-        print("🔄 FLIP: Персонаж уже перевернут!")
-        return true
-    end
-    
-    print("🔄 FLIP: ПРОСТОЙ переворот - начинаем!")
-    
-    -- Сохраняем оригинальную позицию
-    originalPlayerPosition = humanoidRootPart.Position
-    print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
-    
-    -- Вычисляем смещение так, чтобы перевернутое тело оказалось ниже уровня ног до переворота
-    local characterHeight = 6
-    do
-        local ok, size = pcall(function()
-            return player.Character:GetExtentsSize()
-        end)
-        if ok and size then
-            characterHeight = size.Y
-        else
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local head = player.Character:FindFirstChild("Head")
-            if head then
-                characterHeight = math.max(6, math.abs((head.Position - humanoidRootPart.Position).Y) * 2)
-            elseif humanoid then
-                characterHeight = math.max(6, (humanoid.HipHeight or 2) * 3)
-            end
-        end
-    end
-    -- Сдвигаем центр на высоту персонажа + небольшой запас, чтобы ВЕСЬ перевернутый корпус оказался ниже уровня ног
-    local downwardOffset = characterHeight + 1
-    flipTargetY = originalPlayerPosition.Y - downwardOffset
-    local targetPosition = Vector3.new(originalPlayerPosition.X, flipTargetY, originalPlayerPosition.Z)
-    print("📍 FLIP: Целевая позиция:", targetPosition)
-    
-    humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
-    
-    -- Устанавливаем флаг
-    isPlayerFlipped = true
-    
-    -- Запускаем постоянный переворот
-    startContinuousFlip()
-    
-    print("✅ FLIP: ПРОСТОЙ переворот активирован!")
-    return true
-end
 
--- Функция для возврата персонажа в нормальное положение
-local function unflipPlayer()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    if not isPlayerFlipped then
-        return true
-    end
-    
-    print("🔄 FLIP: Возвращаем персонажа в нормальное положение...")
-    
-    -- Останавливаем постоянный переворот
-    stopContinuousFlip()
-    
-    -- Убираем все BodyMovers для переворота
-    local flipRotation = humanoidRootPart:FindFirstChild("AutofarmFlipRotation")
-    if flipRotation then
-        flipRotation:Destroy()
-    end
-    
-    local flipPosition = humanoidRootPart:FindFirstChild("AutofarmFlipPosition")
-    if flipPosition then
-        flipPosition:Destroy()
-    end
-    
-    -- Возвращаем нормальное положение и позицию
-    if originalPlayerPosition then
-        humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition) * CFrame.Angles(0, 0, 0)
-        originalPlayerPosition = nil
-    else
-        -- Если нет сохранённой позиции, просто поворачиваем обратно и поднимаем вверх
-        local currentPosition = humanoidRootPart.Position
-        local upwardOffset = Vector3.new(0, (flipTargetY and (currentPosition.Y - flipTargetY) or 6), 0)
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(0, 0, 0)
-    end
-    flipTargetY = nil
-    
-    -- Сбрасываем флаг
-    isPlayerFlipped = false
-    
-    print("✅ FLIP: Персонаж возвращен в нормальное положение!")
-    return true
-end
 
--- Функция для отслеживания запуска автофарма
-local function monitorAutofarmState()
-    if autofarmFlipConnections.monitor then
-        autofarmFlipConnections.monitor:Disconnect()
-    end
-    
-    print("🔍 FLIP: Запуск мониторинга состояния автофарма...")
-    
-    autofarmFlipConnections.monitor = task.spawn(function()
-        local wasAutofarmEnabled = false
-        
-        while true do
-            task.wait(1) -- Проверяем каждую секунду
-            
-            -- Проверяем состояние автофарма через разные способы
-            local isAutofarmCurrentlyEnabled = false
-            
-            -- Способ 1: через _G.isAutofarmEnabled
-            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
-                local success, result = pcall(_G.isAutofarmEnabled)
-                if success and result then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Способ 2: через внешние функции автофарма
-            if not isAutofarmCurrentlyEnabled and externalAutofarmConfig.isEnabledFunction then
-                local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
-                if success and result then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Способ 3: через глобальные переменные
-            if not isAutofarmCurrentlyEnabled then
-                if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
-                    isAutofarmCurrentlyEnabled = true
-                elseif _G.isAutofarmActive then
-                    isAutofarmCurrentlyEnabled = true
-                end
-            end
-            
-            -- Проверяем завершена ли прогрузка карты
-            if not isMapLoaded then
-                -- Множественные способы определения прогрузки карты
-                local mapLoadIndicators = {
-                    -- Стандартные глобальные переменные
-                    _G.mapLoadCompleted,
-                    _G.AutofarmConfig and _G.AutofarmConfig.mapLoaded,
-                    
-                    -- Проверка через рабочее пространство
-                    workspace.CurrentCamera and workspace.CurrentCamera.CameraType ~= Enum.CameraType.Scriptable,
-                    
-                    -- Проверка загрузки игрока
-                    Players.LocalPlayer and Players.LocalPlayer.Character and 
-                    Players.LocalPlayer.Character:FindFirstChild("Humanoid") and
-                    Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart"),
-                    
-                    -- Проверка, что игра полностью загружена
-                    game:IsLoaded(),
-                    
-                    -- Дополнительная проверка через время (минимум 5 секунд после запуска)
-                    tick() - gameStartTime > 5
-                }
-                
-                -- Если хотя бы несколько индикаторов говорят о загрузке
-                local loadedCount = 0
-                for _, indicator in ipairs(mapLoadIndicators) do
-                    if indicator then loadedCount = loadedCount + 1 end
-                end
-                
-                if loadedCount >= 3 then -- Требуем минимум 3 положительных индикатора
-                    isMapLoaded = true
-                    print("🗺️ FLIP: Прогрузка карты завершена! (Подтверждено " .. loadedCount .. " индикаторами)")
-                end
-            end
-            
-            -- Если состояние автофарма изменилось
-            if isAutofarmCurrentlyEnabled ~= wasAutofarmEnabled then
-                if isAutofarmCurrentlyEnabled and isMapLoaded then
-                    -- Автофарм включился И карта прогружена - переворачиваем персонажа
-                    print("🚀 FLIP: Обнаружен запуск автофарма после прогрузки карты - переворачиваем персонажа!")
-                    
-                    task.spawn(function()
-                        -- Упрощаем: не ждем касание земли, достаточно загрузки карты и наличия персонажа
-                        task.wait(0.5)
-                        flipPlayerUpsideDown()
-                    end)
-                elseif isAutofarmCurrentlyEnabled and not isMapLoaded then
-                    -- Автофарм включился но карта не прогружена - ждем
-                    print("🔄 FLIP: Автофарм включен, но ждем завершения прогрузки карты...")
-                    task.spawn(function()
-                        -- Ждем прогрузки карты с улучшенной проверкой
-                        while isAutofarmCurrentlyEnabled and not isMapLoaded do
-                            task.wait(1)
-                            -- Используем ту же логику проверки что и в основном цикле
-                            local mapLoadIndicators = {
-                                _G.mapLoadCompleted,
-                                _G.AutofarmConfig and _G.AutofarmConfig.mapLoaded,
-                                workspace.CurrentCamera and workspace.CurrentCamera.CameraType ~= Enum.CameraType.Scriptable,
-                                Players.LocalPlayer and Players.LocalPlayer.Character and 
-                                Players.LocalPlayer.Character:FindFirstChild("Humanoid") and
-                                Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart"),
-                                game:IsLoaded(),
-                                tick() - gameStartTime > 5
-                            }
-                            
-                            local loadedCount = 0
-                            for _, indicator in ipairs(mapLoadIndicators) do
-                                if indicator then loadedCount = loadedCount + 1 end
-                            end
-                            
-                            if loadedCount >= 3 then
-                                isMapLoaded = true
-                                print("🗺️ FLIP: Прогрузка карты завершена во время ожидания! (Подтверждено " .. loadedCount .. " индикаторами)")
-                                break
-                            end
-                        end
-                        
-                        -- Если автофарм все еще включен и карта прогружена
-                        if isAutofarmCurrentlyEnabled and isMapLoaded then
-                            print("🚀 FLIP: Прогрузка завершена - переворачиваем персонажа!")
-                            task.wait(0.5)
-                            flipPlayerUpsideDown()
-                        end
-                    end)
-                else
-                    -- Автофарм выключился - возвращаем персонажа в норму
-                    print("🛑 FLIP: Обнаружена остановка автофарма - возвращаем персонажа в норму!")
-                    task.spawn(function()
-                        unflipPlayer()
-                    end)
-                end
-                wasAutofarmEnabled = isAutofarmCurrentlyEnabled
-            end
-        end
-    end)
-end
 
--- Функция для обработки смерти и возрождения персонажа
+
+-- FLIP logic removed
+
+-- FLIP logic removed
+
+-- FLIP logic removed
+
+-- FLIP logic removed
+
+-- FLIP monitor removed
+
+-- Character handling (trimmed, no FLIP)
 local function setupCharacterHandling()
-    local player = Players.LocalPlayer
-    
-    -- Обработка смерти
-    local function onCharacterRemoving()
-        print("💀 FLIP: Персонаж умер - сбрасываем состояние переворота")
-        isPlayerFlipped = false
-        originalPlayerPosition = nil
-        isMapLoaded = false -- Сбрасываем флаг прогрузки карты
-        stopContinuousFlip()
-        
-        -- Дополнительная очистка соединений
-        if renderSteppedConnection then
-            renderSteppedConnection:Disconnect()
-            renderSteppedConnection = nil
-        end
-    end
-    
-    -- Обработка возрождения
-    local function onCharacterAdded(character)
-        task.wait(2) -- Даем время персонажу загрузиться
-        print("🔄 FLIP: Персонаж возродился - проверяем нужно ли восстановить переворот")
-        
-        -- Если автофарм активен, переворачиваем персонажа заново
-        task.spawn(function()
-            task.wait(1)
-            local isAutofarmActive = false
-            
-            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
-                local success, result = pcall(_G.isAutofarmEnabled)
-                if success and result then
-                    isAutofarmActive = true
-                end
-            end
-            
-            if isAutofarmActive then
-                print("🔄 FLIP: Автофарм активен после возрождения - переворачиваем персонажа!")
-                isPlayerFlipped = false -- Сбрасываем флаг перед повторным переворотом
-                task.wait(0.5)
-                flipPlayerUpsideDown()
-            end
-        end)
-    end
-    
-    -- Подключаем обработчики
-    if player.Character then
-        player.CharacterRemoving:Connect(onCharacterRemoving)
-    end
-    player.CharacterAdded:Connect(onCharacterAdded)
-    player.CharacterRemoving:Connect(onCharacterRemoving)
+	local player = Players.LocalPlayer
+	local function onCharacterRemoving()
+		-- no-op for FLIP removed
+	end
+	local function onCharacterAdded(character)
+		-- no-op for FLIP removed
+	end
+	if player.Character then
+		player.CharacterRemoving:Connect(onCharacterRemoving)
+	end
+	player.CharacterAdded:Connect(onCharacterAdded)
+	player.CharacterRemoving:Connect(onCharacterRemoving)
 end
 
--- Инициализация модуля переворота
-local function initializeFlipModule()
-    print("🔄 FLIP: Инициализация модуля переворота персонажа...")
-    
-    -- Запускаем мониторинг автофарма
-    monitorAutofarmState()
-    
-    -- Настраиваем обработку персонажа
-    setupCharacterHandling()
-    
-    print("✅ FLIP: Модуль переворота персонажа готов к работе!")
-end
+-- FLIP init removed
 
--- ТЕСТОВАЯ функция для мгновенного переворота
-local function testFlipNow()
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if humanoidRootPart then
-            print("🧪 TEST FLIP: Мгновенный переворот!")
-            local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-            print("🧪 TEST FLIP: Выполнено!")
-            return true
-        end
-    end
-    print("❌ TEST FLIP: Персонаж не найден!")
-    return false
-end
+-- FLIP test removed
 
--- Экспорт функций в глобальное пространство
-CharacterFlipModule = {
-    flipPlayerUpsideDown = flipPlayerUpsideDown,
-    unflipPlayer = unflipPlayer,
-    isPlayerFlipped = function() return isPlayerFlipped end,
-    startContinuousFlip = startContinuousFlip,
-    stopContinuousFlip = stopContinuousFlip,
-    initialize = initializeFlipModule,
-    testFlipNow = testFlipNow -- ТЕСТОВАЯ функция
-}
+-- FLIP exports removed
 
--- Добавляем модуль в AutosellModule для доступа извне
-_G.AutosellModule.CharacterFlip = CharacterFlipModule
-
--- Автоматически запускаем модуль
 task.spawn(function()
-    task.wait(3) -- Даем время всем системам загрузиться
-    initializeFlipModule()
+	task.wait(3)
+	initializeTravelMonitor()
 end)
 
 print("🤖 AUTOSELL: Модуль загружен успешно! Лимиты предметов обновлены.")
 print("🔗 AUTOFARM LINK: Система связи с внешним автофармом готова!")
-print("🔄 FLIP: Модуль переворота персонажа интегрирован!")
+
 print("🔒 FREEZE: Система фиксации персонажа у Shiftplox добавлена!")
 print("🎛️ GUI: Автосел интегрирован в основное меню с тумблерами:")
 print("   🟢🔴 Тумблеры Enable/Disable All Items")
@@ -1892,10 +1498,135 @@ print("   _G.AutosellModule.disableAllItems() - отключить ВСЕ пре
 print("🔒 Функции фиксации персонажа:")
 print("   _G.AutosellModule.freezePlayerAtShiftplox() - зафиксировать персонажа у Shiftplox")
 print("   _G.AutosellModule.unfreezePlayerFromShiftplox() - снять фиксацию персонажа")
-print("🔄 Функции переворота персонажа:")
-print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
-print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
-print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
-print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
+
+
+ensureMovementMonitor = function()
+	if movementMonitorConnection then return end
+	movementMonitorConnection = RunService.Heartbeat:Connect(function()
+		if not isPlayerFlipped then return end
+		local player = Players.LocalPlayer
+		if not player or not player.Character then return end
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+		local bv = hrp:FindFirstChild("AutofarmBodyVelocity")
+		local vel = (hrp.AssemblyLinearVelocity or Vector3.new())
+		local speed = vel.Magnitude
+		-- Если автофарм активно толкает нас BV или скорость велика — временно отпускаем Root.Transform
+		local pushing = (bv ~= nil) or speed > 70
+		if pushing and not isFlipSuppressed then
+			isFlipSuppressed = true
+			-- Ослабляем влияние, чтобы не мешать полету
+			if rootMotor6D and rootMotor6D.Parent then
+				rootMotor6D.Transform = CFrame.new()
+			end
+			flipResumeCandidateAt = nil
+		elseif not pushing and isFlipSuppressed then
+			-- Ждем короткую паузу стабильности перед возвратом инверсии
+			if not flipResumeCandidateAt then
+				flipResumeCandidateAt = tick()
+			elseif tick() - flipResumeCandidateAt > 0.2 then
+				isFlipSuppressed = false
+				if rootMotor6D and rootMotor6D.Parent and desiredRootTransform then
+					rootMotor6D.Transform = desiredRootTransform
+				end
+			end
+		end
+	end)
+end
+
+local travelConnection = nil
+local travelBodyVelocity = nil
+local isTravelActive = false
+
+local function stopTravelToSafeSpot()
+	if travelConnection then
+		pcall(function() travelConnection:Disconnect() end)
+		travelConnection = nil
+	end
+	if travelBodyVelocity and travelBodyVelocity.Parent then
+		travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+		travelBodyVelocity:Destroy()
+	end
+	travelBodyVelocity = nil
+	isTravelActive = false
+	print("🛑 TRAVEL: Остановлен полет к точке ожидания")
+end
+
+local function startTravelToSafeSpot()
+	if isTravelActive then return end
+	local player = Players.LocalPlayer
+	local character = player and player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	pcall(function()
+		if _G.MovementConfig and _G.MovementConfig.NoClip and not _G.MovementConfig.NoClip.Enabled then
+			_G.MovementConfig.NoClip.Enabled = true
+			if _G.startNoClip and type(_G.startNoClip) == "function" then _G.startNoClip() end
+		end
+	end)
+	travelBodyVelocity = Instance.new("BodyVelocity")
+	travelBodyVelocity.Name = "AutosellTravelBodyVelocity"
+	travelBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+	travelBodyVelocity.Parent = hrp
+	local rawTarget = Vector3.new(8, 0, -783)
+	local target = Vector3.new(rawTarget.X, rawTarget.Y - 1.95, rawTarget.Z)
+	isTravelActive = true
+	print("✈️ TRAVEL: Летим к точке ожидания:", target)
+	travelConnection = RunService.Heartbeat:Connect(function()
+		if not isTravelActive then return end
+		if not player or not player.Character or not hrp or not hrp.Parent then
+			stopTravelToSafeSpot()
+			return
+		end
+		local current = hrp.Position
+		local delta = target - current
+		local distance = delta.Magnitude
+		if distance > 0.75 then
+			local dir = delta.Unit
+			local baseSpeed = 80
+			pcall(function()
+				if _G.AutofarmConfig and _G.AutofarmConfig.FlightSpeed then
+					baseSpeed = math.max(20, _G.AutofarmConfig.FlightSpeed * 8)
+				end
+			end)
+			local dynamicSpeed = math.max(20, math.min(baseSpeed, distance * 25))
+			travelBodyVelocity.Velocity = dir * dynamicSpeed
+		else
+			travelBodyVelocity.Velocity = Vector3.new(0,0,0)
+			print("✅ TRAVEL: Точка ожидания достигнута")
+			stopTravelToSafeSpot()
+		end
+	end)
+end
+
+-- Hook autofarm state: on stop, travel to safe spot; on start, stop travel
+local function initializeTravelMonitor()
+	print("✈️ TRAVEL: Инициализация мониторинга...")
+	task.spawn(function()
+		local wasEnabled = false
+		while true do
+			task.wait(1)
+			local enabled = false
+			if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
+				local s,r = pcall(_G.isAutofarmEnabled)
+				enabled = s and r or false
+			elseif _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
+				enabled = true
+			end
+			if enabled ~= wasEnabled then
+				if enabled then
+					stopTravelToSafeSpot()
+				else
+					-- Даем stopAutofarm() завершить очистку BodyVelocity/NoClip
+					task.delay(1.0, function()
+						startTravelToSafeSpot()
+					end)
+				end
+				wasEnabled = enabled
+			end
+		end
+	end)
+end
 
 return _G.AutosellModule
