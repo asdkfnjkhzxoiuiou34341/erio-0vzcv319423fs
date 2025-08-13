@@ -2172,11 +2172,15 @@ local function createVisualClone(targetPlayer)
                         -- Дополнительные проверки перед вызовом
                         if targetPlayer and targetPlayer.Name and part and part.Name then
                             local success, error_msg = pcall(function()
-                                redirectDamageToOriginal(targetPlayer.Name, part.Name, hit)
+                                local result = redirectDamageToOriginal(targetPlayer.Name, part.Name, hit)
+                                print("🎯 DISTANCE KILL: [DEBUG] Результат redirectDamageToOriginal:", result)
+                                return result
                             end)
                             
                             if not success then
-                                print("🎯 DISTANCE KILL: Ошибка в redirectDamageToOriginal:", error_msg)
+                                print("🎯 DISTANCE KILL: [DEBUG] Ошибка в pcall redirectDamageToOriginal:", error_msg)
+                            else
+                                print("🎯 DISTANCE KILL: [DEBUG] pcall выполнен успешно, результат:", error_msg)
                             end
                         else
                             print("🎯 DISTANCE KILL: Недостаточно данных для перенаправления урона")
@@ -2239,29 +2243,49 @@ end
 
 -- Функция перенаправления урона на оригинального игрока
 local function redirectDamageToOriginal(targetPlayerName, partName, attackPart)
+    print("🎯 DISTANCE KILL: [DEBUG] Начало redirectDamageToOriginal")
+    print("🎯 DISTANCE KILL: [DEBUG] targetPlayerName:", targetPlayerName)
+    print("🎯 DISTANCE KILL: [DEBUG] partName:", partName)
+    print("🎯 DISTANCE KILL: [DEBUG] attackPart:", attackPart)
+    
     -- Проверяем входные параметры
     if not targetPlayerName or not partName then 
-        print("🎯 DISTANCE KILL: Ошибка - нет targetPlayerName или partName")
-        return 
+        print("🎯 DISTANCE KILL: [DEBUG] RETURN 1 - нет targetPlayerName или partName")
+        print("🎯 DISTANCE KILL: [DEBUG] targetPlayerName nil?", targetPlayerName == nil)
+        print("🎯 DISTANCE KILL: [DEBUG] partName nil?", partName == nil)
+        return nil
     end
     
+    print("🎯 DISTANCE KILL: [DEBUG] Поиск игрока в Players...")
     local targetPlayer = Players:FindFirstChild(targetPlayerName)
     if not targetPlayer then 
-        print("🎯 DISTANCE KILL: Игрок", targetPlayerName, "не найден")
-        return 
+        print("🎯 DISTANCE KILL: [DEBUG] RETURN 2 - игрок", targetPlayerName, "не найден")
+        return nil
     end
     
+    print("🎯 DISTANCE KILL: [DEBUG] Игрок найден:", targetPlayer.Name)
+    print("🎯 DISTANCE KILL: [DEBUG] Проверка Character...")
     if not targetPlayer.Character then 
-        print("🎯 DISTANCE KILL: У игрока", targetPlayerName, "нет персонажа")
-        return 
+        print("🎯 DISTANCE KILL: [DEBUG] RETURN 3 - у игрока", targetPlayerName, "нет персонажа")
+        return nil
     end
     
+    print("🎯 DISTANCE KILL: [DEBUG] Character найден:", targetPlayer.Character.Name)
+    print("🎯 DISTANCE KILL: [DEBUG] Поиск части", partName, "...")
     local originalPart = targetPlayer.Character:FindFirstChild(partName)
     if not originalPart then 
-        print("🎯 DISTANCE KILL: Часть", partName, "не найдена у игрока", targetPlayerName)
-        return 
+        print("🎯 DISTANCE KILL: [DEBUG] RETURN 4 - часть", partName, "не найдена у игрока", targetPlayerName)
+        print("🎯 DISTANCE KILL: [DEBUG] Доступные части:")
+        for _, child in ipairs(targetPlayer.Character:GetChildren()) do
+            if child:IsA("BasePart") then
+                print("🎯 DISTANCE KILL: [DEBUG]  -", child.Name)
+            end
+        end
+        return nil
     end
     
+    print("🎯 DISTANCE KILL: [DEBUG] Часть найдена:", originalPart.Name)
+    print("🎯 DISTANCE KILL: [DEBUG] ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ!")
     print("🎯 DISTANCE KILL: Перенаправляем урон на", targetPlayerName, "часть:", partName)
     
     -- Простой метод: только логирование (безопасно)
@@ -2286,10 +2310,13 @@ local function redirectDamageToOriginal(targetPlayerName, partName, attackPart)
             end
         end)
         
-        if not success then
-            print("🎯 DISTANCE KILL: Ошибка создания эффекта:", error_msg)
-        end
-    end)
+                 if not success then
+             print("🎯 DISTANCE KILL: Ошибка создания эффекта:", error_msg)
+         end
+     end)
+     
+     print("🎯 DISTANCE KILL: [DEBUG] Функция redirectDamageToOriginal завершена успешно")
+     return true -- Возвращаем успех вместо nil
 end
 
 -- Функция удаления визуального клона
