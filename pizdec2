@@ -1920,7 +1920,8 @@ local DistanceKillConfig = {
     Radius = 1.5,          -- радиус расстановки игроков вокруг вас (уменьшен для ближнего боя)
     HeightOffset = 0,      -- вертикальный сдвиг относительно вашей позиции
     SelectedPlayers = {},  -- [userId] = true/false
-    UseConstraints = false -- режим фиксации через BodyPosition/BodyGyro (по умолчанию выключен для надежного появления)
+    UseConstraints = false, -- режим фиксации через BodyPosition/BodyGyro (по умолчанию выключен для надежного появления)
+    MaxAttackDistance = 50 -- максимальная реальная дистанция для атаки (защита от урона телепортированным игрокам)
 }
 
 local isDistanceKillEnabled = false
@@ -2046,36 +2047,48 @@ local function updateDistanceKillPositions()
     for index, targetPlayer in ipairs(targets) do
         local targetCharacter = targetPlayer.Character
         if targetCharacter then
-            local targetPos = myRoot.Position + offsets[index]
-            local userId = targetPlayer.UserId
-            activeUserIds[userId] = true
-            if DistanceKillConfig.UseConstraints then
-                local rec = ensureConstraintsForTarget(userId, targetCharacter)
-                local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
-                if rec and rec.bodyPosition and rec.bodyGyro and hrp then
-                    -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
-                    pcall(function()
-                        if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-                        if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
-                        local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-                        if humanoid then
-                            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                            humanoid.PlatformStand = true
-                        end
-                        pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
-                    end)
-                    rec.bodyPosition.Position = targetPos
-                    rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+            local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Проверяем реальную дистанцию перед телепортацией
+                local realDistance = (hrp.Position - myRoot.Position).Magnitude
+                local maxTeleportDistance = DistanceKillConfig.MaxAttackDistance * 1.5 -- увеличиваем лимит для телепортации
+                
+                if realDistance > maxTeleportDistance then
+                    -- Пропускаем телепортацию игроков, которые слишком далеко
+                    print("Distance Kill: Пропуск телепортации игрока " .. targetPlayer.Name .. " (дистанция: " .. math.floor(realDistance) .. ", макс: " .. maxTeleportDistance .. ")")
                 else
-                    setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+                    local targetPos = myRoot.Position + offsets[index]
+                    local userId = targetPlayer.UserId
+                    activeUserIds[userId] = true
+                    
+                    if DistanceKillConfig.UseConstraints then
+                        local rec = ensureConstraintsForTarget(userId, targetCharacter)
+                        if rec and rec.bodyPosition and rec.bodyGyro and hrp then
+                            -- Сброс скоростей, фиксация позиции и ориентации на каждом кадре
+                            pcall(function()
+                                if hrp.AssemblyLinearVelocity then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+                                if hrp.AssemblyAngularVelocity then hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0) end
+                                local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                                if humanoid then
+                                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                                    humanoid.PlatformStand = true
+                                end
+                                pcall(function() hrp:SetNetworkOwner(Players.LocalPlayer) end)
+                            end)
+                            rec.bodyPosition.Position = targetPos
+                            rec.bodyGyro.CFrame = CFrame.new(hrp.Position, myRoot.Position)
+                        else
+                            setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+                        end
+                    else
+                        -- Простой надежный режим: жестко телепортируем цели CFrame-ом
+                        setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+                    end
+                    -- Дополнительный жесткий снап каждые ~0.15с
+                    if (tick() % 0.15) < 0.016 then
+                        setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
+                    end
                 end
-            else
-                -- Простой надежный режим: жестко телепортируем цели CFrame-ом
-                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
-            end
-            -- Дополнительный жесткий снап каждые ~0.15с
-            if (tick() % 0.15) < 0.016 then
-                setCharacterCFrameSafely(targetCharacter, CFrame.new(targetPos, myRoot.Position))
             end
         end
     end
@@ -2197,12 +2210,52 @@ local function getNearestSelectedTargetPosition()
     return nearestPos
 end
 
+-- Функция для проверки реальной дистанции до цели (без учета визуальной телепортации)
+local function isTargetInRealAttackRange(maxDistance)
+    maxDistance = maxDistance or 10 -- максимальная дистанция для атаки по умолчанию
+    local myRoot = getLocalHumanoidRootPart()
+    if not myRoot then return false end
+    
+    local nearestDistance = math.huge
+    local nearestPlayer = nil
+    
+    for userId, enabled in pairs(DistanceKillConfig.SelectedPlayers) do
+        if enabled then
+            local plr = Players:GetPlayerByUserId(tonumber(userId) or -1)
+            local char = plr and plr.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Проверяем реальную дистанцию (не визуальную)
+                local realDistance = (hrp.Position - myRoot.Position).Magnitude
+                if realDistance < nearestDistance then
+                    nearestDistance = realDistance
+                    nearestPlayer = plr
+                end
+            end
+        end
+    end
+    
+    if nearestDistance <= maxDistance then
+        return true, nearestPlayer, nearestDistance
+    else
+        return false, nearestPlayer, nearestDistance
+    end
+end
+
 local function beginAttackBlink()
     if not isDistanceKillEnabled then return end
     local myPlayer = Players.LocalPlayer
     if not myPlayer or not myPlayer.Character then return end
     local myRoot = myPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
+    
+    -- ВАЖНО: Проверяем реальную дистанцию до цели перед атакой
+    local inRange, targetPlayer, realDistance = isTargetInRealAttackRange(DistanceKillConfig.MaxAttackDistance)
+    if not inRange then 
+        print("Distance Kill: Цель слишком далеко для атаки (макс. дистанция: " .. DistanceKillConfig.MaxAttackDistance .. ", реальная дистанция: " .. (realDistance or "неизвестно") .. ")")
+        return 
+    end
+    
     local targetPos = getNearestSelectedTargetPosition()
     if not targetPos then return end
     savedOriginalCFrame = myRoot.CFrame
@@ -2213,13 +2266,16 @@ local function beginAttackBlink()
     if toward.Magnitude < 0.1 then toward = Vector3.new(0, 0, -0.1) end
     local nearPos = targetPos - toward.Unit * 0.8 + Vector3.new(0, 0.15, 0)
     setMyCFrame(CFrame.new(nearPos, targetPos))
+    
+    print("Distance Kill: Атака разрешена, дистанция до цели: " .. realDistance)
 end
 
 local function handleAttackBlink()
     if not isDistanceKillEnabled then return end
     local targetPos = getNearestSelectedTargetPosition()
     if not targetPos then return end
-    blinkToPositionAndBack(targetPos)
+    -- Используем существующую логику beginAttackBlink вместо несуществующей blinkToPositionAndBack
+    beginAttackBlink()
 end
 
 local function bindDistanceKillAttack()
