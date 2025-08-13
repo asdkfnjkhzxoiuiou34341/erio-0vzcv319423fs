@@ -1447,7 +1447,7 @@ local renderSteppedConnection = nil
 local isMapLoaded = false
 local gameStartTime = tick() -- Время запуска скрипта для определения прогрузки
 
--- ПРОСТАЯ функция для постоянного переворота персонажа
+-- УЛУЧШЕННАЯ функция для постоянного переворота персонажа
 local function startContinuousFlip()
     if continuousFlipConnection then
         task.cancel(continuousFlipConnection)
@@ -1457,9 +1457,9 @@ local function startContinuousFlip()
         renderSteppedConnection:Disconnect()
     end
     
-    print("🔄 FLIP: ПРОСТОЙ переворот - запуск...")
+    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - запуск...")
     
-    -- АГРЕССИВНЫЙ переворот каждый кадр
+    -- СТАБИЛЬНЫЙ переворот каждый кадр
     renderSteppedConnection = RunService.RenderStepped:Connect(function()
         if not isPlayerFlipped then return end
         
@@ -1467,12 +1467,26 @@ local function startContinuousFlip()
         if not player or not player.Character then return end
         
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
         if not humanoidRootPart then return end
         
-        -- ПРИНУДИТЕЛЬНО переворачиваем каждый кадр
-        local currentPos = humanoidRootPart.Position
-        local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
-        humanoidRootPart.CFrame = flippedCFrame
+        -- Рассчитываем правильную позицию с учетом высоты персонажа
+        local humanoidHeight = 5
+        if humanoid then
+            humanoidHeight = humanoid.HipHeight + 3
+        end
+        
+        -- Если есть исходная позиция, используем её для расчета
+        if originalPlayerPosition then
+            local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
+            local flippedCFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
+            humanoidRootPart.CFrame = flippedCFrame
+        else
+            -- Если исходной позиции нет, просто переворачиваем на текущем месте
+            local currentPos = humanoidRootPart.Position
+            local flippedCFrame = CFrame.new(currentPos) * CFrame.Angles(math.rad(180), 0, 0)
+            humanoidRootPart.CFrame = flippedCFrame
+        end
     end)
     
     -- Дополнительный цикл для создания BodyAngularVelocity
@@ -1533,6 +1547,7 @@ local function flipPlayerUpsideDown()
     if not player or not player.Character then return false end
     
     local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoidRootPart then return false end
     
     if isPlayerFlipped then
@@ -1540,16 +1555,24 @@ local function flipPlayerUpsideDown()
         return true
     end
     
-    print("🔄 FLIP: ПРОСТОЙ переворот - начинаем!")
+    print("🔄 FLIP: УЛУЧШЕННЫЙ переворот - начинаем!")
     
     -- Сохраняем оригинальную позицию
     originalPlayerPosition = humanoidRootPart.Position
     print("📍 FLIP: Исходная позиция:", originalPlayerPosition)
     
-    -- СРАЗУ переворачиваем и смещаем вниз
-    local targetPosition = originalPlayerPosition + Vector3.new(0, -6, 0)
-    print("📍 FLIP: Целевая позиция:", targetPosition)
+    -- Рассчитываем правильную позицию для переворота
+    -- Персонаж должен быть перевернут так, чтобы его голова была ниже исходного уровня ног
+    local humanoidHeight = 5 -- Примерная высота персонажа
+    if humanoid then
+        humanoidHeight = humanoid.HipHeight + 3 -- Более точный расчет высоты
+    end
     
+    -- Смещаем персонажа вниз на полную высоту + дополнительное смещение
+    local targetPosition = originalPlayerPosition + Vector3.new(0, -(humanoidHeight * 2), 0)
+    print("📍 FLIP: Целевая позиция (голова ниже исходных ног):", targetPosition)
+    
+    -- Переворачиваем персонажа на 180 градусов по оси X и перемещаем
     humanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(180), 0, 0)
     
     -- Устанавливаем флаг
@@ -1558,7 +1581,7 @@ local function flipPlayerUpsideDown()
     -- Запускаем постоянный переворот
     startContinuousFlip()
     
-    print("✅ FLIP: ПРОСТОЙ переворот активирован!")
+    print("✅ FLIP: УЛУЧШЕННЫЙ переворот активирован! Голова теперь ниже исходного уровня ног!")
     return true
 end
 
@@ -1593,12 +1616,21 @@ local function unflipPlayer()
     -- Возвращаем нормальное положение и позицию
     if originalPlayerPosition then
         humanoidRootPart.CFrame = CFrame.new(originalPlayerPosition) * CFrame.Angles(0, 0, 0)
+        print("📍 FLIP: Возврат к исходной позиции:", originalPlayerPosition)
         originalPlayerPosition = nil
     else
-        -- Если нет сохранённой позиции, просто поворачиваем обратно и поднимаем вверх
+        -- Если нет сохранённой позиции, рассчитываем правильное смещение вверх
         local currentPosition = humanoidRootPart.Position
-        local upwardOffset = Vector3.new(0, 6, 0) -- Поднимаем на 6 единиц вверх
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(math.rad(180), 0, 0)
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local humanoidHeight = 5
+        if humanoid then
+            humanoidHeight = humanoid.HipHeight + 3
+        end
+        
+        -- Поднимаем персонажа на полную высоту * 2 (компенсируем смещение при перевороте)
+        local upwardOffset = Vector3.new(0, humanoidHeight * 2, 0)
+        humanoidRootPart.CFrame = CFrame.new(currentPosition + upwardOffset) * CFrame.Angles(0, 0, 0)
+        print("📍 FLIP: Возврат с расчетным смещением:", currentPosition + upwardOffset)
     end
     
     -- Сбрасываем флаг
@@ -1630,6 +1662,7 @@ local function monitorAutofarmState()
                 local success, result = pcall(_G.isAutofarmEnabled)
                 if success and result then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.isAutofarmEnabled")
                 end
             end
             
@@ -1638,6 +1671,7 @@ local function monitorAutofarmState()
                 local success, result = pcall(externalAutofarmConfig.isEnabledFunction)
                 if success and result then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через внешние функции")
                 end
             end
             
@@ -1645,8 +1679,19 @@ local function monitorAutofarmState()
             if not isAutofarmCurrentlyEnabled then
                 if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.AutofarmConfig.Enabled")
                 elseif _G.isAutofarmActive then
                     isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через _G.isAutofarmActive")
+                end
+            end
+            
+            -- Способ 4: через проверку переменных в файле huyna
+            if not isAutofarmCurrentlyEnabled then
+                -- Проверяем локальные переменные автофарма из huyna
+                if _G.isAutofarmEnabled_huyna or _G.autofarmEnabled or _G.farmEnabled then
+                    isAutofarmCurrentlyEnabled = true
+                    print("🔍 FLIP: Автофарм обнаружен через huyna переменные")
                 end
             end
             
@@ -1669,8 +1714,22 @@ local function monitorAutofarmState()
                     -- Проверка, что игра полностью загружена
                     game:IsLoaded(),
                     
-                    -- Дополнительная проверка через время (минимум 5 секунд после запуска)
-                    tick() - gameStartTime > 5
+                    -- Дополнительная проверка через время (минимум 10 секунд после запуска)
+                    tick() - gameStartTime > 10,
+                    
+                    -- Проверка что персонаж стабилен и не падает
+                    (function()
+                        local player = Players.LocalPlayer
+                        if player and player.Character then
+                            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                            local humanoid = player.Character:FindFirstChild("Humanoid")
+                            if humanoidRootPart and humanoid then
+                                local velocity = humanoidRootPart.AssemblyLinearVelocity or humanoidRootPart.Velocity
+                                return velocity.Magnitude < 10 and humanoid.Health > 0
+                            end
+                        end
+                        return false
+                    end)()
                 }
                 
                 -- Если хотя бы несколько индикаторов говорят о загрузке
@@ -1679,7 +1738,7 @@ local function monitorAutofarmState()
                     if indicator then loadedCount = loadedCount + 1 end
                 end
                 
-                if loadedCount >= 3 then -- Требуем минимум 3 положительных индикатора
+                if loadedCount >= 4 then -- Требуем минимум 4 положительных индикатора
                     isMapLoaded = true
                     print("🗺️ FLIP: Прогрузка карты завершена! (Подтверждено " .. loadedCount .. " индикаторами)")
                 end
@@ -1850,16 +1909,59 @@ local function testFlipNow()
     local player = Players.LocalPlayer
     if player and player.Character then
         local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoidRootPart then
-            print("🧪 TEST FLIP: Мгновенный переворот!")
+            print("🧪 TEST FLIP: УЛУЧШЕННЫЙ мгновенный переворот!")
             local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, -6, 0)) * CFrame.Angles(math.rad(180), 0, 0)
-            print("🧪 TEST FLIP: Выполнено!")
+            
+            -- Рассчитываем правильное смещение
+            local humanoidHeight = 5
+            if humanoid then
+                humanoidHeight = humanoid.HipHeight + 3
+            end
+            
+            local targetPos = pos + Vector3.new(0, -(humanoidHeight * 2), 0)
+            humanoidRootPart.CFrame = CFrame.new(targetPos) * CFrame.Angles(math.rad(180), 0, 0)
+            print("🧪 TEST FLIP: Выполнено! Исходная позиция:", pos, "Новая позиция:", targetPos)
             return true
         end
     end
     print("❌ TEST FLIP: Персонаж не найден!")
     return false
+end
+
+-- ТЕСТОВАЯ функция для проверки состояния автофарма
+local function testAutofarmDetection()
+    print("🧪 TEST AUTOFARM: Проверка обнаружения автофарма...")
+    
+    local detectionMethods = {
+        {"_G.isAutofarmEnabled", _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" and _G.isAutofarmEnabled()},
+        {"_G.AutofarmConfig.Enabled", _G.AutofarmConfig and _G.AutofarmConfig.Enabled},
+        {"_G.isAutofarmActive", _G.isAutofarmActive},
+        {"_G.isAutofarmEnabled_huyna", _G.isAutofarmEnabled_huyna},
+        {"_G.autofarmEnabled", _G.autofarmEnabled},
+        {"_G.farmEnabled", _G.farmEnabled},
+        {"External Autofarm", externalAutofarmConfig.isEnabledFunction and externalAutofarmConfig.isEnabledFunction()}
+    }
+    
+    local foundActive = false
+    for _, method in ipairs(detectionMethods) do
+        local name, result = method[1], method[2]
+        if result then
+            print("✅", name, "- АКТИВЕН")
+            foundActive = true
+        else
+            print("❌", name, "- неактивен")
+        end
+    end
+    
+    if not foundActive then
+        print("⚠️ TEST AUTOFARM: НИ ОДИН метод обнаружения автофарма не сработал!")
+    else
+        print("✅ TEST AUTOFARM: Автофарм обнаружен!")
+    end
+    
+    return foundActive
 end
 
 -- Экспорт функций в глобальное пространство
@@ -1870,7 +1972,13 @@ CharacterFlipModule = {
     startContinuousFlip = startContinuousFlip,
     stopContinuousFlip = stopContinuousFlip,
     initialize = initializeFlipModule,
-    testFlipNow = testFlipNow -- ТЕСТОВАЯ функция
+    testFlipNow = testFlipNow, -- ТЕСТОВАЯ функция
+    testAutofarmDetection = testAutofarmDetection, -- ТЕСТОВАЯ функция для проверки автофарма
+    
+    -- Функции для отладки
+    getOriginalPosition = function() return originalPlayerPosition end,
+    isMapLoaded = function() return isMapLoaded end,
+    forceMapLoaded = function() isMapLoaded = true; print("🗺️ FLIP: Принудительно установлена прогрузка карты") end
 }
 
 -- Добавляем модуль в AutosellModule для доступа извне
@@ -1901,6 +2009,10 @@ print("🔄 Функции переворота персонажа:")
 print("   _G.AutosellModule.CharacterFlip.flipPlayerUpsideDown() - перевернуть персонажа")
 print("   _G.AutosellModule.CharacterFlip.unflipPlayer() - вернуть в норму")
 print("   _G.AutosellModule.CharacterFlip.isPlayerFlipped() - проверить состояние")
-print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: мгновенный переворот")
+print("   _G.AutosellModule.CharacterFlip.testFlipNow() - ТЕСТ: улучшенный мгновенный переворот")
+print("🧪 Функции отладки переворота:")
+print("   _G.AutosellModule.CharacterFlip.testAutofarmDetection() - проверить обнаружение автофарма")
+print("   _G.AutosellModule.CharacterFlip.isMapLoaded() - проверить прогрузку карты")
+print("   _G.AutosellModule.CharacterFlip.forceMapLoaded() - принудительно установить прогрузку карты")
 
 return _G.AutosellModule
