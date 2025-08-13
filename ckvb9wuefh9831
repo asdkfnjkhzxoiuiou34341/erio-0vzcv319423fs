@@ -1623,15 +1623,50 @@ CharacterFlipModule = {
 _G.AutosellModule.CharacterFlip = CharacterFlipModule
 
 -- Инициализация модуля переворота
+local function monitorAutofarmState()
+    if autofarmFlipConnections.monitor then
+        task.cancel(autofarmFlipConnections.monitor)
+        autofarmFlipConnections.monitor = nil
+    end
+
+    autofarmFlipConnections.monitor = task.spawn(function()
+        local wasAutofarmEnabled = false
+        while true do
+            task.wait(1)
+            local isAutofarmCurrentlyEnabled = false
+
+            if _G.isAutofarmEnabled and type(_G.isAutofarmEnabled) == "function" then
+                local ok, res = pcall(_G.isAutofarmEnabled)
+                if ok and res then isAutofarmCurrentlyEnabled = true end
+            end
+            if not isAutofarmCurrentlyEnabled and externalAutofarmConfig and externalAutofarmConfig.isEnabledFunction then
+                local ok, res = pcall(externalAutofarmConfig.isEnabledFunction)
+                if ok and res then isAutofarmCurrentlyEnabled = true end
+            end
+            if not isAutofarmCurrentlyEnabled then
+                if _G.AutofarmConfig and _G.AutofarmConfig.Enabled then
+                    isAutofarmCurrentlyEnabled = true
+                elseif _G.isAutofarmActive then
+                    isAutofarmCurrentlyEnabled = true
+                end
+            end
+
+            if isAutofarmCurrentlyEnabled ~= wasAutofarmEnabled then
+                if isAutofarmCurrentlyEnabled then
+                    flipPlayerUpsideDown()
+                else
+                    unflipPlayer()
+                end
+                wasAutofarmEnabled = isAutofarmCurrentlyEnabled
+            end
+        end
+    end)
+end
+
 local function initializeFlipModule()
     print("🔄 FLIP: Инициализация модуля переворота персонажа...")
-    
-    -- Запускаем мониторинг автофарма
     monitorAutofarmState()
-    
-    -- Настраиваем обработку персонажа
     setupCharacterHandling()
-    
     print("✅ FLIP: Модуль переворота персонажа готов к работе!")
 end
 
