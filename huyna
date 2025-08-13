@@ -283,6 +283,8 @@ local autofarmRestartTimer = nil -- Таймер для автоматическ
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
 
+
+
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
 local wasAutofarmEnabledBeforeDeath = false
@@ -1790,7 +1792,6 @@ _G.stopFly = stopFly
 _G.MovementConfig = MovementConfig
 _G.isNoClipping = function() return isNoClipping end
 _G.isFlying = function() return isFlying end
-
 local function createStealthTeleport()
     if not TeleportConfig.TargetPlayer then 
         return 
@@ -4125,7 +4126,9 @@ local function getItemKey(item)
     return item.Name .. "_" .. tostring(item.Position.X) .. "_" .. tostring(item.Position.Z)
 end
 
--- Функция сброса попыток для предмета
+
+
+-- Сброс попыток для предмета
 local function resetItemAttempts(itemKey)
     autofarmItemAttempts[itemKey] = nil
 end
@@ -5051,6 +5054,8 @@ function startAutofarm()
             end)
         end
     end)
+    
+
 end
 
 function stopAutofarm()
@@ -5150,15 +5155,17 @@ function stopAutofarm()
     end
     
     print("AUTOFARM: Полностью остановлен")
+    
+
 end
 
 -- Экспорт функций автофарма для модуля автоселла  
 _G.moveToPosition = moveToPosition
 _G.isAutofarmEnabled = function() return isAutofarmEnabled end
 _G.startAutofarm = startAutofarm
-_G.stopAutofarm = function() 
-    isAutofarmEnabled = false 
-    print("🤖 AUTOFARM: Остановлен через _G.stopAutofarm") 
+_G.stopAutofarm = function()
+    stopAutofarm()
+    print("🤖 AUTOFARM: Остановлен через _G.stopAutofarm")
 end
 _G.AutofarmConfig = AutofarmConfig
 
@@ -5405,7 +5412,6 @@ UserInputService.InputEnded:Connect(function(input)
         resizeHandle.BackgroundTransparency = 0.2
     end
 end)
-
 RunService.RenderStepped:Connect(function()
     if isResizing then
         local currentMousePos = UserInputService:GetMouseLocation()
