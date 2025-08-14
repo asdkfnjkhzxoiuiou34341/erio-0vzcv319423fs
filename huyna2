@@ -4262,19 +4262,13 @@ local function moveToPosition(targetPosition, callback)
         return false
     end
     
-    -- НОВАЯ ЛОГИКА: Перемещаемся под землю к предмету для скрытности
-    local undergroundOffset = -2 -- На 1.5 единицы под землей для скрытности 
-    local adjustedTarget = Vector3.new(targetPosition.X, targetPosition.Y + undergroundOffset, targetPosition.Z)
-    
-    print("AUTOFARM: 🔥 ПОДЗЕМНЫЙ полет к позиции", targetPosition, "-> под землю:", adjustedTarget)
-    
     -- Включаем NoClip для прохода через землю
     if AutofarmConfig.UseNoClipMovement and not isNoClipping then
         startNoClip()
-        print("AUTOFARM: NoClip включен для подземного движения")
+        print("AUTOFARM: NoClip включен для трёхэтапного движения")
     end
     
-    -- Настраиваем персонажа для полета (как в обычном флае)
+    -- Настраиваем персонажа для полета
     local humanoid = character:FindFirstChild("Humanoid")
     if humanoid then
         humanoid.JumpPower = 0
@@ -4282,12 +4276,12 @@ local function moveToPosition(targetPosition, callback)
         humanoid.HipHeight = 0
     end
     
-    -- Создаем BodyVelocity для движения (как в обычном флае)
+    -- Создаем BodyVelocity для движения
     local bodyVelocity = humanoidRootPart:FindFirstChild("AutofarmBodyVelocity")
     if not bodyVelocity then
         bodyVelocity = Instance.new("BodyVelocity")
         bodyVelocity.Name = "AutofarmBodyVelocity"
-        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9) -- как в обычном флае
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
         bodyVelocity.Parent = humanoidRootPart
     end
     
@@ -4296,6 +4290,22 @@ local function moveToPosition(targetPosition, callback)
         workspace.Gravity = 0
         print("AUTOFARM: Гравитация отключена")
     end
+    
+    -- ТРЁХЭТАПНОЕ ДВИЖЕНИЕ:
+    -- Этап 1: Спуск на Y = -70
+    -- Этап 2: Полёт по X,Z к предмету
+    -- Этап 3: Подъём по Y до предмета с отступом -2
+    
+    local currentStage = 1
+    local currentPos = humanoidRootPart.Position
+    local stage1Target = Vector3.new(currentPos.X, -70, currentPos.Z)  -- Спуск на -70 по Y
+    local stage2Target = Vector3.new(targetPosition.X, -70, targetPosition.Z)  -- Полёт по X,Z на уровне -70
+    local stage3Target = Vector3.new(targetPosition.X, targetPosition.Y - 2, targetPosition.Z)  -- Подъём к предмету с отступом -2
+    
+    print("AUTOFARM: 🎯 Трёхэтапное движение к позиции", targetPosition)
+    print("AUTOFARM: Этап 1: Спуск на Y=-70 ->", stage1Target)
+    print("AUTOFARM: Этап 2: Полёт по X,Z ->", stage2Target) 
+    print("AUTOFARM: Этап 3: Подъём к предмету ->", stage3Target)
     
     local moveConnection
     
@@ -4311,25 +4321,44 @@ local function moveToPosition(targetPosition, callback)
         end
         
         local currentPos = humanoidRootPart.Position
-        local distance = (adjustedTarget - currentPos).Magnitude
+        local currentTarget
         
-        -- УЛУЧШЕННАЯ ТОЧНОСТЬ: Уменьшил допуск расстояния с 3 до 1 единицы
+        -- Определяем текущую цель в зависимости от этапа
+        if currentStage == 1 then
+            currentTarget = stage1Target
+        elseif currentStage == 2 then
+            currentTarget = stage2Target
+        else
+            currentTarget = stage3Target
+        end
+        
+        local distance = (currentTarget - currentPos).Magnitude
+        
         if distance > 0.3 then
-            local direction = (adjustedTarget - currentPos).Unit
-            -- Динамическая скорость: быстрее на дальних расстояниях, медленнее при приближении
+            local direction = (currentTarget - currentPos).Unit
+            -- Динамическая скорость
             local dynamicSpeed = math.max(20, math.min(AutofarmConfig.FlightSpeed * 8, distance * 25))
             local moveVector = direction * dynamicSpeed
             bodyVelocity.Velocity = moveVector
         else
-            -- Достигли цели - останавливаемся
+            -- Достигли текущего этапа
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
             
-            local finalDistance = (adjustedTarget - humanoidRootPart.Position).Magnitude
-            print("AUTOFARM: ✅ Достигли позицию предмета, расстояние:", math.floor(finalDistance * 10) / 10, "м")
-            
-            moveConnection:Disconnect()
-            if callback then
-                callback()
+            if currentStage == 1 then
+                print("AUTOFARM: ✅ Этап 1 завершён - спустились на Y=-70")
+                currentStage = 2
+            elseif currentStage == 2 then
+                print("AUTOFARM: ✅ Этап 2 завершён - достигли позиции по X,Z")
+                currentStage = 3
+            else
+                -- Этап 3 завершён - достигли предмета
+                local finalDistance = (stage3Target - humanoidRootPart.Position).Magnitude
+                print("AUTOFARM: ✅ Этап 3 завершён - достигли предмета, расстояние:", math.floor(finalDistance * 10) / 10, "м")
+                
+                moveConnection:Disconnect()
+                if callback then
+                    callback()
+                end
             end
         end
     end)
