@@ -3061,37 +3061,37 @@ FOVCircle.Visible = false
 
 
 local function getName(p)
-    return p.Name
-end
-
--- Функция для получения информации о стенде игрока
-local function getPlayerStand(p)
-    local playerStats = Players:FindFirstChild(p.Name)
-    if playerStats then
-        local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
-        if playerStatsFolder then
-            local stand = playerStatsFolder:FindFirstChild("Stand")
-            if stand and stand.Value and stand.Value ~= "" then
-                return stand.Value
+    local playerName = p.Name
+    
+    -- Получаем информацию о стенде из Players>[игрок]>PlayerStats>Stand
+    if userStandESPEnabled then
+        local playerStats = Players:FindFirstChild(p.Name)
+        if playerStats then
+            local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
+            if playerStatsFolder then
+                local stand = playerStatsFolder:FindFirstChild("Stand")
+                if stand and stand.Value and stand.Value ~= "" then
+                    playerName = playerName .. " | " .. stand.Value
+                end
             end
         end
     end
-    return nil
-end
-
--- Функция для получения информации о стиле игрока
-local function getPlayerStyle(p)
-    local playerStats = Players:FindFirstChild(p.Name)
-    if playerStats then
-        local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
-        if playerStatsFolder then
-            local spec = playerStatsFolder:FindFirstChild("Spec")
-            if spec and spec.Value and spec.Value ~= "" then
-                return spec.Value
+    
+    -- Получаем информацию о стиле из Players>[игрок]>PlayerStats>Spec
+    if userStyleESPEnabled then
+        local playerStats = Players:FindFirstChild(p.Name)
+        if playerStats then
+            local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
+            if playerStatsFolder then
+                local spec = playerStatsFolder:FindFirstChild("Spec")
+                if spec and spec.Value and spec.Value ~= "" then
+                    playerName = playerName .. " | " .. spec.Value
+                end
             end
         end
     end
-    return nil
+    
+    return playerName
 end
 local function getHealth(p)
     local h = p.Character and p.Character:FindFirstChild("Humanoid")
@@ -3148,22 +3148,6 @@ local function createOrUpdateESP(p)
     end
     
     local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
-    
-    -- Добавляем информацию о стенде, если тумблер включен
-    if userStandESPEnabled then
-        local standName = getPlayerStand(p)
-        if standName then
-            baseText = baseText .. " | " .. standName
-        end
-    end
-    
-    -- Добавляем информацию о стиле, если тумблер включен
-    if userStyleESPEnabled then
-        local styleName = getPlayerStyle(p)
-        if styleName then
-            baseText = baseText .. " | " .. styleName
-        end
-    end
     
     d.tl.Text = baseText
 end
