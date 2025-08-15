@@ -278,6 +278,8 @@ local autofarmLastPickupTime = 0 -- Время последнего подбор
 local autofarmRestartTimer = nil -- Таймер для автоматического перезапуска через 60 секунд
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
+local autofarmCurrentItemIndex = 1 -- Индекс текущего предмета в списке
+local autofarmAllItems = {} -- Все найденные предметы
 
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
@@ -4517,6 +4519,10 @@ local function pickupItem(item)
             autofarmLastPickupTime = tick()
             print("AUTOFARM: ✅ Предмет", item.Name, "подобран успешно")
             
+            -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
+            autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
+            print("AUTOFARM: Успешный подбор - переходим к предмету", autofarmCurrentItemIndex)
+            
             pickupConnection:Disconnect()
             autofarmPickingUp = false
             
@@ -4584,6 +4590,10 @@ local function pickupItem(item)
             if attempts >= maxAttempts then
                 print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- ЗАБИВАЕМ ХУЙ и летим дальше")
                 
+                -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
+                autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
+                print("AUTOFARM: Переходим к предмету", autofarmCurrentItemIndex)
+                
                 pickupConnection:Disconnect()
                 autofarmPickingUp = false
                 
@@ -4641,6 +4651,10 @@ local function pickupItem(item)
             
             -- Таймаут - забиваем хуй на этот предмет
             
+            -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
+            autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
+            print("AUTOFARM: Таймаут - переходим к предмету", autofarmCurrentItemIndex)
+            
             pickupConnection:Disconnect()
             autofarmPickingUp = false
             task.spawn(function()
@@ -4693,11 +4707,14 @@ function processNextItem()
         print("AUTOFARM DEBUG: Таймер не инициализирован")
     end
     
-    -- Сканируем новые предметы
-    local items = findAutofarmItems()
-    print("AUTOFARM: Найдено", #items, "предметов для подбора")
+    -- Сканируем новые предметы только если список пустой
+    if #autofarmAllItems == 0 then
+        autofarmAllItems = findAutofarmItems()
+        autofarmCurrentItemIndex = 1
+        print("AUTOFARM: Найдено", #autofarmAllItems, "предметов для подбора")
+    end
     
-    if #items == 0 then
+    if #autofarmAllItems == 0 then
         print("AUTOFARM: Нет доступных предметов для подбора - ждем и сканируем снова")
         -- Если нет доступных предметов, ждем и сканируем снова
         task.spawn(function()
@@ -4709,13 +4726,28 @@ function processNextItem()
         return
     end
     
-    -- Берем ближайший предмет
-    local nextItem = items[1]
+    -- Берем следующий предмет по индексу
+    if autofarmCurrentItemIndex > #autofarmAllItems then
+        print("AUTOFARM: Прошли все предметы в списке - сканируем заново")
+        autofarmAllItems = {}
+        autofarmCurrentItemIndex = 1
+        task.spawn(function()
+            task.wait(0.5)
+            if isAutofarmEnabled then
+                processNextItem()
+            end
+        end)
+        return
+    end
+    
+    local nextItem = autofarmAllItems[autofarmCurrentItemIndex]
     autofarmCurrentTarget = nextItem
+    print("AUTOFARM: Берем предмет", autofarmCurrentItemIndex, "/", #autofarmAllItems, "-", nextItem.Name)
     
     -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: предмет все еще включен в настройках автофарма
     if not AutofarmConfig.Items[nextItem.Name] then
         print("AUTOFARM: Предмет", nextItem.Name, "был отключен в настройках - пропускаем")
+        autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
         task.spawn(function()
             task.wait(0.1)
             if isAutofarmEnabled then
@@ -4747,6 +4779,7 @@ function processNextItem()
     
     if not itemExists then
         print("AUTOFARM: Предмет", nextItem.Name, "исчез ДО начала полета (нет физических частей) - сразу ищем следующий")
+        autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
         task.spawn(function()
             task.wait(0.1) -- минимальная пауза для стабилизации
             if isAutofarmEnabled then
@@ -4783,6 +4816,7 @@ function processNextItem()
                 pickupItem(nextItem)
             else
                 print("AUTOFARM: Предмет", nextItem.Name, "исчез ПОСЛЕ полета (нет физических частей) - сразу ищем следующий")
+                autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
                 task.spawn(function()
                     task.wait(0.1)
                     if isAutofarmEnabled then
@@ -4983,7 +5017,10 @@ function startAutofarm()
         end
     end)
     
-    -- Запускаем автофарм
+    -- Очищаем список предметов при запуске
+    autofarmAllItems = {}
+    autofarmCurrentItemIndex = 1
+    print("🤖 AUTOFARM: Список предметов очищен")
     
     -- НОВОЕ: Принудительная прогрузка карты перед началом фарма
     task.spawn(function()
@@ -5015,7 +5052,10 @@ function stopAutofarm()
     autofarmPickingUp = false
     autofarmCurrentTarget = nil
     
-    -- Останавливаем автофарм
+    -- Очищаем список предметов при остановке
+    autofarmAllItems = {}
+    autofarmCurrentItemIndex = 1
+    print("🤖 AUTOFARM: Список предметов очищен при остановке")
     
     -- Отменяем автоматический перезапуск если он был запланирован
     if autofarmAutoRestarting then
