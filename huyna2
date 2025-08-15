@@ -3067,8 +3067,15 @@ local function getName(p)
         local stand = playerStats:FindFirstChild("stand")
         if stand then
             local standName = stand.Value or stand.Name
-            playerName = playerName .. " | " .. standName
+            if standName and standName ~= "" then
+                playerName = playerName .. " | " .. standName
+                print("DEBUG: Найден стенд для", p.Name, ":", standName)
+            end
+        else
+            print("DEBUG: Стенд не найден для", p.Name)
         end
+    else
+        print("DEBUG: playerstats не найден для", p.Name)
     end
     
     -- Получаем информацию о стиле из players>[игрок]>playerstats>spec
@@ -3076,7 +3083,12 @@ local function getName(p)
         local spec = playerStats:FindFirstChild("spec")
         if spec then
             local specName = spec.Value or spec.Name
-            playerName = playerName .. " | " .. specName
+            if specName and specName ~= "" then
+                playerName = playerName .. " | " .. specName
+                print("DEBUG: Найден стиль для", p.Name, ":", specName)
+            end
+        else
+            print("DEBUG: Стиль не найден для", p.Name)
         end
     end
     
@@ -3139,6 +3151,7 @@ local function createOrUpdateESP(p)
     local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
     
     d.tl.Text = baseText
+    print("DEBUG: ESP текст для", p.Name, ":", baseText)
 end
 
 local function removeESP(p)
