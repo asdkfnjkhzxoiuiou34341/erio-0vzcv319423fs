@@ -429,11 +429,6 @@ local function updateBlurEffect()
 end
 
 local function updateAccentColor()
-    local reopenButton = screenGui:FindFirstChild("ReopenButton")
-    if reopenButton then
-        reopenButton.BackgroundColor3 = MenuSettings.AccentColor
-    end
-    
     for _, child in pairs(functionsContainer:GetChildren()) do
         if child:IsA("Frame") then
             local sliderBack = child:FindFirstChild("SliderBack")
@@ -5382,7 +5377,6 @@ closeCorner.CornerRadius = UDim.new(0, 6)
 
 closeButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
-    createReopenButton()
 end)
 
 local resizeHandle = Instance.new("Frame", mainFrame)
@@ -5455,32 +5449,7 @@ RunService.RenderStepped:Connect(function()
         mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
     end
 end)
-function createReopenButton()
-    local existingButton = screenGui:FindFirstChild("ReopenButton")
-    if existingButton then
-        existingButton:Destroy()
-    end
-    
-    local reopenButton = Instance.new("TextButton", screenGui)
-    reopenButton.Name = "ReopenButton"
-    reopenButton.Size = UDim2.new(0, 50, 0, 50)
-    reopenButton.Position = UDim2.new(1, -70, 0, 20)
-    reopenButton.Text = "🔧"
-    reopenButton.Font = Enum.Font.GothamBold
-    reopenButton.TextSize = 20
-    reopenButton.TextColor3 = Color3.new(1, 1, 1)
-    reopenButton.BackgroundColor3 = MenuSettings.AccentColor
-    reopenButton.BorderSizePixel = 0
-    reopenButton.AutoButtonColor = false
-    
-    local reopenCorner = Instance.new("UICorner", reopenButton)
-    reopenCorner.CornerRadius = UDim.new(0.5, 0)
-    
-    reopenButton.MouseButton1Click:Connect(function()
-        mainFrame.Visible = true
-        reopenButton:Destroy()
-    end)
-end
+-- Функция createReopenButton удалена
 
 local contentTitle = Instance.new("TextLabel", rightPanel)
 contentTitle.Name = "ContentTitle"
@@ -6708,13 +6677,5 @@ showContent("Main")
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == Enum.KeyCode.Insert then
         mainFrame.Visible = not mainFrame.Visible
-        if mainFrame.Visible then
-            local existingButton = screenGui:FindFirstChild("ReopenButton")
-            if existingButton then
-                existingButton:Destroy()
-            end
-        else
-            createReopenButton()
-        end
     end
 end)
