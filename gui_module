@@ -1,0 +1,245 @@
+-- ===== GUI MODULE =====
+-- Простой GUI модуль для демонстрации модульной архитектуры
+-- Загружается отдельно через ModuleLoader
+
+print("🖥️ Загружаем модуль GUI...")
+
+-- Получаем доступ к утилитам и сервисам
+local Utils = _G.ModuleUtils
+local Services = Utils.Services
+local Players = Services.Players
+local CoreGui = Services.CoreGui
+local UserInputService = Services.UserInputService
+
+-- Основной объект модуля
+local GUIModule = {}
+
+-- Переменные GUI
+local screenGui = nil
+local mainFrame = nil
+
+-- Функция создания простого GUI
+local function createSimpleGUI()
+    -- Создаем ScreenGui
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ModularScriptGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = CoreGui
+    
+    -- Главный фрейм
+    mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 400, 0, 300)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
+    
+    -- Закругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
+    
+    -- Заголовок
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, 0, 0, 40)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.Text = "🚀 Modular Script v" .. _G.BaseConfig.Version
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 16
+    titleLabel.TextColor3 = Color3.new(1, 1, 1)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    titleLabel.BorderSizePixel = 0
+    titleLabel.Parent = mainFrame
+    
+    -- Закругленные углы для заголовка
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 12)
+    titleCorner.Parent = titleLabel
+    
+    -- Кнопка закрытия
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -35, 0, 5)
+    closeButton.Text = "×"
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 18
+    closeButton.TextColor3 = Color3.new(1, 1, 1)
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    closeButton.BorderSizePixel = 0
+    closeButton.Parent = titleLabel
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 8)
+    closeCorner.Parent = closeButton
+    
+    closeButton.MouseButton1Click:Connect(function()
+        screenGui.Enabled = false
+    end)
+    
+    -- Контейнер для кнопок модулей
+    local modulesFrame = Instance.new("Frame")
+    modulesFrame.Size = UDim2.new(1, -20, 1, -60)
+    modulesFrame.Position = UDim2.new(0, 10, 0, 50)
+    modulesFrame.BackgroundTransparency = 1
+    modulesFrame.Parent = mainFrame
+    
+    -- Создаем кнопки для загрузки модулей
+    local moduleButtons = {
+        {name = "Movement", description = "Fly, NoClip, Speed", color = Color3.fromRGB(100, 150, 255)},
+        {name = "Autofarm", description = "Auto Item Collection", color = Color3.fromRGB(255, 150, 100)},
+        {name = "YBA", description = "Stand Range Hack", color = Color3.fromRGB(255, 100, 150)},
+        {name = "ESP", description = "Player/Item ESP", color = Color3.fromRGB(150, 255, 100)},
+        {name = "AntiTimeStop", description = "Anti Time Stop", color = Color3.fromRGB(255, 255, 100)},
+        {name = "Teleport", description = "Player Teleport", color = Color3.fromRGB(150, 100, 255)}
+    }
+    
+    for i, moduleData in ipairs(moduleButtons) do
+        local moduleButton = Instance.new("TextButton")
+        moduleButton.Size = UDim2.new(0.45, 0, 0, 60)
+        local column = (i - 1) % 2
+        local row = math.floor((i - 1) / 2)
+        moduleButton.Position = UDim2.new(column * 0.5 + 0.025, 0, 0, row * 70)
+        moduleButton.Text = ""
+        moduleButton.BackgroundColor3 = moduleData.color
+        moduleButton.BorderSizePixel = 0
+        moduleButton.Parent = modulesFrame
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        buttonCorner.Parent = moduleButton
+        
+        -- Название модуля
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -10, 0, 25)
+        nameLabel.Position = UDim2.new(0, 5, 0, 5)
+        nameLabel.Text = moduleData.name
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.TextColor3 = Color3.new(1, 1, 1)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = moduleButton
+        
+        -- Описание модуля
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Size = UDim2.new(1, -10, 0, 20)
+        descLabel.Position = UDim2.new(0, 5, 0, 25)
+        descLabel.Text = moduleData.description
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.TextSize = 10
+        descLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+        descLabel.BackgroundTransparency = 1
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.Parent = moduleButton
+        
+        -- Статус модуля
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Size = UDim2.new(1, -10, 0, 15)
+        statusLabel.Position = UDim2.new(0, 5, 0, 45)
+        statusLabel.Text = "⬜ Not Loaded"
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.TextSize = 9
+        statusLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.Parent = moduleButton
+        
+        -- Обработчик клика
+        moduleButton.MouseButton1Click:Connect(function()
+            statusLabel.Text = "🔄 Loading..."
+            statusLabel.TextColor3 = Color3.new(1, 1, 0)
+            
+            local success = _G.loadModuleOnDemand(moduleData.name)
+            
+            if success then
+                statusLabel.Text = "✅ Loaded"
+                statusLabel.TextColor3 = Color3.new(0, 1, 0)
+                print("✅ Модуль", moduleData.name, "загружен успешно!")
+            else
+                statusLabel.Text = "❌ Failed"
+                statusLabel.TextColor3 = Color3.new(1, 0, 0)
+                print("❌ Не удалось загрузить модуль", moduleData.name)
+            end
+        end)
+        
+        -- Проверяем, загружен ли модуль уже
+        if _G.BaseConfig.Modules[moduleData.name] and _G.LoadedModules[_G.BaseConfig.Modules[moduleData.name]] then
+            statusLabel.Text = "✅ Loaded"
+            statusLabel.TextColor3 = Color3.new(0, 1, 0)
+        end
+    end
+    
+    return screenGui
+end
+
+-- Основные функции модуля
+function GUIModule.create()
+    if screenGui then
+        print("GUI: GUI уже создан")
+        return screenGui
+    end
+    
+    screenGui = createSimpleGUI()
+    print("✅ GUI создан успешно!")
+    return screenGui
+end
+
+function GUIModule.show()
+    if screenGui then
+        screenGui.Enabled = true
+        return true
+    end
+    return false
+end
+
+function GUIModule.hide()
+    if screenGui then
+        screenGui.Enabled = false
+        return true
+    end
+    return false
+end
+
+function GUIModule.toggle()
+    if screenGui then
+        screenGui.Enabled = not screenGui.Enabled
+        return screenGui.Enabled
+    end
+    return false
+end
+
+function GUIModule.destroy()
+    if screenGui then
+        screenGui:Destroy()
+        screenGui = nil
+        return true
+    end
+    return false
+end
+
+function GUIModule.isVisible()
+    return screenGui and screenGui.Enabled or false
+end
+
+-- Хоткей для показа/скрытия GUI
+local hotKeyConnection = Utils.safeConnect(UserInputService.InputBegan, function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Insert then
+        GUIModule.toggle()
+    end
+end)
+
+-- Регистрируем модуль
+_G.GUIModule = GUIModule
+
+-- Автоматически создаем GUI при загрузке модуля
+GUIModule.create()
+
+print("✅ Модуль GUI загружен успешно!")
+print("💡 Нажмите Insert для показа/скрытия GUI")
+print("💡 Доступные функции: create, show, hide, toggle, destroy")
+
+return GUIModule

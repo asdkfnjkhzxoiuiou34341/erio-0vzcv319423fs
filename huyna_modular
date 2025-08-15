@@ -1,0 +1,231 @@
+-- ===== MODULAR SCRIPT LOADER =====
+-- Основной загрузчик, который подгружает модули по требованию
+-- Решает проблему "Out of local registers" путем разбиения кода на модули
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+-- Система модулей
+local ModuleLoader = {}
+local LoadedModules = {}
+local ModuleCache = {}
+
+-- Базовый URL для GitHub raw файлов (замените на ваш репозиторий)
+local GITHUB_BASE_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/modules/"
+
+-- Функция загрузки модуля
+function ModuleLoader.loadModule(moduleName, forceReload)
+    -- Проверяем кэш
+    if not forceReload and LoadedModules[moduleName] then
+        print("MODULE: Модуль", moduleName, "уже загружен из кэша")
+        return LoadedModules[moduleName]
+    end
+    
+    print("MODULE: Загружаем модуль", moduleName, "...")
+    
+    local url = GITHUB_BASE_URL .. moduleName .. ".lua"
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if not success then
+        warn("MODULE: Не удалось загрузить модуль", moduleName, ":", response)
+        return nil
+    end
+    
+    -- Компилируем и выполняем модуль
+    local moduleFunc, compileError = loadstring(response)
+    if not moduleFunc then
+        warn("MODULE: Ошибка компиляции модуля", moduleName, ":", compileError)
+        return nil
+    end
+    
+    -- Выполняем модуль
+    local executeSuccess, moduleResult = pcall(moduleFunc)
+    if not executeSuccess then
+        warn("MODULE: Ошибка выполнения модуля", moduleName, ":", moduleResult)
+        return nil
+    end
+    
+    -- Сохраняем в кэш
+    LoadedModules[moduleName] = moduleResult or true
+    print("MODULE: ✅ Модуль", moduleName, "успешно загружен")
+    
+    return LoadedModules[moduleName]
+end
+
+-- Функция для перезагрузки модуля
+function ModuleLoader.reloadModule(moduleName)
+    LoadedModules[moduleName] = nil
+    return ModuleLoader.loadModule(moduleName, true)
+end
+
+-- Функция для проверки загруженности модуля
+function ModuleLoader.isLoaded(moduleName)
+    return LoadedModules[moduleName] ~= nil
+end
+
+-- Общие сервисы (используются всеми модулями)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Глобальные переменные для совместного использования модулями
+_G.ModuleLoader = ModuleLoader
+_G.LoadedModules = LoadedModules
+
+-- Базовые конфиги (легкие, не вызывают проблем с registers)
+_G.BaseConfig = {
+    Version = "1.0.0",
+    Author = "YourName",
+    ScriptName = "Modular Script",
+    
+    -- URLs модулей
+    Modules = {
+        GUI = "gui_module",
+        Movement = "movement_module", 
+        YBA = "yba_module",
+        Autofarm = "autofarm_module",
+        AntiTimeStop = "antitimestop_module",
+        Teleport = "teleport_module",
+        ESP = "esp_module"
+    },
+    
+    -- Настройки автозагрузки
+    AutoLoad = {
+        GUI = true,      -- GUI всегда нужно загружать
+        Movement = false, -- Загружается по требованию
+        YBA = false,
+        Autofarm = false,
+        AntiTimeStop = false,
+        Teleport = false,
+        ESP = false
+    }
+}
+
+-- Система событий для связи между модулями
+_G.ModuleEvents = {}
+
+function _G.ModuleEvents.fire(eventName, ...)
+    local listeners = _G.ModuleEvents[eventName]
+    if listeners then
+        for _, callback in pairs(listeners) do
+            pcall(callback, ...)
+        end
+    end
+end
+
+function _G.ModuleEvents.connect(eventName, callback)
+    if not _G.ModuleEvents[eventName] then
+        _G.ModuleEvents[eventName] = {}
+    end
+    table.insert(_G.ModuleEvents[eventName], callback)
+end
+
+-- Утилиты для модулей
+_G.ModuleUtils = {
+    Services = {
+        Players = Players,
+        RunService = RunService,
+        UserInputService = UserInputService,
+        TweenService = TweenService,
+        CoreGui = CoreGui
+    },
+    
+    -- Безопасная функция для создания соединений
+    safeConnect = function(signal, callback)
+        local success, connection = pcall(function()
+            return signal:Connect(callback)
+        end)
+        return success and connection or nil
+    end,
+    
+    -- Функция для очистки соединений
+    cleanupConnections = function(connections)
+        for _, connection in pairs(connections or {}) do
+            if connection and typeof(connection) == "RBXScriptConnection" then
+                pcall(function() connection:Disconnect() end)
+            end
+        end
+    end
+}
+
+print("=== MODULAR SCRIPT LOADER ===")
+print("Версия:", _G.BaseConfig.Version)
+print("Автор:", _G.BaseConfig.Author)
+
+-- Автозагрузка критически важных модулей
+print("Начинаем автозагрузку модулей...")
+
+-- Загружаем GUI модуль (обязательно)
+if _G.BaseConfig.AutoLoad.GUI then
+    task.spawn(function()
+        task.wait(0.1) -- Небольшая задержка для инициализации
+        local gui = ModuleLoader.loadModule(_G.BaseConfig.Modules.GUI)
+        if gui then
+            print("✅ GUI модуль загружен и готов к работе")
+            _G.ModuleEvents.fire("GUILoaded", gui)
+        else
+            warn("❌ Не удалось загрузить GUI модуль")
+        end
+    end)
+end
+
+-- Функция для ленивой загрузки модулей
+function _G.loadModuleOnDemand(moduleName)
+    local moduleKey = _G.BaseConfig.Modules[moduleName]
+    if moduleKey then
+        return ModuleLoader.loadModule(moduleKey)
+    else
+        warn("MODULE: Неизвестный модуль:", moduleName)
+        return nil
+    end
+end
+
+-- Команды для отладки модулей
+_G.ModuleCommands = {
+    load = function(moduleName)
+        return _G.loadModuleOnDemand(moduleName)
+    end,
+    
+    reload = function(moduleName)
+        local moduleKey = _G.BaseConfig.Modules[moduleName]
+        if moduleKey then
+            return ModuleLoader.reloadModule(moduleKey)
+        end
+        return nil
+    end,
+    
+    list = function()
+        print("=== ЗАГРУЖЕННЫЕ МОДУЛИ ===")
+        for name, module in pairs(LoadedModules) do
+            print("✅", name, typeof(module))
+        end
+        print("=== ДОСТУПНЫЕ МОДУЛИ ===") 
+        for name, key in pairs(_G.BaseConfig.Modules) do
+            local loaded = LoadedModules[key] and "✅" or "⬜"
+            print(loaded, name, "(" .. key .. ")")
+        end
+    end,
+    
+    status = function()
+        print("=== СТАТУС СИСТЕМЫ МОДУЛЕЙ ===")
+        print("Загружено модулей:", #LoadedModules)
+        print("Доступно модулей:", #_G.BaseConfig.Modules)
+        print("База URL:", GITHUB_BASE_URL)
+    end
+}
+
+-- Регистрируем команды в _G для легкого доступа из консоли
+_G.ml = _G.ModuleCommands.load
+_G.mr = _G.ModuleCommands.reload  
+_G.mlist = _G.ModuleCommands.list
+_G.mstatus = _G.ModuleCommands.status
+
+print("✅ Система модулей инициализирована!")
+print("💡 Используйте _G.ml('ModuleName') для загрузки модулей")
+print("💡 Используйте _G.mlist() для просмотра статуса модулей")
+print("💡 Доступные модули:", table.concat({"GUI", "Movement", "YBA", "Autofarm", "AntiTimeStop", "Teleport", "ESP"}, ", "))
+
+return ModuleLoader
