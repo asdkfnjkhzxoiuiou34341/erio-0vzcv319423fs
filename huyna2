@@ -4194,20 +4194,43 @@ local function findAutofarmItems()
                 itemName = "Mysterious Arrow"
             end
             if not shouldSkipItem and AutofarmConfig.Items[itemName] then
-                -- Ищем WorldPivot позицию
+                -- Ищем позицию в model -> MeshPart -> BodyPosition.Position
                 local worldPivot = nil
-                if model.WorldPivot then
-                    worldPivot = model.WorldPivot.Position
-                elseif model.PrimaryPart then
-                    worldPivot = model.PrimaryPart.Position
-                elseif model:FindFirstChild("HumanoidRootPart") then
-                    worldPivot = model.HumanoidRootPart.Position
-                else
-                    -- Ищем любую Part
-                    for _, child in ipairs(model:GetDescendants()) do
-                        if child:IsA("BasePart") then
-                            worldPivot = child.Position
-                            break
+                
+                -- Ищем первую папку MeshPart в model
+                local meshPart = nil
+                for _, child in ipairs(model:GetChildren()) do
+                    if child:IsA("MeshPart") then
+                        meshPart = child
+                        break
+                    end
+                end
+                
+                if meshPart then
+                    -- Ищем BodyPosition в MeshPart
+                    local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+                    if bodyPosition and bodyPosition.Position then
+                        worldPivot = bodyPosition.Position
+                        print("AUTOFARM: Найдена позиция через BodyPosition:", worldPivot)
+                    end
+                end
+                
+                -- Fallback: если не найден BodyPosition, используем старую логику
+                if not worldPivot then
+                    print("AUTOFARM: BodyPosition не найден, используем fallback логику для", itemName)
+                    if model.WorldPivot then
+                        worldPivot = model.WorldPivot.Position
+                    elseif model.PrimaryPart then
+                        worldPivot = model.PrimaryPart.Position
+                    elseif model:FindFirstChild("HumanoidRootPart") then
+                        worldPivot = model.HumanoidRootPart.Position
+                    else
+                        -- Ищем любую Part
+                        for _, child in ipairs(model:GetDescendants()) do
+                            if child:IsA("BasePart") then
+                                worldPivot = child.Position
+                                break
+                            end
                         end
                     end
                 end
