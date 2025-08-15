@@ -4214,6 +4214,12 @@ local function findAutofarmItems()
                 goto continue
             end
             
+            -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: проверяем что ProximityPrompt активен
+            if proximityPrompt.Enabled == false then
+                print("AUTOFARM: ⚠️ Предмет", model.Name, "имеет неактивный ProximityPrompt - пропускаем (баганый)")
+                goto continue
+            end
+            
             -- Получаем название предмета из ProximityPrompt
             local itemName = proximityPrompt.ObjectText or proximityPrompt.ActionText or model.Name
             
@@ -4486,7 +4492,7 @@ local function pickupItem(item)
             return
         end
         
-        -- Проверяем что предмет еще физически существует
+        -- Проверяем что предмет еще физически существует и имеет активный ProximityPrompt
         local itemStillExists = false
         pcall(function()
             if item.Model and item.Model.Parent then
@@ -4499,7 +4505,12 @@ local function pickupItem(item)
                             break
                         end
                     end
-                    itemStillExists = hasPhysicalParts
+                    
+                    -- Дополнительно проверяем ProximityPrompt
+                    local proximityPrompt = item.Model:FindFirstChild("ProximityPrompt")
+                    if hasPhysicalParts and proximityPrompt and proximityPrompt.Enabled then
+                        itemStillExists = true
+                    end
                 end
             end
         end)
@@ -4589,6 +4600,13 @@ local function pickupItem(item)
             -- Если сделали 2 попытки, переходим к следующему предмету
             if attempts >= maxAttempts then
                 print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- переходим к следующему")
+                
+                -- ОТМЕЧАЕМ предмет как попробованный (даже если не удалось подобрать)
+                if item.Key then
+                    autofarmAttemptedItems[item.Key] = true
+                    print("AUTOFARM: Отмечаем предмет", item.Name, "как попробованный (после неудачных попыток)")
+                end
+                
                 pickupConnection:Disconnect()
                 autofarmPickingUp = false
                 
@@ -4642,6 +4660,12 @@ local function pickupItem(item)
                     )
                 end)
                 isKeyPressed = false
+            end
+            
+            -- ОТМЕЧАЕМ предмет как попробованный при таймауте
+            if item.Key then
+                autofarmAttemptedItems[item.Key] = true
+                print("AUTOFARM: Отмечаем предмет", item.Name, "как попробованный (таймаут)")
             end
             
             pickupConnection:Disconnect()
@@ -4698,7 +4722,10 @@ function processNextItem()
     
     -- Сканируем новые предметы
     local items = findAutofarmItems()
+    print("AUTOFARM: Найдено", #items, "предметов для подбора")
+    
     if #items == 0 then
+        print("AUTOFARM: Нет доступных предметов для подбора - ждем и сканируем снова")
         -- Если нет доступных предметов, ждем и сканируем снова
         task.spawn(function()
             task.wait(AutofarmConfig.ScanInterval)
