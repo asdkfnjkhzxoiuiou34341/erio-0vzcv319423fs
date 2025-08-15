@@ -266,8 +266,6 @@ local itemESPEnabled = false
 -- Player ESP variables
 local playerESPConnections = {}
 local playerESPElements = {}
-local userStandESPEnabled = false
-local userStyleESPEnabled = false
 
 -- Autofarm variables
 local isAutofarmEnabled = false
@@ -3061,37 +3059,7 @@ FOVCircle.Visible = false
 
 
 local function getName(p)
-    local playerName = p.Name
-    
-    -- Получаем информацию о стенде из Players>[игрок]>PlayerStats>Stand
-    if userStandESPEnabled then
-        local playerStats = Players:FindFirstChild(p.Name)
-        if playerStats then
-            local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
-            if playerStatsFolder then
-                local stand = playerStatsFolder:FindFirstChild("Stand")
-                if stand and stand.Value and stand.Value ~= "" then
-                    playerName = playerName .. " | " .. stand.Value
-                end
-            end
-        end
-    end
-    
-    -- Получаем информацию о стиле из Players>[игрок]>PlayerStats>Spec
-    if userStyleESPEnabled then
-        local playerStats = Players:FindFirstChild(p.Name)
-        if playerStats then
-            local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
-            if playerStatsFolder then
-                local spec = playerStatsFolder:FindFirstChild("Spec")
-                if spec and spec.Value and spec.Value ~= "" then
-                    playerName = playerName .. " | " .. spec.Value
-                end
-            end
-        end
-    end
-    
-    return playerName
+    return p.Name
 end
 local function getHealth(p)
     local h = p.Character and p.Character:FindFirstChild("Humanoid")
@@ -4137,25 +4105,21 @@ end
 
 -- Простые функции управления Player ESP
 
--- Функции для User Stand ESP
+-- Функции для User Stand ESP (заглушки)
 local function startUserStandESP()
-    userStandESPEnabled = true
     print("YBA Player ESP: User Stand ESP активирован")
 end
 
 local function stopUserStandESP()
-    userStandESPEnabled = false
     print("YBA Player ESP: User Stand ESP деактивирован")
 end
 
--- Функции для User Style ESP
+-- Функции для User Style ESP (заглушки)
 local function startUserStyleESP()
-    userStyleESPEnabled = true
     print("YBA Player ESP: User Style ESP активирован")
 end
 
 local function stopUserStyleESP()
-    userStyleESPEnabled = false
     print("YBA Player ESP: User Style ESP деактивирован")
 end
 
