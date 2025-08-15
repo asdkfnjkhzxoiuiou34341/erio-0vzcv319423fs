@@ -278,7 +278,6 @@ local autofarmLastPickupTime = 0 -- Время последнего подбор
 local autofarmRestartTimer = nil -- Таймер для автоматического перезапуска через 60 секунд
 local autofarmAutoRestarting = false -- Флаг автоматического перезапуска
 local autofarmDeathCheckConnection = nil -- Отслеживание смерти для автофарма
-local autofarmAttemptedItems = {} -- Предметы, которые уже пытались подбирать
 
 -- Глобальные переменные для отслеживания состояния функций перед смертью
 -- Они позволяют восстановить состояние после возрождения
@@ -4203,7 +4202,6 @@ local function findAutofarmItems()
     
     print("AUTOFARM: Папки найдены, сканируем модели...")
     local foundCount = 0
-    local validItemsCount = 0
     
     for _, model in ipairs(itemsFolder:GetChildren()) do
         if model:IsA("Model") then
@@ -4260,28 +4258,17 @@ local function findAutofarmItems()
                 
                 if worldPivot then
                     local distance = (worldPivot - playerRoot.Position).Magnitude
-                    foundCount = foundCount + 1
-                    
-                    -- СОЗДАЕМ УНИКАЛЬНЫЙ КЛЮЧ для предмета
-                    local itemKey = getItemKey({Name = itemName, Position = worldPivot})
-                    
-                    -- ПРОВЕРЯЕМ не пытались ли уже подбирать этот предмет
-                    if autofarmAttemptedItems[itemKey] then
-                        print("AUTOFARM: ⏭️ Предмет", itemName, "уже пытались подбирать - пропускаем")
-                        goto continue
-                    end
                     
                     local tempItem = {
                         Name = itemName,
                         Position = worldPivot,
                         Distance = distance,
                         Model = model,
-                        ProximityPrompt = proximityPrompt,
-                        Key = itemKey
+                        ProximityPrompt = proximityPrompt
                     }
-                    print("AUTOFARM: 🎯 Найден НОВЫЙ предмет", itemName, "на расстоянии", math.floor(distance), "м")
+                    print("AUTOFARM: 🎯 Найден предмет", itemName, "на расстоянии", math.floor(distance), "м")
                     table.insert(items, tempItem)
-                    validItemsCount = validItemsCount + 1
+                    foundCount = foundCount + 1
                 end
             end -- Закрываем if AutofarmConfig.Items[itemName] then
         end
@@ -4292,7 +4279,7 @@ local function findAutofarmItems()
     -- Сортируем по расстоянию (ближайшие первыми)
     table.sort(items, function(a, b) return a.Distance < b.Distance end)
     
-    print("AUTOFARM: Найдено", foundCount, "предметов, из них", validItemsCount, "новых для подбора")
+    print("AUTOFARM: Найдено", foundCount, "предметов для подбора")
     return items
 end
 
@@ -4429,11 +4416,7 @@ local function pickupItem(item)
         return
     end
     
-    -- ОТМЕЧАЕМ предмет как попробованный
-    if item.Key then
-        autofarmAttemptedItems[item.Key] = true
-        print("AUTOFARM: Отмечаем предмет", item.Name, "как попробованный")
-    end
+    -- Начинаем подбор предмета
     
     autofarmPickingUp = true
     
@@ -4599,13 +4582,7 @@ local function pickupItem(item)
             
             -- Если сделали 2 попытки, переходим к следующему предмету
             if attempts >= maxAttempts then
-                print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- переходим к следующему")
-                
-                -- ОТМЕЧАЕМ предмет как попробованный (даже если не удалось подобрать)
-                if item.Key then
-                    autofarmAttemptedItems[item.Key] = true
-                    print("AUTOFARM: Отмечаем предмет", item.Name, "как попробованный (после неудачных попыток)")
-                end
+                print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- ЗАБИВАЕМ ХУЙ и летим дальше")
                 
                 pickupConnection:Disconnect()
                 autofarmPickingUp = false
@@ -4662,11 +4639,7 @@ local function pickupItem(item)
                 isKeyPressed = false
             end
             
-            -- ОТМЕЧАЕМ предмет как попробованный при таймауте
-            if item.Key then
-                autofarmAttemptedItems[item.Key] = true
-                print("AUTOFARM: Отмечаем предмет", item.Name, "как попробованный (таймаут)")
-            end
+            -- Таймаут - забиваем хуй на этот предмет
             
             pickupConnection:Disconnect()
             autofarmPickingUp = false
@@ -5010,9 +4983,7 @@ function startAutofarm()
         end
     end)
     
-    -- Очищаем список попробованных предметов при запуске
-    autofarmAttemptedItems = {}
-    print("🤖 AUTOFARM: Список попробованных предметов очищен")
+    -- Запускаем автофарм
     
     -- НОВОЕ: Принудительная прогрузка карты перед началом фарма
     task.spawn(function()
@@ -5044,9 +5015,7 @@ function stopAutofarm()
     autofarmPickingUp = false
     autofarmCurrentTarget = nil
     
-    -- Очищаем список попробованных предметов
-    autofarmAttemptedItems = {}
-    print("🤖 AUTOFARM: Список попробованных предметов очищен")
+    -- Останавливаем автофарм
     
     -- Отменяем автоматический перезапуск если он был запланирован
     if autofarmAutoRestarting then
