@@ -4882,38 +4882,38 @@ function processNextItem()
     
     local targetPosition = nextItem.Position  -- Начальная позиция для этапов 1 и 2
     pcall(function()
-        moveToPosition(targetPosition, function(), nextItem)  -- Передаем nextItem для динамического отслеживания
-        if isAutofarmEnabled then
-            local itemExistsAfterFlight = false
-            pcall(function()
-                if nextItem.Model and nextItem.Model.Parent then
-                    local worldPivot = nextItem.Model:GetPivot()
-                    if worldPivot and worldPivot.Position and worldPivot.Position.Magnitude > 0 then
-                        local hasPhysicalParts = false
-                        for _, child in pairs(nextItem.Model:GetChildren()) do
-                            if child:IsA("BasePart") and child.Size.Magnitude > 0 then
-                                hasPhysicalParts = true
-                                break
+        moveToPosition(targetPosition, function()
+            if isAutofarmEnabled then
+                local itemExistsAfterFlight = false
+                pcall(function()
+                    if nextItem.Model and nextItem.Model.Parent then
+                        local worldPivot = nextItem.Model:GetPivot()
+                        if worldPivot and worldPivot.Position and worldPivot.Position.Magnitude > 0 then
+                            local hasPhysicalParts = false
+                            for _, child in pairs(nextItem.Model:GetChildren()) do
+                                if child:IsA("BasePart") and child.Size.Magnitude > 0 then
+                                    hasPhysicalParts = true
+                                    break
+                                end
                             end
+                            itemExistsAfterFlight = hasPhysicalParts
                         end
-                        itemExistsAfterFlight = hasPhysicalParts
-                    end
-                end
-            end)
-            
-            if itemExistsAfterFlight then
-                pickupItem(nextItem)
-            else
-                print("AUTOFARM: Предмет", nextItem.Name, "исчез ПОСЛЕ полета (нет физических частей) - сразу ищем следующий")
-                task.spawn(function()
-                    task.wait(0.1)
-                    if isAutofarmEnabled then
-                        processNextItem()
                     end
                 end)
+                
+                if itemExistsAfterFlight then
+                    pickupItem(nextItem)
+                else
+                    print("AUTOFARM: Предмет", nextItem.Name, "исчез ПОСЛЕ полета (нет физических частей) - сразу ищем следующий")
+                    task.spawn(function()
+                        task.wait(0.1)
+                        if isAutofarmEnabled then
+                            processNextItem()
+                        end
+                    end)
+                end
             end
-        end
-        end)
+        end, nextItem)  -- Передаем nextItem как третий параметр
     end)
 end
 
