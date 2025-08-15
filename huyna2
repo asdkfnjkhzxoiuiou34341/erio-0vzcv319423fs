@@ -266,6 +266,8 @@ local itemESPEnabled = false
 -- Player ESP variables
 local playerESPConnections = {}
 local playerESPElements = {}
+local userStandESPEnabled = false
+local userStyleESPEnabled = false
 
 -- Autofarm variables
 local isAutofarmEnabled = false
@@ -3059,66 +3061,37 @@ FOVCircle.Visible = false
 
 
 local function getName(p)
-    local playerName = p.Name
-    
-    print("DEBUG: Проверяем игрока:", p.Name)
-    
-    -- Получаем информацию о стенде из Players>[игрок]>PlayerStats>stand
+    return p.Name
+end
+
+-- Функция для получения информации о стенде игрока
+local function getPlayerStand(p)
     local playerStats = Players:FindFirstChild(p.Name)
     if playerStats then
-        print("DEBUG: Найден объект игрока в Players для", p.Name)
-        
         local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
         if playerStatsFolder then
-            print("DEBUG: Найдена папка PlayerStats для", p.Name)
-            
             local stand = playerStatsFolder:FindFirstChild("Stand")
-            if stand then
-                print("DEBUG: Найден объект Stand для", p.Name)
-                print("DEBUG: Тип Stand:", typeof(stand))
-                print("DEBUG: Свойства Stand:", stand:GetChildren())
-                
-                local standName = stand.Value
-                print("DEBUG: Значение Stand.Value:", standName)
-                
-                if standName and standName ~= "" then
-                    playerName = playerName .. " | " .. standName
-                    print("DEBUG: Найден стенд для", p.Name, ":", standName)
-                end
-            else
-                print("DEBUG: Stand не найден для", p.Name)
-                print("DEBUG: Содержимое PlayerStats:", playerStatsFolder:GetChildren())
+            if stand and stand.Value and stand.Value ~= "" then
+                return stand.Value
             end
-        else
-            print("DEBUG: PlayerStats папка не найдена для", p.Name)
-            print("DEBUG: Содержимое объекта игрока:", playerStats:GetChildren())
         end
-    else
-        print("DEBUG: Игрок не найден в Players для", p.Name)
-        print("DEBUG: Все игроки в Players:", Players:GetChildren())
     end
-    
-    -- Получаем информацию о стиле из Players>[игрок]>PlayerStats>spec
+    return nil
+end
+
+-- Функция для получения информации о стиле игрока
+local function getPlayerStyle(p)
+    local playerStats = Players:FindFirstChild(p.Name)
     if playerStats then
         local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
         if playerStatsFolder then
             local spec = playerStatsFolder:FindFirstChild("Spec")
-            if spec then
-                print("DEBUG: Найден объект Spec для", p.Name)
-                print("DEBUG: Значение Spec.Value:", spec.Value)
-                
-                local specName = spec.Value
-                if specName and specName ~= "" then
-                    playerName = playerName .. " | " .. specName
-                    print("DEBUG: Найден стиль для", p.Name, ":", specName)
-                end
-            else
-                print("DEBUG: Spec не найден для", p.Name)
+            if spec and spec.Value and spec.Value ~= "" then
+                return spec.Value
             end
         end
     end
-    
-    return playerName
+    return nil
 end
 local function getHealth(p)
     local h = p.Character and p.Character:FindFirstChild("Humanoid")
@@ -3175,6 +3148,22 @@ local function createOrUpdateESP(p)
     end
     
     local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
+    
+    -- Добавляем информацию о стенде, если тумблер включен
+    if userStandESPEnabled then
+        local standName = getPlayerStand(p)
+        if standName then
+            baseText = baseText .. " | " .. standName
+        end
+    end
+    
+    -- Добавляем информацию о стиле, если тумблер включен
+    if userStyleESPEnabled then
+        local styleName = getPlayerStyle(p)
+        if styleName then
+            baseText = baseText .. " | " .. styleName
+        end
+    end
     
     d.tl.Text = baseText
 end
@@ -4164,22 +4153,26 @@ end
 
 -- Простые функции управления Player ESP
 
--- Функции для User Stand ESP (заглушки, так как логика уже в getName)
+-- Функции для User Stand ESP
 local function startUserStandESP()
-    print("YBA Player ESP: User Stand ESP активирован (информация уже включена в Player ESP)")
+    userStandESPEnabled = true
+    print("YBA Player ESP: User Stand ESP активирован")
 end
 
 local function stopUserStandESP()
-    print("YBA Player ESP: User Stand ESP деактивирован (информация уже включена в Player ESP)")
+    userStandESPEnabled = false
+    print("YBA Player ESP: User Stand ESP деактивирован")
 end
 
--- Функции для User Style ESP (заглушки, так как логика уже в getName)
+-- Функции для User Style ESP
 local function startUserStyleESP()
-    print("YBA Player ESP: User Style ESP активирован (информация уже включена в Player ESP)")
+    userStyleESPEnabled = true
+    print("YBA Player ESP: User Style ESP активирован")
 end
 
 local function stopUserStyleESP()
-    print("YBA Player ESP: User Style ESP деактивирован (информация уже включена в Player ESP)")
+    userStyleESPEnabled = false
+    print("YBA Player ESP: User Style ESP деактивирован")
 end
 
 -- Autofarm Functions
