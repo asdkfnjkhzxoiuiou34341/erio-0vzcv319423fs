@@ -4126,11 +4126,23 @@ end
 
 -- Простые функции управления Player ESP
 
+-- Функции для User Stand ESP (заглушки, так как логика уже в getName)
+local function startUserStandESP()
+    print("YBA Player ESP: User Stand ESP активирован (информация уже включена в Player ESP)")
+end
 
+local function stopUserStandESP()
+    print("YBA Player ESP: User Stand ESP деактивирован (информация уже включена в Player ESP)")
+end
 
+-- Функции для User Style ESP (заглушки, так как логика уже в getName)
+local function startUserStyleESP()
+    print("YBA Player ESP: User Style ESP активирован (информация уже включена в Player ESP)")
+end
 
-
-
+local function stopUserStyleESP()
+    print("YBA Player ESP: User Style ESP деактивирован (информация уже включена в Player ESP)")
+end
 
 -- Autofarm Functions
 -- Функция создания уникального ключа предмета
