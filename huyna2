@@ -3062,33 +3062,41 @@ local function getName(p)
     local playerName = p.Name
     
     -- Получаем информацию о стенде из Players>[игрок]>PlayerStats>stand
-    local playerStats = p:FindFirstChild("PlayerStats")
+    local playerStats = Players:FindFirstChild(p.Name)
     if playerStats then
-        local stand = playerStats:FindFirstChild("stand")
-        if stand then
-            local standName = stand.Value or stand.Name
-            if standName and standName ~= "" then
-                playerName = playerName .. " | " .. standName
-                print("DEBUG: Найден стенд для", p.Name, ":", standName)
+        local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
+        if playerStatsFolder then
+            local stand = playerStatsFolder:FindFirstChild("stand")
+            if stand then
+                local standName = stand.Value or stand.Name
+                if standName and standName ~= "" then
+                    playerName = playerName .. " | " .. standName
+                    print("DEBUG: Найден стенд для", p.Name, ":", standName)
+                end
+            else
+                print("DEBUG: Стенд не найден для", p.Name)
             end
         else
-            print("DEBUG: Стенд не найден для", p.Name)
+            print("DEBUG: PlayerStats папка не найдена для", p.Name)
         end
     else
-        print("DEBUG: PlayerStats не найден для", p.Name)
+        print("DEBUG: Игрок не найден в Players для", p.Name)
     end
     
     -- Получаем информацию о стиле из Players>[игрок]>PlayerStats>spec
     if playerStats then
-        local spec = playerStats:FindFirstChild("spec")
-        if spec then
-            local specName = spec.Value or spec.Name
-            if specName and specName ~= "" then
-                playerName = playerName .. " | " .. specName
-                print("DEBUG: Найден стиль для", p.Name, ":", specName)
+        local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
+        if playerStatsFolder then
+            local spec = playerStatsFolder:FindFirstChild("spec")
+            if spec then
+                local specName = spec.Value or spec.Name
+                if specName and specName ~= "" then
+                    playerName = playerName .. " | " .. specName
+                    print("DEBUG: Найден стиль для", p.Name, ":", specName)
+                end
+            else
+                print("DEBUG: Стиль не найден для", p.Name)
             end
-        else
-            print("DEBUG: Стиль не найден для", p.Name)
         end
     end
     
