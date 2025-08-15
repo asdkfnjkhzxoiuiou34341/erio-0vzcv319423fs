@@ -4841,7 +4841,7 @@ function processNextItem()
     
     print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
     
-    local targetPosition = Vector3.new(nextItem.Position.X, nextItem.Position.Y - 2, nextItem.Position.Z)
+    local targetPosition = nextItem.Position  -- Убираем двойной отступ - отступ -2 применяется в moveToPosition
     pcall(function()
         moveToPosition(targetPosition, function()
         if isAutofarmEnabled then
