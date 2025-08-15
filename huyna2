@@ -4571,7 +4571,7 @@ local function pickupItem(item)
             -- ОПТИМИЗИРОВАНО: Ждем пока предмет исчезнет или максимум 3 секунды
             task.spawn(function()
                 local waitStartTime = tick()
-                local maxWaitTime = 5 -- максимум 3 секунды ожидания
+                local maxWaitTime = 1 -- максимум 3 секунды ожидания
                 
                 -- Активно проверяем исчез ли предмет
                 while isAutofarmEnabled and (tick() - waitStartTime) < maxWaitTime do
@@ -4591,7 +4591,7 @@ local function pickupItem(item)
                         break
                     end
                     
-                    task.wait(0.5) -- проверяем каждые 0.1 секунды
+                    task.wait(0.1) -- проверяем каждые 0.1 секунды
                 end
                 
                 if isAutofarmEnabled then
