@@ -3061,8 +3061,8 @@ FOVCircle.Visible = false
 local function getName(p)
     local playerName = p.Name
     
-    -- Получаем информацию о стенде из players>[игрок]>playerstats>stand
-    local playerStats = p:FindFirstChild("playerstats")
+    -- Получаем информацию о стенде из Players>[игрок]>PlayerStats>stand
+    local playerStats = p:FindFirstChild("PlayerStats")
     if playerStats then
         local stand = playerStats:FindFirstChild("stand")
         if stand then
@@ -3075,10 +3075,10 @@ local function getName(p)
             print("DEBUG: Стенд не найден для", p.Name)
         end
     else
-        print("DEBUG: playerstats не найден для", p.Name)
+        print("DEBUG: PlayerStats не найден для", p.Name)
     end
     
-    -- Получаем информацию о стиле из players>[игрок]>playerstats>spec
+    -- Получаем информацию о стиле из Players>[игрок]>PlayerStats>spec
     if playerStats then
         local spec = playerStats:FindFirstChild("spec")
         if spec then
@@ -3151,7 +3151,6 @@ local function createOrUpdateESP(p)
     local baseText = string.format("%s | HP:%d | %dm", getName(p), getHealth(p), distance)
     
     d.tl.Text = baseText
-    print("DEBUG: ESP текст для", p.Name, ":", baseText)
 end
 
 local function removeESP(p)
