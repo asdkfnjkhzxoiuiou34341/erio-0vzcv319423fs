@@ -1,0 +1,999 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+
+local Config = {
+    ESP = {
+        Enabled     = true,
+        TeamCheck   = false,
+        ShowOutline = true,
+        ShowLines   = false,
+        Rainbow     = false,
+        FillColor   = Color3.fromRGB(255,255,255),
+        OutlineColor= Color3.fromRGB(255,255,255),
+        TextColor   = Color3.fromRGB(255,255,255),
+        LineColor   = Color3.fromRGB(255,255,255),
+        FillTransparency    = 0.5,
+        OutlineTransparency = 0,
+        Font        = Enum.Font.SciFi,
+        TeamColor   = Color3.fromRGB(0,255,0),
+        EnemyColor  = Color3.fromRGB(255,0,0),
+        ToggleKey   = nil,
+    },
+    Aimbot = {
+        Enabled         = false,
+        TeamCheck       = false,
+        VisibilityCheck = true,
+        FOV             = 150,
+        ToggleKey       = nil,
+        FOVColor        = Color3.fromRGB(255,128,128),
+        FOVRainbow      = false,
+    },
+    MenuCollapsed = false,
+}
+
+
+local MovementConfig = {
+    Fly = {Enabled = false, Speed = 1, ToggleKey = nil},
+    NoClip = {Enabled = false, ToggleKey = nil, ForceToggleKey = nil},
+    Speed = {Enabled = false, Speed = 1, ToggleKey = nil, UseJumpPower = false},
+    LongJump = {Enabled = false, JumpPower = 150, ToggleKey = nil},
+    InfiniteJump = {Enabled = false, JumpPower = 50, ToggleKey = nil},
+}
+
+
+local TeleportConfig = {
+    Enabled = false,
+    TargetPlayer = nil,
+    OriginalPosition = nil,
+    ToggleKey = nil,
+    SelectedPlayerName = nil,
+    UseStealthMode = true,
+    TeleportSpeed = 2000,
+    ReturnSpeed = 2400,
+    BehindPlayerDistance = 2.6,
+    StabilizationTime = 0.25,
+    MaxSpeedResetTime = 2.0,
+    SpeedResetThreshold = 50,
+    InstantTurnSpeed = 600,
+    SmoothingFactor = 0.2,
+    MaxCorrectionSpeed = 180,
+    StabilizationThreshold = 0.9,
+}
+
+local YBAConfig = {
+    Enabled = false,
+    ToggleKey = nil,
+    StandRange = 500,
+    FreezePlayer = true,
+    SwitchCamera = true,
+    TransferControl = true,
+    AutoFindStands = true,
+    MaxStandDistance = 50,
+    CameraDistance = 12,
+    CameraHeight = 8,
+    StandControlSpeed = 1.0,
+    StandControlSmoothing = 0.1,
+    MouseSensitivity = 0.01,
+    CameraSmoothing = 0.08,
+    CameraFollowDistance = 20.2,
+    CameraFollowHeight = 6.1,
+    MouseLookSensitivity = 0.003,
+    StandRotationSpeed = 0.05,
+    UndergroundControl = {
+        FlightSpeed = 40,
+        AutoNoClip = true,
+        OriginalPosition = nil,
+    },
+    ItemESP = {
+        Enabled = false,
+        ToggleKey = nil,
+        MaxDistance = 1000,
+        MaxRenderDistance = 5000,
+        UpdateInterval = 0.3,
+        ShowOutline = true,
+        ShowText = true,
+        ShowFill = true,
+        FillColor = Color3.fromRGB(255, 215, 0),
+        OutlineColor = Color3.fromRGB(255, 255, 0),
+        TextColor = Color3.fromRGB(255, 255, 255),
+        TextBackgroundColor = Color3.fromRGB(0, 0, 0),
+        FillTransparency = 0.3,
+        OutlineTransparency = 0.1,
+        TextBackgroundTransparency = 0.3,
+        TextSize = 10,
+        DistanceTextSize = 9,
+        Font = Enum.Font.GothamBold,
+        Items = {
+            ["Mysterious Arrow"] = true,
+            ["Rokakaka"] = true,
+            ["Pure Rokakaka"] = true,
+            ["Diamond"] = true,
+            ["Gold Coin"] = true,
+            ["Steel Ball"] = true,
+            ["Clackers"] = true,
+            ["Caesar's Headband"] = true,
+            ["Zeppeli's Hat"] = true,
+            ["Zeppeli's Scarf"] = true,
+            ["Ancient Scroll"] = true,
+            ["Quinton's Glove"] = true,
+            ["Stone Mask"] = true,
+            ["Lucky Arrow"] = true,
+            ["Lucky Stone Mask"] = true,
+            ["Rib Cage of The Saint's Corpse"] = true,
+            ["DIO's Diary"] = true,
+        }
+    }
+}
+
+local AntiTimeStopConfig = {
+    Enabled = false,
+    ToggleKey = nil,
+    MovementSpeed = 1.5,
+    JumpPower = 50,
+    WalkSpeed = 16,
+    AutoActivate = true,
+    DetectionRange = 100,
+    VisualEffect = true,
+    SoundEffect = false,
+    AntiFreeze = true,
+    TimeStopBypass = true,
+    MovementOverride = true,
+    DisableOnAttack = true,
+    ServerSync = true,
+}
+
+local AutofarmConfig = {
+    Enabled = false,
+    ToggleKey = nil,
+    UseFlightMovement = true,
+    UseNoClipMovement = true,
+    FlightSpeed = 100,
+    PickupRadius = 8,
+    PickupDuration = 0.25,
+    PickupKey = Enum.KeyCode.E,
+    ScanInterval = 1,
+    Items = {
+        ["Mysterious Arrow"] = true,
+        ["Rokakaka"] = true,
+        ["Pure Rokakaka"] = true,
+        ["Diamond"] = true,
+        ["Gold Coin"] = true,
+        ["Steel Ball"] = true,
+        ["Clackers"] = true,
+        ["Caesar's Headband"] = true,
+        ["Zeppeli's Hat"] = true,
+        ["Zeppeli's Scarf"] = true,
+        ["Ancient Scroll"] = true,
+        ["Quinton's Glove"] = false,
+        ["Stone Mask"] = true,
+        ["Lucky Arrow"] = true,
+        ["Lucky Stone Mask"] = true,
+        ["Rib Cage of The Saint's Corpse"] = true,
+        ["DIO's Diary"] = true,
+        ["Dio's Diary"] = true,
+    }
+}
+
+-- Global variables
+local isFlying = false
+local flyConnections = {}
+local originalGravity = workspace.Gravity
+local isNoClipping = false
+local noClipConnections = {}
+local isSpeedHacking = false
+local speedHackConnections = {}
+local originalWalkSpeed = 16
+local originalJumpPower = 50
+local isLongJumping = false
+local longJumpConnections = {}
+local originalLongJumpPower = 50
+local isUndergroundControlEnabled = false
+local undergroundControlConnections = {}
+local controlledStandForUnderground = nil
+local isShiftPressed = false
+local isInfiniteJumping = false
+local infiniteJumpConnections = {}
+local lastJumpTime = 0
+local isTeleporting = false
+local teleportConnections = {}
+local playerSelectionWindow = nil
+local lastTeleportPosition = nil
+local stabilizationStartTime = nil
+local isStabilizing = false
+local speedResetTimer = 0
+local lastSpeedCheck = tick()
+local lastBehindDistance = 0
+local lastUpdateTime = tick()
+local isYBAEnabled = false
+local ybaConnections = {}
+local originalPlayerPosition = nil
+local originalPlayerCFrame = nil
+local originalCameraCFrame = nil
+local controlledStand = nil
+local standControlConnections = {}
+local originalYBAWalkSpeed = 16
+local originalYBAJumpPower = 50
+local isAntiTimeStopEnabled = false
+local antiTimeStopConnections = {}
+local originalAntiTimeStopWalkSpeed = 16
+local originalAntiTimeStopJumpPower = 50
+local timeStopDetected = false
+local timeStopStartTime = 0
+local timeStopDuration = 0
+local antiTimeStopEffect = nil
+local isStandControlActive = false
+local currentControlledStand = nil
+local standCameraConnections = {}
+local originalStandCameraCFrame = nil
+local standControlActive = false
+local freeCameraActive = false
+local freeCameraConnections = {}
+local freeCameraRotation = Vector2.new(0, 0)
+local freeCameraDistance = 10
+local freeCameraHeight = 5
+local freeCameraTarget = nil
+local freeCameraLastMousePos = Vector2.new(0, 0)
+local lastCameraUpdate = nil
+local isInputBeingProcessedByGame = false
+local itemESPConnections = {}
+local itemESPElements = {}
+local itemESPEnabled = false
+local playerESPConnections = {}
+local playerESPElements = {}
+
+-- Autofarm variables
+local isAutofarmEnabled = false
+local autofarmConnections = {}
+local autofarmCurrentTarget = nil
+local autofarmItemQueue = {}
+local autofarmOriginalPosition = nil
+local autofarmPickingUp = false
+local autofarmSkippedItems = {}
+local autofarmItemAttempts = {}
+local autofarmSkippedReturns = {}
+local autofarmLastPickupTime = 0
+local autofarmRestartTimer = nil
+local autofarmAutoRestarting = false
+local autofarmDeathCheckConnection = nil
+local wasAutofarmEnabledBeforeDeath = false
+local wasAutosellEnabledBeforeDeath = false
+local deathTrackingActive = false
+local respawnHandler = nil
+
+-- GUI elements
+local teleportBtn = nil
+local MenuSettings = {
+    BlurEnabled = true,
+    AccentColor = Color3.fromRGB(0, 150, 0),
+    Language = "English",
+}
+
+-- Placeholder for translation function  
+local function getText(key) return key end
+
+-- GUI Variables - will be initialized in createGUI function
+local screenGui = nil
+local mainFrame = nil
+local leftPanel = nil
+local rightPanel = nil
+local functionsContainer = nil
+local contentTitle = nil
+local glassEffect = nil
+local glassBorder = nil
+local selectedTab = "Main"
+
+-- GUI helper functions
+local function updateBlurEffect()
+    if glassEffect then
+        glassEffect.Visible = MenuSettings.BlurEnabled
+    end
+    if glassBorder then
+        glassBorder.Transparency = MenuSettings.BlurEnabled and 0.7 or 1
+    end
+    if rightPanel then
+        rightPanel.BackgroundTransparency = MenuSettings.BlurEnabled and 0.15 or 0.05
+    end
+end
+
+local function updateAccentColor()
+    local reopenButton = screenGui and screenGui:FindFirstChild("ReopenButton")
+    if reopenButton then
+        reopenButton.BackgroundColor3 = MenuSettings.AccentColor
+    end
+    
+    if functionsContainer then
+        for _, child in pairs(functionsContainer:GetChildren()) do
+            if child:IsA("Frame") then
+                local sliderBack = child:FindFirstChild("SliderBack")
+                if sliderBack and sliderBack.BackgroundColor3 ~= Color3.fromRGB(100, 100, 100) then
+                    sliderBack.BackgroundColor3 = MenuSettings.AccentColor
+                end
+            end
+        end
+    end
+    
+    if leftPanel then
+        for _, btn in pairs(leftPanel:GetChildren()) do
+            if btn:IsA("TextButton") and btn.BackgroundColor3 == Color3.fromRGB(40, 40, 45) then
+                local highlight = btn:FindFirstChild("Highlight")
+                if highlight then
+                    highlight.BackgroundColor3 = MenuSettings.AccentColor
+                end
+            end
+        end
+    end
+end
+
+local function updateAllTexts()
+    if contentTitle then
+        if selectedTab == "Main" then
+            contentTitle.Text = getText("MainFunctions")
+        elseif selectedTab == "YBA Hacks" then
+            contentTitle.Text = getText("YBAHacks")
+        elseif selectedTab == "Settings" then
+            contentTitle.Text = getText("MenuSettings")
+        end
+    end
+    
+    -- Will call showContent when it's defined
+    if showContent then
+        showContent(selectedTab)
+    end
+end
+
+-- Essential utility functions that need to be here for everything to work
+local function getCurrentItemPosition(item)
+    if not item or not item.Model then
+        return nil
+    end
+    
+    -- Ищем первую папку MeshPart в model
+    local meshPart = nil
+    for _, child in ipairs(item.Model:GetChildren()) do
+        if child:IsA("MeshPart") then
+            meshPart = child
+            break
+        end
+    end
+    
+    if meshPart then
+        -- Ищем BodyPosition в MeshPart
+        local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+        if bodyPosition and bodyPosition.Position then
+            return bodyPosition.Position
+        end
+    end
+    
+    -- Fallback к статичной позиции предмета
+    return item.Position
+end
+
+-- Additional variables that will be needed by GUI functions
+local currentY = 0
+local padding = 5
+local tabScrollPositions = {}
+
+-- Forward declarations for GUI functions that will be defined later
+local createKeyBindButton, createDivider, createSectionHeader, createToggleSlider
+local createColorPicker, createSlider, createSpeedInput, createDropdown
+local startFly, stopFly, startNoClip, stopNoClip, startSpeedHack, stopSpeedHack
+local startLongJump, stopLongJump, startInfiniteJump, stopInfiniteJump
+local startTeleport, stopTeleport, startYBA, stopYBA, startAntiTimeStop, stopAntiTimeStop
+local startAutofarm, stopAutofarm, startItemESP, stopItemESP
+
+-- Separated content functions to reduce local variable count
+local function showMainContent()
+    contentTitle.Text = getText("MainFunctions")
+    
+    -- Hotkeys section
+    createKeyBindButton("ESP", Config.ESP.ToggleKey, function(newKey)
+        Config.ESP.ToggleKey = newKey
+    end)
+    
+    createKeyBindButton("Aimbot", Config.Aimbot.ToggleKey, function(newKey)
+        Config.Aimbot.ToggleKey = newKey
+    end)
+    
+    createKeyBindButton("Fly", MovementConfig.Fly.ToggleKey, function(newKey)
+        MovementConfig.Fly.ToggleKey = newKey
+    end)
+    
+    createKeyBindButton("NoClip", MovementConfig.NoClip.ToggleKey, function(newKey)
+        MovementConfig.NoClip.ToggleKey = newKey
+    end)
+    
+    createKeyBindButton("SpeedHack", MovementConfig.Speed.ToggleKey, function(newKey)
+        MovementConfig.Speed.ToggleKey = newKey
+    end)
+    
+    createKeyBindButton("Teleport", TeleportConfig.ToggleKey, function(newKey)
+        TeleportConfig.ToggleKey = newKey
+    end)
+    
+    createDivider()
+end
+
+local function showMainESPSettings()
+    createSectionHeader("🔷ESP Settings")
+    createToggleSlider(getText("ESP"), Config.ESP.Enabled, function(v) Config.ESP.Enabled = v end)
+    createToggleSlider(getText("TeamCheck"), Config.ESP.TeamCheck, function(v) Config.ESP.TeamCheck = v end)
+    createToggleSlider(getText("ShowOutline"), Config.ESP.ShowOutline, function(v) Config.ESP.ShowOutline = v end)
+    createToggleSlider(getText("ShowLines"), Config.ESP.ShowLines, function(v) Config.ESP.ShowLines = v end)
+    createToggleSlider(getText("RainbowColors"), Config.ESP.Rainbow, function(v) Config.ESP.Rainbow = v end)
+    
+    createColorPicker("Fill Color", Config.ESP.FillColor, function(c) Config.ESP.FillColor = c end)
+    createColorPicker("Outline Color", Config.ESP.OutlineColor, function(c) Config.ESP.OutlineColor = c end)
+    createColorPicker("Text Color", Config.ESP.TextColor, function(c) Config.ESP.TextColor = c end)
+    createSlider("Fill Transparency", 0, 1, Config.ESP.FillTransparency, function(v) Config.ESP.FillTransparency = v end)
+    createSlider("Outline Transparency", 0, 1, Config.ESP.OutlineTransparency, function(v) Config.ESP.OutlineTransparency = v end)
+    createDivider()
+end
+
+local function showMainAimbotSettings()
+    createSectionHeader("🔷Aimbot Settings")
+    createToggleSlider(getText("Aimbot"), Config.Aimbot.Enabled, function(v) Config.Aimbot.Enabled = v end)
+    createToggleSlider(getText("TeamCheck"), Config.Aimbot.TeamCheck, function(v) Config.Aimbot.TeamCheck = v end)
+    createToggleSlider(getText("VisibilityCheck"), Config.Aimbot.VisibilityCheck, function(v) Config.Aimbot.VisibilityCheck = v end)
+    createSlider("FOV Radius", 10, 500, Config.Aimbot.FOV, function(v) Config.Aimbot.FOV = v end)
+    createToggleSlider(getText("FOVRainbow"), Config.Aimbot.FOVRainbow, function(v) Config.Aimbot.FOVRainbow = v end)
+    createColorPicker("Aimbot FOV Color", Config.Aimbot.FOVColor, function(c) Config.Aimbot.FOVColor = c end)
+    createDivider()
+end
+
+local function showMainMovementSettings()
+    -- Fly Settings
+    createSectionHeader("🟨 Fly Settings")
+    createToggleSlider("Fly", MovementConfig.Fly.Enabled, function(v)
+        MovementConfig.Fly.Enabled = v
+        if v then startFly() else stopFly() end
+    end)
+    
+    createSlider("Fly Speed", 0.1, 10, MovementConfig.Fly.Speed, function(v)
+        MovementConfig.Fly.Speed = v
+    end)
+    
+    createSpeedInput("Custom Fly Speed", MovementConfig.Fly.Speed, function(v)
+        MovementConfig.Fly.Speed = v
+    end)
+    
+    createDivider()
+    
+    -- NoClip Settings
+    createSectionHeader("🟪 NoClip Settings")
+    local noClipStatusLabel = Instance.new("TextLabel", functionsContainer)
+    noClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
+    noClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
+    noClipStatusLabel.Text = "NoClip Status: " .. (isNoClipping and "ON" or "OFF")
+    noClipStatusLabel.Font = Enum.Font.GothamBold
+    noClipStatusLabel.TextSize = 12
+    noClipStatusLabel.TextColor3 = isNoClipping and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
+    noClipStatusLabel.BackgroundTransparency = 1
+    noClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    currentY = currentY + 20 + padding
+    
+    createToggleSlider("Force NoClip", isNoClipping, function(v)
+        if v then
+            startNoClip()
+            noClipStatusLabel.Text = "NoClip Status: ON"
+            noClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
+        else
+            stopNoClip()
+            noClipStatusLabel.Text = "NoClip Status: OFF"
+            noClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
+        end
+    end)
+    
+    createDivider()
+end
+
+local function showMainSpeedSettings()
+    createSectionHeader("🟦 SpeedHack Settings")
+    createToggleSlider("SpeedHack", MovementConfig.Speed.Enabled, function(v)
+        MovementConfig.Speed.Enabled = v
+        if v then startSpeedHack() else stopSpeedHack() end
+    end)
+    
+    createToggleSlider("Use JumpPower Method", MovementConfig.Speed.UseJumpPower, function(v)
+        MovementConfig.Speed.UseJumpPower = v
+        if MovementConfig.Speed.Enabled then
+            stopSpeedHack()
+            startSpeedHack()
+        end
+    end)
+    
+    createSlider("SpeedHack Speed", 0.1, 10, MovementConfig.Speed.Speed, function(v)
+        MovementConfig.Speed.Speed = v
+        if MovementConfig.Speed.Enabled then
+            local char = Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = v * 16
+                if MovementConfig.Speed.UseJumpPower then
+                    hum.JumpPower = v * 50
+                end
+            end
+        end
+    end)
+    
+    createSpeedInput("Custom SpeedHack Speed", MovementConfig.Speed.Speed, function(v)
+        MovementConfig.Speed.Speed = v
+        if MovementConfig.Speed.Enabled then
+            local char = Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = v * 16
+                if MovementConfig.Speed.UseJumpPower then
+                    hum.JumpPower = v * 50
+                end
+            end
+        end
+    end)
+    
+    createDivider()
+end
+
+local function showMainJumpSettings()
+    createSectionHeader("🦘 Jump Settings")
+    createToggleSlider(getText("LongJump"), MovementConfig.LongJump.Enabled, function(v)
+        MovementConfig.LongJump.Enabled = v
+        if v then startLongJump() else stopLongJump() end
+    end)
+    
+    createSlider("Long Jump Power", 50, 500, MovementConfig.LongJump.JumpPower, function(v)
+        MovementConfig.LongJump.JumpPower = v
+        if MovementConfig.LongJump.Enabled then
+            local char = Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.JumpPower = v
+            end
+        end
+    end)
+    
+    createToggleSlider(getText("InfiniteJump"), MovementConfig.InfiniteJump.Enabled, function(v)
+        MovementConfig.InfiniteJump.Enabled = v
+        if v then startInfiniteJump() else stopInfiniteJump() end
+    end)
+    
+    createSlider("Infinite Jump Power", 20, 150, MovementConfig.InfiniteJump.JumpPower, function(v)
+        MovementConfig.InfiniteJump.JumpPower = v
+    end)
+    
+    createDivider()
+end
+
+-- Simplified showContent function that calls modular functions
+function showContent(tabName)
+    -- Сохраняем текущую позицию прокрутки
+    if selectedTab and scrollFrame then
+        tabScrollPositions[selectedTab] = scrollFrame.CanvasPosition.Y
+    end
+    
+    -- Очищаем контейнер и сбрасываем позицию
+    for _, child in pairs(functionsContainer:GetChildren()) do
+        child:Destroy()
+    end
+    currentY = 0
+    
+    if tabName == "Main" then
+        showMainContent()
+        showMainESPSettings()
+        showMainAimbotSettings()
+        showMainMovementSettings()
+        showMainSpeedSettings()
+        showMainJumpSettings()
+        -- Additional sections would be added here...
+        
+    elseif tabName == "YBA Hacks" then
+        -- Will implement YBA content in separate function
+        contentTitle.Text = getText("YBAHacks")
+        createSectionHeader("🔶 YBA Stand Range")
+        createToggleSlider("Stand Range Hack", YBAConfig.Enabled, function(v)
+            YBAConfig.Enabled = v
+            if v then startYBA() else stopYBA() end
+        end)
+        -- More YBA settings...
+        
+    elseif tabName == "Settings" then
+        -- Will implement Settings content in separate function
+        contentTitle.Text = getText("MenuSettings")
+        createSectionHeader("🛠️ Menu Settings")
+        createToggleSlider(getText("BlurEffect"), MenuSettings.BlurEnabled, function(v)
+            MenuSettings.BlurEnabled = v
+            updateBlurEffect()
+        end)
+        -- More settings...
+        
+    end
+    
+    functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+    selectedTab = tabName
+    
+    if scrollFrame and tabScrollPositions[tabName] then
+        scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+    end
+end
+
+-- Placeholder function implementations - these will be properly implemented later
+local function createPlaceholderFunction(name)
+    return function(...)
+        print("Placeholder function called:", name)
+    end
+end
+
+createKeyBindButton = createPlaceholderFunction("createKeyBindButton")
+createDivider = createPlaceholderFunction("createDivider") 
+createSectionHeader = createPlaceholderFunction("createSectionHeader")
+createToggleSlider = createPlaceholderFunction("createToggleSlider")
+createColorPicker = createPlaceholderFunction("createColorPicker")
+createSlider = createPlaceholderFunction("createSlider")
+createSpeedInput = createPlaceholderFunction("createSpeedInput")
+createDropdown = createPlaceholderFunction("createDropdown")
+
+startFly = createPlaceholderFunction("startFly")
+stopFly = createPlaceholderFunction("stopFly")
+startNoClip = createPlaceholderFunction("startNoClip")
+stopNoClip = createPlaceholderFunction("stopNoClip")
+startSpeedHack = createPlaceholderFunction("startSpeedHack")
+stopSpeedHack = createPlaceholderFunction("stopSpeedHack")
+startLongJump = createPlaceholderFunction("startLongJump")
+stopLongJump = createPlaceholderFunction("stopLongJump")
+startInfiniteJump = createPlaceholderFunction("startInfiniteJump")
+stopInfiniteJump = createPlaceholderFunction("stopInfiniteJump")
+startTeleport = createPlaceholderFunction("startTeleport")
+stopTeleport = createPlaceholderFunction("stopTeleport")
+startYBA = createPlaceholderFunction("startYBA")
+stopYBA = createPlaceholderFunction("stopYBA")
+startAntiTimeStop = createPlaceholderFunction("startAntiTimeStop")
+stopAntiTimeStop = createPlaceholderFunction("stopAntiTimeStop")
+startAutofarm = createPlaceholderFunction("startAutofarm")
+stopAutofarm = createPlaceholderFunction("stopAutofarm")
+startItemESP = createPlaceholderFunction("startItemESP")
+stopItemESP = createPlaceholderFunction("stopItemESP")
+
+-- Core autofarm functions with improved position tracking
+local function getItemKey(item)
+    return item.Name .. "_" .. tostring(item.Position.X) .. "_" .. tostring(item.Position.Z)
+end
+
+local function resetItemAttempts(itemKey)
+    autofarmItemAttempts[itemKey] = nil
+end
+
+local function incrementItemAttempts(itemKey)
+    autofarmItemAttempts[itemKey] = (autofarmItemAttempts[itemKey] or 0) + 1
+    return autofarmItemAttempts[itemKey]
+end
+
+local function isItemMaxAttempts(itemKey)
+    return (autofarmItemAttempts[itemKey] or 0) >= 3
+end
+
+local function findAutofarmItems()
+    local items = {}
+    local player = Players.LocalPlayer
+    local playerChar = player.Character
+    local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+    if not playerRoot then 
+        print("AUTOFARM: Игрок не найден")
+        return items 
+    end
+
+    print("AUTOFARM: Начинаем поиск предметов...")
+    local foundCount = 0
+
+    for _, model in pairs(workspace:GetChildren()) do
+        if model:IsA("Model") then
+            local proximityPrompt = model:FindFirstChild("ProximityPrompt")
+            local itemName = model.Name
+            
+            if proximityPrompt then
+                itemName = proximityPrompt.ObjectText or proximityPrompt.ActionText or model.Name
+            end
+            
+            -- Дополнительная проверка для дневника ДИО (разные варианты названий)
+            if itemName == "Dio's Diary" and AutofarmConfig.Items["DIO's Diary"] then
+                itemName = "DIO's Diary"
+            end
+            
+            -- Стандартизируем название стрел
+            local shouldSkipItem = false
+            if string.find(string.lower(itemName), "arrow") and not AutofarmConfig.Items["Mysterious Arrow"] then
+                shouldSkipItem = true
+            end
+            
+            if not shouldSkipItem and string.find(string.lower(itemName), "arrow") and itemName ~= "Mysterious Arrow" then
+                itemName = "Mysterious Arrow"
+            end
+            
+            if not shouldSkipItem and AutofarmConfig.Items[itemName] then
+                -- Ищем позицию в model -> MeshPart -> BodyPosition.Position
+                local worldPivot = nil
+                
+                -- Ищем первую папку MeshPart в model
+                local meshPart = nil
+                for _, child in ipairs(model:GetChildren()) do
+                    if child:IsA("MeshPart") then
+                        meshPart = child
+                        break
+                    end
+                end
+                
+                if meshPart then
+                    -- Ищем BodyPosition в MeshPart
+                    local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+                    if bodyPosition and bodyPosition.Position then
+                        worldPivot = bodyPosition.Position
+                        print("AUTOFARM: Найдена позиция через BodyPosition:", worldPivot)
+                    end
+                end
+                
+                -- Fallback: если не найден BodyPosition, используем старую логику
+                if not worldPivot then
+                    print("AUTOFARM: BodyPosition не найден, используем fallback логику для", itemName)
+                    if model.WorldPivot then
+                        worldPivot = model.WorldPivot.Position
+                    elseif model.PrimaryPart then
+                        worldPivot = model.PrimaryPart.Position
+                    elseif model:FindFirstChild("HumanoidRootPart") then
+                        worldPivot = model.HumanoidRootPart.Position
+                    else
+                        -- Ищем любую Part
+                        for _, child in ipairs(model:GetDescendants()) do
+                            if child:IsA("BasePart") then
+                                worldPivot = child.Position
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if worldPivot then
+                    local distance = (worldPivot - playerRoot.Position).Magnitude
+                    foundCount = foundCount + 1
+                    local tempItem = {
+                        Name = itemName,
+                        Position = worldPivot,
+                        Distance = distance,
+                        Model = model,
+                        ProximityPrompt = proximityPrompt
+                    }
+                    local itemKey = getItemKey(tempItem)
+                    
+                    -- Проверяем не превышено ли количество попыток
+                    if not isItemMaxAttempts(itemKey) then
+                        -- Логируем только первую попытку для предмета, чтобы не спамить
+                        if (autofarmItemAttempts[itemKey] or 0) == 0 then
+                            print("AUTOFARM: 🎯 Найден предмет", itemName, "на расстоянии", math.floor(distance), "м")
+                        end
+                        table.insert(items, tempItem)
+                    else
+                        print("AUTOFARM: Предмет", itemName, "пропущен - превышено количество попыток (3/3)")
+                        autofarmSkippedItems[itemKey] = tempItem
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Сортируем по расстоянию (ближайшие первыми)
+    table.sort(items, function(a, b) return a.Distance < b.Distance end)
+    
+    return items
+end
+
+local function moveToPosition(targetPosition, callback, trackingItem)
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character then
+        print("AUTOFARM: Персонаж не найден")
+        return false
+    end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        print("AUTOFARM: HumanoidRootPart не найден")
+        return false
+    end
+    
+    -- Включаем NoClip для прохода через землю
+    if AutofarmConfig.UseNoClipMovement and not isNoClipping then
+        if startNoClip then
+            startNoClip()
+            print("AUTOFARM: NoClip включен для трёхэтапного движения")
+        end
+    end
+    
+    -- Настраиваем персонажа для полета
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = 0
+        humanoid.JumpHeight = 0
+        humanoid.HipHeight = 0
+    end
+    
+    -- Создаем BodyVelocity для движения
+    local bodyVelocity = humanoidRootPart:FindFirstChild("AutofarmBodyVelocity")
+    if not bodyVelocity then
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Name = "AutofarmBodyVelocity"
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Parent = humanoidRootPart
+    end
+    
+    -- Отключаем гравитацию если нужно
+    if AutofarmConfig.UseFlightMovement then
+        workspace.Gravity = 0
+        print("AUTOFARM: Гравитация отключена")
+    end
+    
+    -- ТРЁХЭТАПНОЕ ДВИЖЕНИЕ:
+    -- Этап 1: Спуск на Y = -70
+    -- Этап 2: Полёт по X,Z к предмету
+    -- Этап 3: Подъём по Y до предмета с отступом -2
+    
+    local currentStage = 1
+    local currentPos = humanoidRootPart.Position
+    local stage1Target = Vector3.new(currentPos.X, -70, currentPos.Z)
+    local stage2Target = Vector3.new(targetPosition.X, -70, targetPosition.Z)
+    local stage3Target = Vector3.new(targetPosition.X, targetPosition.Y - 2, targetPosition.Z)
+    
+    print("AUTOFARM: 🎯 Трёхэтапное движение к позиции", targetPosition)
+    print("AUTOFARM: Этап 1: Спуск на Y=-70 ->", stage1Target)
+    print("AUTOFARM: Этап 2: Полёт по X,Z ->", stage2Target) 
+    print("AUTOFARM: Этап 3: Подъём к предмету ->", stage3Target)
+    
+    local moveConnection
+    
+    moveConnection = RunService.Heartbeat:Connect(function()
+        if not isAutofarmEnabled then
+            -- При отключении автофарма очищаем BodyVelocity
+            if bodyVelocity and bodyVelocity.Parent then
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity:Destroy()
+            end
+            moveConnection:Disconnect()
+            return
+        end
+        
+        local currentPos = humanoidRootPart.Position
+        local currentTarget
+        
+        -- Определяем текущую цель в зависимости от этапа
+        if currentStage == 1 then
+            currentTarget = stage1Target
+        elseif currentStage == 2 then
+            currentTarget = stage2Target
+        else
+            -- Этап 3: динамически обновляем позицию предмета если передан trackingItem
+            if trackingItem then
+                local currentItemPos = getCurrentItemPosition(trackingItem)
+                if currentItemPos then
+                    local newTarget = Vector3.new(currentItemPos.X, currentItemPos.Y - 2, currentItemPos.Z)
+                    -- Логируем изменения позиции только если они значительные
+                    if (newTarget - stage3Target).Magnitude > 0.5 then
+                        print("AUTOFARM: 📍 Позиция предмета изменилась:", currentItemPos, "-> цель:", newTarget)
+                    end
+                    stage3Target = newTarget
+                end
+            end
+            currentTarget = stage3Target
+        end
+        
+        local distance = (currentTarget - currentPos).Magnitude
+        
+        if distance > 0.3 then
+            local direction = (currentTarget - currentPos).Unit
+            local dynamicSpeed = math.max(20, math.min(AutofarmConfig.FlightSpeed * 8, distance * 25))
+            local moveVector = direction * dynamicSpeed
+            bodyVelocity.Velocity = moveVector
+        else
+            -- Достигли текущего этапа
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            
+            if currentStage == 1 then
+                print("AUTOFARM: ✅ Этап 1 завершён - спустились на Y=-70")
+                currentStage = 2
+            elseif currentStage == 2 then
+                print("AUTOFARM: ✅ Этап 2 завершён - достигли позиции по X,Z")
+                currentStage = 3
+            else
+                -- Этап 3 завершён - достигли предмета
+                local finalDistance = (stage3Target - humanoidRootPart.Position).Magnitude
+                print("AUTOFARM: ✅ Этап 3 завершён - достигли предмета, расстояние:", math.floor(finalDistance * 10) / 10, "м")
+                
+                moveConnection:Disconnect()
+                if callback then
+                    callback()
+                end
+            end
+        end
+    end)
+    
+    table.insert(autofarmConnections, moveConnection)
+    return true
+end
+
+-- Simple implementations for the core functions needed
+function startAutofarm()
+    if isAutofarmEnabled then
+        print("AUTOFARM: Уже активирован!")
+        return
+    end
+    
+    isAutofarmEnabled = true
+    AutofarmConfig.Enabled = true
+    print("AUTOFARM: Активирован!")
+    
+    -- Store original position
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        autofarmOriginalPosition = character.HumanoidRootPart.Position
+    end
+    
+    -- Start processing items
+    task.spawn(function()
+        while isAutofarmEnabled do
+            local items = findAutofarmItems()
+            if #items > 0 then
+                local nextItem = items[1]
+                print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
+                
+                local targetPosition = nextItem.Position
+                pcall(function()
+                    moveToPosition(targetPosition, function()
+                        if isAutofarmEnabled then
+                            print("AUTOFARM: 🎯 Достигли предмета", nextItem.Name)
+                            -- Here would be pickup logic
+                        end
+                    end, nextItem)
+                end)
+            else
+                print("AUTOFARM: Предметы не найдены, ждем...")
+            end
+            task.wait(AutofarmConfig.ScanInterval)
+        end
+    end)
+end
+
+function stopAutofarm()
+    if not isAutofarmEnabled then
+        return
+    end
+    
+    isAutofarmEnabled = false
+    AutofarmConfig.Enabled = false
+    print("AUTOFARM: Отключен!")
+    
+    -- Clean up connections
+    for _, connection in ipairs(autofarmConnections) do
+        if connection then
+            pcall(function() connection:Disconnect() end)
+        end
+    end
+    autofarmConnections = {}
+    
+    -- Restore gravity
+    workspace.Gravity = originalGravity
+    
+    -- Clean up BodyVelocity
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local root = character.HumanoidRootPart
+        local bv = root:FindFirstChild("AutofarmBodyVelocity")
+        if bv then
+            bv:Destroy()
+        end
+    end
+end
+
+print("huyna3 refactored version loaded successfully!")

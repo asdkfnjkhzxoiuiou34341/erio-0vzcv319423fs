@@ -1,0 +1,470 @@
+-- ===== AUTOFARM MODULE =====
+-- Модуль автофарма с улучшенным отслеживанием позиций предметов
+-- Загружается отдельно через ModuleLoader для решения проблемы local registers
+
+print("🚜 Загружаем модуль Autofarm...")
+
+-- Получаем доступ к утилитам и сервисам
+local Utils = _G.ModuleUtils
+local Services = Utils.Services
+local Players = Services.Players
+local RunService = Services.RunService
+local UserInputService = Services.UserInputService
+
+-- Конфигурация автофарма
+local AutofarmConfig = {
+    Enabled = false,
+    UseFlightMovement = true,
+    UseNoClipMovement = true,
+    FlightSpeed = 100,
+    PickupRadius = 8,
+    PickupDuration = 0.25,
+    PickupKey = Enum.KeyCode.E,
+    ScanInterval = 1,
+    Items = {
+        ["Mysterious Arrow"] = true,
+        ["Rokakaka"] = true,
+        ["Pure Rokakaka"] = true,
+        ["Diamond"] = true,
+        ["Gold Coin"] = true,
+        ["Steel Ball"] = true,
+        ["Clackers"] = true,
+        ["Caesar's Headband"] = true,
+        ["Zeppeli's Hat"] = true,
+        ["Zeppeli's Scarf"] = true,
+        ["Ancient Scroll"] = true,
+        ["Quinton's Glove"] = false,
+        ["Stone Mask"] = true,
+        ["Lucky Arrow"] = true,
+        ["Lucky Stone Mask"] = true,
+        ["Rib Cage of The Saint's Corpse"] = true,
+        ["DIO's Diary"] = true,
+        ["Dio's Diary"] = true,
+    }
+}
+
+-- Переменные состояния автофарма
+local AutofarmState = {
+    isEnabled = false,
+    connections = {},
+    currentTarget = nil,
+    itemAttempts = {},
+    skippedItems = {},
+    originalPosition = nil,
+    pickingUp = false,
+    originalGravity = workspace.Gravity
+}
+
+-- Основной объект модуля
+local AutofarmModule = {}
+
+-- Утилиты для работы с предметами
+local function getItemKey(item)
+    return item.Name .. "_" .. tostring(item.Position.X) .. "_" .. tostring(item.Position.Z)
+end
+
+local function resetItemAttempts(itemKey)
+    AutofarmState.itemAttempts[itemKey] = nil
+end
+
+local function incrementItemAttempts(itemKey)
+    AutofarmState.itemAttempts[itemKey] = (AutofarmState.itemAttempts[itemKey] or 0) + 1
+    return AutofarmState.itemAttempts[itemKey]
+end
+
+local function isItemMaxAttempts(itemKey)
+    return (AutofarmState.itemAttempts[itemKey] or 0) >= 3
+end
+
+-- Функция для получения текущей позиции предмета из BodyPosition
+local function getCurrentItemPosition(item)
+    if not item or not item.Model then
+        return nil
+    end
+    
+    -- Ищем первую папку MeshPart в model
+    local meshPart = nil
+    for _, child in ipairs(item.Model:GetChildren()) do
+        if child:IsA("MeshPart") then
+            meshPart = child
+            break
+        end
+    end
+    
+    if meshPart then
+        -- Ищем BodyPosition в MeshPart
+        local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+        if bodyPosition and bodyPosition.Position then
+            return bodyPosition.Position
+        end
+    end
+    
+    -- Fallback к статичной позиции предмета
+    return item.Position
+end
+
+-- Функция поиска предметов для автофарма
+local function findAutofarmItems()
+    local items = {}
+    local player = Players.LocalPlayer
+    local playerChar = player.Character
+    local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+    if not playerRoot then 
+        print("AUTOFARM: Игрок не найден")
+        return items 
+    end
+
+    print("AUTOFARM: Начинаем поиск предметов...")
+    local foundCount = 0
+
+    for _, model in pairs(workspace:GetChildren()) do
+        if model:IsA("Model") then
+            local proximityPrompt = model:FindFirstChild("ProximityPrompt")
+            local itemName = model.Name
+            
+            if proximityPrompt then
+                itemName = proximityPrompt.ObjectText or proximityPrompt.ActionText or model.Name
+            end
+            
+            -- Дополнительная проверка для дневника ДИО (разные варианты названий)
+            if itemName == "Dio's Diary" and AutofarmConfig.Items["DIO's Diary"] then
+                itemName = "DIO's Diary"
+            end
+            
+            -- Стандартизируем название стрел
+            local shouldSkipItem = false
+            if string.find(string.lower(itemName), "arrow") and not AutofarmConfig.Items["Mysterious Arrow"] then
+                shouldSkipItem = true
+            end
+            
+            if not shouldSkipItem and string.find(string.lower(itemName), "arrow") and itemName ~= "Mysterious Arrow" then
+                itemName = "Mysterious Arrow"
+            end
+            
+            if not shouldSkipItem and AutofarmConfig.Items[itemName] then
+                -- Ищем позицию в model -> MeshPart -> BodyPosition.Position
+                local worldPivot = nil
+                
+                -- Ищем первую папку MeshPart в model
+                local meshPart = nil
+                for _, child in ipairs(model:GetChildren()) do
+                    if child:IsA("MeshPart") then
+                        meshPart = child
+                        break
+                    end
+                end
+                
+                if meshPart then
+                    -- Ищем BodyPosition в MeshPart
+                    local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+                    if bodyPosition and bodyPosition.Position then
+                        worldPivot = bodyPosition.Position
+                        print("AUTOFARM: Найдена позиция через BodyPosition:", worldPivot)
+                    end
+                end
+                
+                -- Fallback: если не найден BodyPosition, используем старую логику
+                if not worldPivot then
+                    print("AUTOFARM: BodyPosition не найден, используем fallback логику для", itemName)
+                    if model.WorldPivot then
+                        worldPivot = model.WorldPivot.Position
+                    elseif model.PrimaryPart then
+                        worldPivot = model.PrimaryPart.Position
+                    elseif model:FindFirstChild("HumanoidRootPart") then
+                        worldPivot = model.HumanoidRootPart.Position
+                    else
+                        -- Ищем любую Part
+                        for _, child in ipairs(model:GetDescendants()) do
+                            if child:IsA("BasePart") then
+                                worldPivot = child.Position
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if worldPivot then
+                    local distance = (worldPivot - playerRoot.Position).Magnitude
+                    foundCount = foundCount + 1
+                    local tempItem = {
+                        Name = itemName,
+                        Position = worldPivot,
+                        Distance = distance,
+                        Model = model,
+                        ProximityPrompt = proximityPrompt
+                    }
+                    local itemKey = getItemKey(tempItem)
+                    
+                    -- Проверяем не превышено ли количество попыток
+                    if not isItemMaxAttempts(itemKey) then
+                        -- Логируем только первую попытку для предмета, чтобы не спамить
+                        if (AutofarmState.itemAttempts[itemKey] or 0) == 0 then
+                            print("AUTOFARM: 🎯 Найден предмет", itemName, "на расстоянии", math.floor(distance), "м")
+                        end
+                        table.insert(items, tempItem)
+                    else
+                        print("AUTOFARM: Предмет", itemName, "пропущен - превышено количество попыток (3/3)")
+                        AutofarmState.skippedItems[itemKey] = tempItem
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Сортируем по расстоянию (ближайшие первыми)
+    table.sort(items, function(a, b) return a.Distance < b.Distance end)
+    
+    return items
+end
+
+-- Функция движения к позиции с динамическим отслеживанием
+local function moveToPosition(targetPosition, callback, trackingItem)
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character then
+        print("AUTOFARM: Персонаж не найден")
+        return false
+    end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        print("AUTOFARM: HumanoidRootPart не найден")
+        return false
+    end
+    
+    -- Запрашиваем NoClip у системы модулей
+    if AutofarmConfig.UseNoClipMovement then
+        _G.ModuleEvents.fire("RequestNoClip", true)
+    end
+    
+    -- Настраиваем персонажа для полета
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = 0
+        humanoid.JumpHeight = 0
+        humanoid.HipHeight = 0
+    end
+    
+    -- Создаем BodyVelocity для движения
+    local bodyVelocity = humanoidRootPart:FindFirstChild("AutofarmBodyVelocity")
+    if not bodyVelocity then
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Name = "AutofarmBodyVelocity"
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Parent = humanoidRootPart
+    end
+    
+    -- Отключаем гравитацию если нужно
+    if AutofarmConfig.UseFlightMovement then
+        workspace.Gravity = 0
+        print("AUTOFARM: Гравитация отключена")
+    end
+    
+    -- ТРЁХЭТАПНОЕ ДВИЖЕНИЕ с динамическим отслеживанием
+    local currentStage = 1
+    local currentPos = humanoidRootPart.Position
+    local stage1Target = Vector3.new(currentPos.X, -70, currentPos.Z)
+    local stage2Target = Vector3.new(targetPosition.X, -70, targetPosition.Z)
+    local stage3Target = Vector3.new(targetPosition.X, targetPosition.Y - 2, targetPosition.Z)
+    
+    print("AUTOFARM: 🎯 Трёхэтапное движение к позиции", targetPosition)
+    print("AUTOFARM: Этап 1: Спуск на Y=-70 ->", stage1Target)
+    print("AUTOFARM: Этап 2: Полёт по X,Z ->", stage2Target) 
+    print("AUTOFARM: Этап 3: Подъём к предмету ->", stage3Target)
+    
+    local moveConnection = Utils.safeConnect(RunService.Heartbeat, function()
+        if not AutofarmState.isEnabled then
+            -- При отключении автофарма очищаем BodyVelocity
+            if bodyVelocity and bodyVelocity.Parent then
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity:Destroy()
+            end
+            if moveConnection then moveConnection:Disconnect() end
+            return
+        end
+        
+        local currentPos = humanoidRootPart.Position
+        local currentTarget
+        
+        -- Определяем текущую цель в зависимости от этапа
+        if currentStage == 1 then
+            currentTarget = stage1Target
+        elseif currentStage == 2 then
+            currentTarget = stage2Target
+        else
+            -- Этап 3: динамически обновляем позицию предмета если передан trackingItem
+            if trackingItem then
+                local currentItemPos = getCurrentItemPosition(trackingItem)
+                if currentItemPos then
+                    local newTarget = Vector3.new(currentItemPos.X, currentItemPos.Y - 2, currentItemPos.Z)
+                    -- Логируем изменения позиции только если они значительные
+                    if (newTarget - stage3Target).Magnitude > 0.5 then
+                        print("AUTOFARM: 📍 Позиция предмета изменилась:", currentItemPos, "-> цель:", newTarget)
+                    end
+                    stage3Target = newTarget
+                end
+            end
+            currentTarget = stage3Target
+        end
+        
+        local distance = (currentTarget - currentPos).Magnitude
+        
+        if distance > 0.3 then
+            local direction = (currentTarget - currentPos).Unit
+            local dynamicSpeed = math.max(20, math.min(AutofarmConfig.FlightSpeed * 8, distance * 25))
+            local moveVector = direction * dynamicSpeed
+            bodyVelocity.Velocity = moveVector
+        else
+            -- Достигли текущего этапа
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            
+            if currentStage == 1 then
+                print("AUTOFARM: ✅ Этап 1 завершён - спустились на Y=-70")
+                currentStage = 2
+            elseif currentStage == 2 then
+                print("AUTOFARM: ✅ Этап 2 завершён - достигли позиции по X,Z")
+                currentStage = 3
+            else
+                -- Этап 3 завершён - достигли предмета
+                local finalDistance = (stage3Target - humanoidRootPart.Position).Magnitude
+                print("AUTOFARM: ✅ Этап 3 завершён - достигли предмета, расстояние:", math.floor(finalDistance * 10) / 10, "м")
+                
+                if moveConnection then moveConnection:Disconnect() end
+                if callback then
+                    callback()
+                end
+            end
+        end
+    end)
+    
+    if moveConnection then
+        table.insert(AutofarmState.connections, moveConnection)
+    end
+    return true
+end
+
+-- Основные функции модуля
+function AutofarmModule.start()
+    if AutofarmState.isEnabled then
+        print("AUTOFARM: Уже активирован!")
+        return false
+    end
+    
+    AutofarmState.isEnabled = true
+    AutofarmConfig.Enabled = true
+    print("AUTOFARM: 🚜 Активирован!")
+    
+    -- Сохраняем исходную позицию
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        AutofarmState.originalPosition = character.HumanoidRootPart.Position
+    end
+    
+    -- Запускаем основной цикл обработки предметов
+    task.spawn(function()
+        while AutofarmState.isEnabled do
+            local items = findAutofarmItems()
+            if #items > 0 then
+                local nextItem = items[1]
+                print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
+                
+                local targetPosition = nextItem.Position
+                pcall(function()
+                    moveToPosition(targetPosition, function()
+                        if AutofarmState.isEnabled then
+                            print("AUTOFARM: 🎯 Достигли предмета", nextItem.Name)
+                            -- Здесь будет логика подбора предмета
+                            _G.ModuleEvents.fire("ItemReached", nextItem)
+                        end
+                    end, nextItem)
+                end)
+            else
+                print("AUTOFARM: Предметы не найдены, ждем...")
+            end
+            task.wait(AutofarmConfig.ScanInterval)
+        end
+    end)
+    
+    -- Уведомляем другие модули
+    _G.ModuleEvents.fire("AutofarmStarted")
+    return true
+end
+
+function AutofarmModule.stop()
+    if not AutofarmState.isEnabled then
+        return false
+    end
+    
+    AutofarmState.isEnabled = false
+    AutofarmConfig.Enabled = false
+    print("AUTOFARM: 🛑 Отключен!")
+    
+    -- Очищаем соединения
+    Utils.cleanupConnections(AutofarmState.connections)
+    AutofarmState.connections = {}
+    
+    -- Восстанавливаем гравитацию
+    workspace.Gravity = AutofarmState.originalGravity
+    
+    -- Очищаем BodyVelocity
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local root = character.HumanoidRootPart
+        local bv = root:FindFirstChild("AutofarmBodyVelocity")
+        if bv then
+            bv:Destroy()
+        end
+    end
+    
+    -- Отключаем NoClip
+    _G.ModuleEvents.fire("RequestNoClip", false)
+    
+    -- Уведомляем другие модули
+    _G.ModuleEvents.fire("AutofarmStopped")
+    return true
+end
+
+function AutofarmModule.toggle()
+    if AutofarmState.isEnabled then
+        return AutofarmModule.stop()
+    else
+        return AutofarmModule.start()
+    end
+end
+
+function AutofarmModule.isEnabled()
+    return AutofarmState.isEnabled
+end
+
+function AutofarmModule.getConfig()
+    return AutofarmConfig
+end
+
+function AutofarmModule.setConfig(newConfig)
+    for key, value in pairs(newConfig) do
+        if AutofarmConfig[key] ~= nil then
+            AutofarmConfig[key] = value
+        end
+    end
+end
+
+function AutofarmModule.getStats()
+    return {
+        enabled = AutofarmState.isEnabled,
+        currentTarget = AutofarmState.currentTarget,
+        itemAttempts = AutofarmState.itemAttempts,
+        skippedItems = AutofarmState.skippedItems,
+        connections = #AutofarmState.connections
+    }
+end
+
+-- Регистрируем модуль в глобальной области
+_G.AutofarmModule = AutofarmModule
+
+print("✅ Модуль Autofarm загружен успешно!")
+print("💡 Используйте _G.AutofarmModule.start() для запуска")
+print("💡 Используйте _G.AutofarmModule.stop() для остановки")
+
+return AutofarmModule

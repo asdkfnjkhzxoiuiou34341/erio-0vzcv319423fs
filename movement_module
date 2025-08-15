@@ -1,0 +1,508 @@
+-- ===== MOVEMENT MODULE =====
+-- Модуль движения: NoClip, Fly, SpeedHack, Jumps
+-- Загружается отдельно через ModuleLoader
+
+print("🏃 Загружаем модуль Movement...")
+
+-- Получаем доступ к утилитам и сервисам
+local Utils = _G.ModuleUtils
+local Services = Utils.Services
+local Players = Services.Players
+local RunService = Services.RunService
+local UserInputService = Services.UserInputService
+
+-- Конфигурация движения
+local MovementConfig = {
+    Fly = {Enabled = false, Speed = 1, ToggleKey = nil},
+    NoClip = {Enabled = false, ToggleKey = nil, ForceToggleKey = nil},
+    Speed = {Enabled = false, Speed = 1, ToggleKey = nil, UseJumpPower = false},
+    LongJump = {Enabled = false, JumpPower = 150, ToggleKey = nil},
+    InfiniteJump = {Enabled = false, JumpPower = 50, ToggleKey = nil},
+}
+
+-- Состояние модулей движения
+local MovementState = {
+    isFlying = false,
+    flyConnections = {},
+    originalGravity = workspace.Gravity,
+    
+    isNoClipping = false,
+    noClipConnections = {},
+    
+    isSpeedHacking = false,
+    speedHackConnections = {},
+    originalWalkSpeed = 16,
+    originalJumpPower = 50,
+    
+    isLongJumping = false,
+    longJumpConnections = {},
+    originalLongJumpPower = 50,
+    
+    isInfiniteJumping = false,
+    infiniteJumpConnections = {},
+    lastJumpTime = 0,
+}
+
+-- Основной объект модуля
+local MovementModule = {}
+
+-- Функции Fly
+local function startFly()
+    local plr = Players.LocalPlayer
+    local char = plr.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if not hum or not root then return false end
+    
+    MovementState.isFlying = true
+    
+    local flyOriginalJumpPower = hum.JumpPower
+    local flyOriginalJumpHeight = hum.JumpHeight
+    local flyOriginalGravity = workspace.Gravity
+    local flyOriginalHipHeight = hum.HipHeight
+    
+    hum.JumpPower = 0
+    hum.JumpHeight = 0
+    workspace.Gravity = 0
+    hum.HipHeight = 0
+    
+    local ctrl = {f = 0, b = 0, l = 0, r = 0, u = 0, d = 0}
+    
+    local inputDown = Utils.safeConnect(UserInputService.InputBegan, function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.W then ctrl.f = 1
+        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = -1
+        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = -1
+        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r = 1
+        elseif input.KeyCode == Enum.KeyCode.Space then ctrl.u = 1
+        elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = -1 end
+    end)
+    
+    local inputUp = Utils.safeConnect(UserInputService.InputEnded, function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.W then ctrl.f = 0
+        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = 0
+        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = 0
+        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r = 0
+        elseif input.KeyCode == Enum.KeyCode.Space then ctrl.u = 0
+        elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = 0 end
+    end)
+    
+    local renderConnection = Utils.safeConnect(RunService.RenderStepped, function()
+        if not MovementState.isFlying or not char or not char:FindFirstChild("Humanoid") or not root then
+            if hum then
+                hum.JumpPower = flyOriginalJumpPower
+                hum.JumpHeight = flyOriginalJumpHeight
+                hum.HipHeight = flyOriginalHipHeight
+            end
+            if not MovementState.isNoClipping then
+                workspace.Gravity = flyOriginalGravity
+            end
+            
+            Utils.cleanupConnections({inputDown, inputUp, renderConnection})
+            return
+        end
+        
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        
+        local forward = cam.CFrame.lookVector
+        local right = cam.CFrame.rightVector
+        local up = Vector3.new(0, 1, 0)
+        
+        local moveVector = Vector3.new(0, 0, 0)
+        moveVector = moveVector + (forward * (ctrl.f + ctrl.b))
+        moveVector = moveVector + (right * (ctrl.r + ctrl.l))
+        moveVector = moveVector + (up * (ctrl.u + ctrl.d))
+        
+        if moveVector.Magnitude > 0 then
+            moveVector = moveVector.Unit * (MovementConfig.Fly.Speed * 10)
+            local bv = root:FindFirstChild("BodyVelocity")
+            if not bv then
+                bv = Instance.new("BodyVelocity", root)
+                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            end
+            bv.Velocity = moveVector
+        else
+            local bv = root:FindFirstChild("BodyVelocity")
+            if bv then
+                bv.Velocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+    
+    MovementState.flyConnections = {inputDown, inputUp, renderConnection}
+    return true
+end
+
+local function stopFly()
+    MovementState.isFlying = false
+    
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if hum then
+        hum.JumpPower = 50
+        hum.JumpHeight = 7.2
+        hum.HipHeight = 2
+    end
+    
+    workspace.Gravity = 196.2
+    
+    if root then
+        local bv = root:FindFirstChild("BodyVelocity")
+        if bv then
+            bv:Destroy()
+        end
+    end
+    
+    Utils.cleanupConnections(MovementState.flyConnections)
+    MovementState.flyConnections = {}
+    return true
+end
+
+-- Функции NoClip
+local function startNoClip()
+    local char = Players.LocalPlayer.Character
+    if not char then return false end
+    
+    MovementState.isNoClipping = true
+    
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = false
+        end
+    end
+    
+    local function noclip()
+        if not char or not char.Parent then return end
+        
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+    
+    local noClipLoop = Utils.safeConnect(RunService.Heartbeat, function()
+        if not MovementState.isNoClipping or not char or not char.Parent then
+            return
+        end
+        noclip()
+    end)
+    
+    local descendantAdded = Utils.safeConnect(char.DescendantAdded, function(part)
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = false
+        end
+    end)
+    
+    MovementState.noClipConnections = {noClipLoop, descendantAdded}
+    
+    task.spawn(function()
+        task.wait(0.5)
+        if MovementState.isNoClipping and char and char.Parent then
+            noclip()
+        end
+    end)
+    
+    return true
+end
+
+local function stopNoClip()
+    MovementState.isNoClipping = false
+    
+    local char = Players.LocalPlayer.Character
+    if not char then return false end
+    
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
+        end
+    end
+    
+    Utils.cleanupConnections(MovementState.noClipConnections)
+    MovementState.noClipConnections = {}
+    return true
+end
+
+-- Функции SpeedHack
+local function startSpeedHack()
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    
+    MovementState.isSpeedHacking = true
+    MovementState.originalWalkSpeed = hum.WalkSpeed
+    MovementState.originalJumpPower = hum.JumpPower
+    
+    hum.WalkSpeed = MovementConfig.Speed.Speed * 16
+    
+    if MovementConfig.Speed.UseJumpPower then
+        hum.JumpPower = MovementConfig.Speed.Speed * 50
+    end
+    
+    local characterAddedConnection = Utils.safeConnect(Players.LocalPlayer.CharacterAdded, function(newChar)
+        local newHum = newChar:WaitForChild("Humanoid")
+        if MovementState.isSpeedHacking then
+            newHum.WalkSpeed = MovementConfig.Speed.Speed * 16
+            if MovementConfig.Speed.UseJumpPower then
+                newHum.JumpPower = MovementConfig.Speed.Speed * 50
+            end
+        end
+    end)
+    
+    local speedLoop = Utils.safeConnect(RunService.Heartbeat, function()
+        if not MovementState.isSpeedHacking then return end
+        
+        local currentChar = Players.LocalPlayer.Character
+        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+        
+        if currentHum then
+            if currentHum.WalkSpeed ~= MovementConfig.Speed.Speed * 16 then
+                currentHum.WalkSpeed = MovementConfig.Speed.Speed * 16
+            end
+            
+            if MovementConfig.Speed.UseJumpPower and currentHum.JumpPower ~= MovementConfig.Speed.Speed * 50 then
+                currentHum.JumpPower = MovementConfig.Speed.Speed * 50
+            end
+        end
+    end)
+    
+    MovementState.speedHackConnections = {characterAddedConnection, speedLoop}
+    return true
+end
+
+local function stopSpeedHack()
+    MovementState.isSpeedHacking = false
+    
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.WalkSpeed = MovementState.originalWalkSpeed
+        hum.JumpPower = MovementState.originalJumpPower
+    end
+    
+    Utils.cleanupConnections(MovementState.speedHackConnections)
+    MovementState.speedHackConnections = {}
+    return true
+end
+
+-- Функции LongJump
+local function startLongJump()
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    
+    MovementState.isLongJumping = true
+    MovementState.originalLongJumpPower = hum.JumpPower
+    
+    hum.JumpPower = MovementConfig.LongJump.JumpPower
+    
+    local characterAddedConnection = Utils.safeConnect(Players.LocalPlayer.CharacterAdded, function(newChar)
+        local newHum = newChar:WaitForChild("Humanoid")
+        if MovementState.isLongJumping then
+            newHum.JumpPower = MovementConfig.LongJump.JumpPower
+        end
+    end)
+    
+    local longJumpLoop = Utils.safeConnect(RunService.Heartbeat, function()
+        if not MovementState.isLongJumping then return end
+        
+        local currentChar = Players.LocalPlayer.Character
+        local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+        
+        if currentHum and currentHum.JumpPower ~= MovementConfig.LongJump.JumpPower then
+            currentHum.JumpPower = MovementConfig.LongJump.JumpPower
+        end
+    end)
+    
+    MovementState.longJumpConnections = {characterAddedConnection, longJumpLoop}
+    return true
+end
+
+local function stopLongJump()
+    MovementState.isLongJumping = false
+    
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.JumpPower = MovementState.originalLongJumpPower
+    end
+    
+    Utils.cleanupConnections(MovementState.longJumpConnections)
+    MovementState.longJumpConnections = {}
+    return true
+end
+
+-- Функции InfiniteJump
+local function startInfiniteJump()
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return false end
+    
+    MovementState.isInfiniteJumping = true
+    MovementState.lastJumpTime = 0
+    
+    local function onJumpRequest()
+        if not MovementState.isInfiniteJumping then return end
+        
+        local currentTime = tick()
+        if currentTime - MovementState.lastJumpTime < 0.1 then return end 
+        
+        MovementState.lastJumpTime = currentTime
+        
+        local bv = Instance.new("BodyVelocity", root)
+        bv.MaxForce = Vector3.new(0, math.huge, 0)
+        bv.Velocity = Vector3.new(0, MovementConfig.InfiniteJump.JumpPower, 0)
+        
+        task.spawn(function()
+            task.wait(0.3)
+            if bv and bv.Parent then
+                bv:Destroy()
+            end
+        end)
+    end
+    
+    local jumpConnection = Utils.safeConnect(hum.Jumping, onJumpRequest)
+    
+    local inputConnection = Utils.safeConnect(UserInputService.InputBegan, function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.Space then
+            onJumpRequest()
+        end
+    end)
+    
+    local characterAddedConnection = Utils.safeConnect(Players.LocalPlayer.CharacterAdded, function(newChar)
+        if MovementState.isInfiniteJumping then
+            task.wait(1) 
+            startInfiniteJump() 
+        end
+    end)
+    
+    MovementState.infiniteJumpConnections = {jumpConnection, inputConnection, characterAddedConnection}
+    return true
+end
+
+local function stopInfiniteJump()
+    MovementState.isInfiniteJumping = false
+    MovementState.lastJumpTime = 0
+    
+    Utils.cleanupConnections(MovementState.infiniteJumpConnections)
+    MovementState.infiniteJumpConnections = {}
+    
+    local char = Players.LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        for _, child in pairs(root:GetChildren()) do
+            if child:IsA("BodyVelocity") then
+                child:Destroy()
+            end
+        end
+    end
+    return true
+end
+
+-- Основные функции модуля
+function MovementModule.fly(enabled)
+    if enabled then
+        return startFly()
+    else
+        return stopFly()
+    end
+end
+
+function MovementModule.noClip(enabled)
+    if enabled then
+        return startNoClip()
+    else
+        return stopNoClip()
+    end
+end
+
+function MovementModule.speedHack(enabled)
+    if enabled then
+        return startSpeedHack()
+    else
+        return stopSpeedHack()
+    end
+end
+
+function MovementModule.longJump(enabled)
+    if enabled then
+        return startLongJump()
+    else
+        return stopLongJump()
+    end
+end
+
+function MovementModule.infiniteJump(enabled)
+    if enabled then
+        return startInfiniteJump()
+    else
+        return stopInfiniteJump()
+    end
+end
+
+function MovementModule.getConfig()
+    return MovementConfig
+end
+
+function MovementModule.setConfig(newConfig)
+    for category, settings in pairs(newConfig) do
+        if MovementConfig[category] then
+            for key, value in pairs(settings) do
+                if MovementConfig[category][key] ~= nil then
+                    MovementConfig[category][key] = value
+                end
+            end
+        end
+    end
+end
+
+function MovementModule.getState()
+    return {
+        fly = MovementState.isFlying,
+        noClip = MovementState.isNoClipping,
+        speedHack = MovementState.isSpeedHacking,
+        longJump = MovementState.isLongJumping,
+        infiniteJump = MovementState.isInfiniteJumping
+    }
+end
+
+function MovementModule.stopAll()
+    stopFly()
+    stopNoClip()
+    stopSpeedHack()
+    stopLongJump()
+    stopInfiniteJump()
+    print("MOVEMENT: Все функции движения отключены")
+end
+
+-- Обработчики событий от других модулей
+_G.ModuleEvents.connect("RequestNoClip", function(enabled)
+    MovementModule.noClip(enabled)
+end)
+
+_G.ModuleEvents.connect("RequestFly", function(enabled)
+    MovementModule.fly(enabled)
+end)
+
+-- Регистрируем модуль в глобальной области
+_G.MovementModule = MovementModule
+
+-- Экспорт для совместимости с оригинальным кодом
+_G.startNoClip = startNoClip
+_G.stopNoClip = stopNoClip
+_G.startFly = startFly
+_G.stopFly = stopFly
+_G.isNoClipping = function() return MovementState.isNoClipping end
+_G.isFlying = function() return MovementState.isFlying end
+
+print("✅ Модуль Movement загружен успешно!")
+print("💡 Доступны функции: fly, noClip, speedHack, longJump, infiniteJump")
+
+return MovementModule
