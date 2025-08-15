@@ -3072,21 +3072,21 @@ local function getName(p)
         if playerStatsFolder then
             print("DEBUG: Найдена папка PlayerStats для", p.Name)
             
-            local stand = playerStatsFolder:FindFirstChild("stand")
+            local stand = playerStatsFolder:FindFirstChild("Stand")
             if stand then
-                print("DEBUG: Найден объект stand для", p.Name)
-                print("DEBUG: Тип stand:", typeof(stand))
-                print("DEBUG: Свойства stand:", stand:GetChildren())
+                print("DEBUG: Найден объект Stand для", p.Name)
+                print("DEBUG: Тип Stand:", typeof(stand))
+                print("DEBUG: Свойства Stand:", stand:GetChildren())
                 
                 local standName = stand.Value
-                print("DEBUG: Значение stand.Value:", standName)
+                print("DEBUG: Значение Stand.Value:", standName)
                 
                 if standName and standName ~= "" then
                     playerName = playerName .. " | " .. standName
                     print("DEBUG: Найден стенд для", p.Name, ":", standName)
                 end
             else
-                print("DEBUG: Стенд не найден для", p.Name)
+                print("DEBUG: Stand не найден для", p.Name)
                 print("DEBUG: Содержимое PlayerStats:", playerStatsFolder:GetChildren())
             end
         else
@@ -3102,10 +3102,10 @@ local function getName(p)
     if playerStats then
         local playerStatsFolder = playerStats:FindFirstChild("PlayerStats")
         if playerStatsFolder then
-            local spec = playerStatsFolder:FindFirstChild("spec")
+            local spec = playerStatsFolder:FindFirstChild("Spec")
             if spec then
-                print("DEBUG: Найден объект spec для", p.Name)
-                print("DEBUG: Значение spec.Value:", spec.Value)
+                print("DEBUG: Найден объект Spec для", p.Name)
+                print("DEBUG: Значение Spec.Value:", spec.Value)
                 
                 local specName = spec.Value
                 if specName and specName ~= "" then
@@ -3113,7 +3113,7 @@ local function getName(p)
                     print("DEBUG: Найден стиль для", p.Name, ":", specName)
                 end
             else
-                print("DEBUG: Стиль не найден для", p.Name)
+                print("DEBUG: Spec не найден для", p.Name)
             end
         end
     end
