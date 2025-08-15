@@ -4590,6 +4590,14 @@ local function pickupItem(item)
             if attempts >= maxAttempts then
                 print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- ЗАБИВАЕМ ХУЙ и летим дальше")
                 
+                -- УДАЛЯЕМ МОДЕЛЬ предмета после неудачных попыток
+                if item.Model and item.Model.Parent then
+                    print("AUTOFARM: 🗑️ Удаляем модель предмета", item.Name, "после неудачных попыток")
+                    pcall(function()
+                        item.Model:Destroy()
+                    end)
+                end
+                
                 -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
                 autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
                 print("AUTOFARM: Переходим к предмету", autofarmCurrentItemIndex)
@@ -4650,6 +4658,14 @@ local function pickupItem(item)
             end
             
             -- Таймаут - забиваем хуй на этот предмет
+            
+            -- УДАЛЯЕМ МОДЕЛЬ предмета при таймауте
+            if item.Model and item.Model.Parent then
+                print("AUTOFARM: 🗑️ Удаляем модель предмета", item.Name, "при таймауте")
+                pcall(function()
+                    item.Model:Destroy()
+                end)
+            end
             
             -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
             autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
@@ -4747,6 +4763,15 @@ function processNextItem()
     -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: предмет все еще включен в настройках автофарма
     if not AutofarmConfig.Items[nextItem.Name] then
         print("AUTOFARM: Предмет", nextItem.Name, "был отключен в настройках - пропускаем")
+        
+        -- УДАЛЯЕМ МОДЕЛЬ предмета который отключен в настройках
+        if nextItem.Model and nextItem.Model.Parent then
+            print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "отключенного в настройках")
+            pcall(function()
+                nextItem.Model:Destroy()
+            end)
+        end
+        
         autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
         task.spawn(function()
             task.wait(0.1)
@@ -4779,6 +4804,15 @@ function processNextItem()
     
     if not itemExists then
         print("AUTOFARM: Предмет", nextItem.Name, "исчез ДО начала полета (нет физических частей) - сразу ищем следующий")
+        
+        -- УДАЛЯЕМ МОДЕЛЬ предмета который не существует
+        if nextItem.Model and nextItem.Model.Parent then
+            print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "который не существует")
+            pcall(function()
+                nextItem.Model:Destroy()
+            end)
+        end
+        
         autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
         task.spawn(function()
             task.wait(0.1) -- минимальная пауза для стабилизации
@@ -4816,6 +4850,15 @@ function processNextItem()
                 pickupItem(nextItem)
             else
                 print("AUTOFARM: Предмет", nextItem.Name, "исчез ПОСЛЕ полета (нет физических частей) - сразу ищем следующий")
+                
+                -- УДАЛЯЕМ МОДЕЛЬ предмета который исчез после полета
+                if nextItem.Model and nextItem.Model.Parent then
+                    print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "который исчез после полета")
+                    pcall(function()
+                        nextItem.Model:Destroy()
+                    end)
+                end
+                
                 autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
                 task.spawn(function()
                     task.wait(0.1)
