@@ -4271,7 +4271,34 @@ local function findAutofarmItems()
     return items
 end
 
-local function moveToPosition(targetPosition, callback)
+-- Функция для получения текущей позиции предмета из BodyPosition
+local function getCurrentItemPosition(item)
+    if not item or not item.Model then
+        return nil
+    end
+    
+    -- Ищем первую папку MeshPart в model
+    local meshPart = nil
+    for _, child in ipairs(item.Model:GetChildren()) do
+        if child:IsA("MeshPart") then
+            meshPart = child
+            break
+        end
+    end
+    
+    if meshPart then
+        -- Ищем BodyPosition в MeshPart
+        local bodyPosition = meshPart:FindFirstChild("BodyPosition")
+        if bodyPosition and bodyPosition.Position then
+            return bodyPosition.Position
+        end
+    end
+    
+    -- Fallback к статичной позиции предмета
+    return item.Position
+end
+
+local function moveToPosition(targetPosition, callback, trackingItem)
     local player = Players.LocalPlayer
     local character = player.Character
     if not character then
@@ -4352,6 +4379,18 @@ local function moveToPosition(targetPosition, callback)
         elseif currentStage == 2 then
             currentTarget = stage2Target
         else
+            -- Этап 3: динамически обновляем позицию предмета если передан trackingItem
+            if trackingItem then
+                local currentItemPos = getCurrentItemPosition(trackingItem)
+                if currentItemPos then
+                    local newTarget = Vector3.new(currentItemPos.X, currentItemPos.Y - 2, currentItemPos.Z)
+                    -- Логируем изменения позиции только если они значительные
+                    if (newTarget - stage3Target).Magnitude > 0.5 then
+                        print("AUTOFARM: 📍 Позиция предмета изменилась:", currentItemPos, "-> цель:", newTarget)
+                    end
+                    stage3Target = newTarget
+                end
+            end
             currentTarget = stage3Target
         end
         
@@ -4841,9 +4880,9 @@ function processNextItem()
     
     print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
     
-    local targetPosition = nextItem.Position  -- Убираем двойной отступ - отступ -2 применяется в moveToPosition
+    local targetPosition = nextItem.Position  -- Начальная позиция для этапов 1 и 2
     pcall(function()
-        moveToPosition(targetPosition, function()
+        moveToPosition(targetPosition, function(), nextItem)  -- Передаем nextItem для динамического отслеживания
         if isAutofarmEnabled then
             local itemExistsAfterFlight = false
             pcall(function()
