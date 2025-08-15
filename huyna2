@@ -5360,24 +5360,7 @@ rightCorner.CornerRadius = UDim.new(0, 8)
 local glassCorner = Instance.new("UICorner", glassEffect)
 glassCorner.CornerRadius = UDim.new(0, 8)
 
-local closeButton = Instance.new("TextButton", rightPanel)
-closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0, 30, 0, 30)
-closeButton.Position = UDim2.new(1, -35, 0, 5)
-closeButton.Text = "X"
-closeButton.Font = Enum.Font.GothamBold
-closeButton.TextSize = 16
-closeButton.TextColor3 = Color3.new(1, 1, 1)
-closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-closeButton.BorderSizePixel = 0
-closeButton.AutoButtonColor = false
-
-local closeCorner = Instance.new("UICorner", closeButton)
-closeCorner.CornerRadius = UDim.new(0, 6)
-
-closeButton.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-end)
+-- Кнопка закрытия удалена
 
 local resizeHandle = Instance.new("Frame", mainFrame)
 resizeHandle.Name = "ResizeHandle"
