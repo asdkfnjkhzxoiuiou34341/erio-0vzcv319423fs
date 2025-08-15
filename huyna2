@@ -3068,7 +3068,7 @@ local function getName(p)
         if playerStatsFolder then
             local stand = playerStatsFolder:FindFirstChild("stand")
             if stand then
-                local standName = stand.Value or stand.Name
+                local standName = stand.Value
                 if standName and standName ~= "" then
                     playerName = playerName .. " | " .. standName
                     print("DEBUG: Найден стенд для", p.Name, ":", standName)
@@ -3089,7 +3089,7 @@ local function getName(p)
         if playerStatsFolder then
             local spec = playerStatsFolder:FindFirstChild("spec")
             if spec then
-                local specName = spec.Value or spec.Name
+                local specName = spec.Value
                 if specName and specName ~= "" then
                     playerName = playerName .. " | " .. specName
                     print("DEBUG: Найден стиль для", p.Name, ":", specName)
