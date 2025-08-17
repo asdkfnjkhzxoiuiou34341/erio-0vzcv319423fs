@@ -36,13 +36,13 @@ local RunService = game:GetService("RunService")
 -- Конфигурация автоселла с правильными лимитами
 local AutosellConfig = {
     Enabled = false,
-    ShiftploxPosition = Vector3.new(-709, -35, -332), -- позиция NPC Shiftplox (на 10 единиц ниже)
+    ShiftploxPosition = Vector3.new(-711, -35, -332), -- позиция NPC Shiftplox (на 10 единиц ниже)
     CameraWallhack = true, -- Камера смотрит сквозь стены во время автосела
     MaxItemCount = 10, -- Максимальное количество предметов для слайдера
     ItemLimits = {
         ["Mysterious Arrow"] = 25,
         ["Rokakaka"] = 25,
-        ["Pure Rokakaka"] = 25,
+        ["Pure Rokakaka"] = 10,
         ["Diamond"] = 30,
         ["Gold Coin"] = 45,
         ["Steel Ball"] = 10,
