@@ -6026,23 +6026,15 @@ function showContent(tabName)
             if not _G.YBAHacksModule then
                 print("YBA HACKS: Загружаем модуль для YBA...")
                 local success, ybaModule = pcall(function()
-                    -- Пытаемся загрузить полный модуль
-                    local ybaCode = readfile("yba_hacks_complete.lua")
+                    -- Пытаемся загрузить локальный файл
+                    local ybaCode = readfile("yba_hacks.lua")
                     return loadstring(ybaCode)()
                 end)
                 
                 if not success then
-                    -- Если полного модуля нет, пробуем обычный
-                    success, ybaModule = pcall(function()
-                        local ybaCode = readfile("yba_hacks.lua")
-                        return loadstring(ybaCode)()
-                    end)
-                end
-                
-                if not success then
                     -- Если локального файла нет, загружаем с GitHub
                     success, ybaModule = pcall(function()
-                        local ybaCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/yba_hacks_complete.lua")
+                        local ybaCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/yba_hacks.lua")
                         return loadstring(ybaCode)()
                     end)
                 end
