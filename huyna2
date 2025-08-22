@@ -67,70 +67,7 @@ local TeleportConfig = {
     StabilizationThreshold = 0.9,
 }
 
-local YBAConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    StandRange = 500, -- Уменьшили с 100000 до разумного значения
-    FreezePlayer = true,
-    SwitchCamera = true,
-    TransferControl = true,
-    AutoFindStands = true,
-    MaxStandDistance = 50, -- Уменьшили с 10000 до разумного значения
-    CameraDistance = 12, -- Уменьшили для лучшего обзора
-    CameraHeight = 8, -- Увеличили для лучшего обзора
-    StandControlSpeed = 1.0,
-    StandControlSmoothing = 0.1,
-    MouseSensitivity = 0.01,
-    CameraSmoothing = 0.08,
-    CameraFollowDistance = 20.2,
-    CameraFollowHeight = 6.1,
-    MouseLookSensitivity = 0.003,
-    StandRotationSpeed = 0.05,
-    UndergroundControl = {
-        FlightSpeed = 40, -- Дефолтная скорость полета
-        AutoNoClip = true,
-        OriginalPosition = nil,
-    },
-    ItemESP = {
-        Enabled = false,
-        ToggleKey = nil,
-        MaxDistance = 1000,
-        MaxRenderDistance = 5000,
-        UpdateInterval = 0.3,
-        ShowOutline = true,
-        ShowText = true,
-        ShowFill = true,
-        FillColor = Color3.fromRGB(255, 215, 0),
-        OutlineColor = Color3.fromRGB(255, 255, 0),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        TextBackgroundColor = Color3.fromRGB(0, 0, 0),
-        FillTransparency = 0.3,
-        OutlineTransparency = 0.1,
-        TextBackgroundTransparency = 0.3,
-        TextSize = 10,
-        DistanceTextSize = 9,
-        Font = Enum.Font.GothamBold,
-        Items = {
-            ["Mysterious Arrow"] = true,
-            ["Rokakaka"] = true,
-            ["Pure Rokakaka"] = true,
-            ["Diamond"] = true,
-            ["Gold Coin"] = true,
-            ["Steel Ball"] = true,
-            ["Clackers"] = true,
-            ["Caesar's Headband"] = true,
-            ["Zeppeli's Hat"] = true,
-            ["Zeppeli's Scarf"] = true,
-            ["Ancient Scroll"] = true,
-            ["Quinton's Glove"] = true,
-            ["Stone Mask"] = true,
-            ["Lucky Arrow"] = true,
-            ["Lucky Stone Mask"] = true,
-            ["Rib Cage of The Saint's Corpse"] = true,
-            ["DIO's Diary"] = true,
-        }
-    }
-}
+-- YBA config moved to external module
 
 local YBA_REMOTE_URL = "https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/huyna2_yba.lua"
 

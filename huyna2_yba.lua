@@ -1,3 +1,117 @@
+local YBAConfig = {
+	Enabled = false,
+	ToggleKey = nil,
+	StandRange = 500,
+	FreezePlayer = true,
+	SwitchCamera = true,
+	TransferControl = true,
+	AutoFindStands = true,
+	MaxStandDistance = 50,
+	CameraDistance = 12,
+	CameraHeight = 8,
+	StandControlSpeed = 1.0,
+	StandControlSmoothing = 0.1,
+	MouseSensitivity = 0.01,
+	CameraSmoothing = 0.08,
+	CameraFollowDistance = 20.2,
+	CameraFollowHeight = 6.1,
+	MouseLookSensitivity = 0.003,
+	StandRotationSpeed = 0.05,
+	UndergroundControl = {
+		FlightSpeed = 40,
+		AutoNoClip = true,
+		OriginalPosition = nil,
+	},
+	ItemESP = {
+		Enabled = false,
+		ToggleKey = nil,
+		MaxDistance = 1000,
+		MaxRenderDistance = 5000,
+		UpdateInterval = 0.3,
+		ShowOutline = true,
+		ShowText = true,
+		ShowFill = true,
+		FillColor = Color3.fromRGB(255, 215, 0),
+		OutlineColor = Color3.fromRGB(255, 255, 0),
+		TextColor = Color3.fromRGB(255, 255, 255),
+		TextBackgroundColor = Color3.fromRGB(0, 0, 0),
+		FillTransparency = 0.3,
+		OutlineTransparency = 0.1,
+		TextBackgroundTransparency = 0.3,
+		TextSize = 10,
+		DistanceTextSize = 9,
+		Font = Enum.Font.GothamBold,
+		Items = {
+			["Mysterious Arrow"] = true,
+			["Rokakaka"] = true,
+			["Pure Rokakaka"] = true,
+			["Diamond"] = true,
+			["Gold Coin"] = true,
+			["Steel Ball"] = true,
+			["Clackers"] = true,
+			["Caesar's Headband"] = true,
+			["Zeppeli's Hat"] = true,
+			["Zeppeli's Scarf"] = true,
+			["Ancient Scroll"] = true,
+			["Quinton's Glove"] = true,
+			["Stone Mask"] = true,
+			["Lucky Arrow"] = true,
+			["Lucky Stone Mask"] = true,
+			["Rib Cage of The Saint's Corpse"] = true,
+			["DIO's Diary"] = true,
+		}
+	}
+}
+
+local AntiTimeStopConfig = {
+	Enabled = false,
+	ToggleKey = nil,
+	MovementSpeed = 1.5,
+	JumpPower = 50,
+	WalkSpeed = 16,
+	AutoActivate = true,
+	DetectionRange = 100,
+	VisualEffect = true,
+	SoundEffect = false,
+	AntiFreeze = true,
+	TimeStopBypass = true,
+	MovementOverride = true,
+	DisableOnAttack = true,
+	ServerSync = true,
+}
+
+local AutofarmConfig = {
+	Enabled = false,
+	ToggleKey = nil,
+	UseFlightMovement = true,
+	UseNoClipMovement = true,
+	FlightSpeed = 100,
+	PickupRadius = 8,
+	PickupDuration = 0.25,
+	PickupKey = Enum.KeyCode.E,
+	ScanInterval = 1,
+	Items = {
+		["Mysterious Arrow"] = true,
+		["Rokakaka"] = true,
+		["Pure Rokakaka"] = true,
+		["Diamond"] = true,
+		["Gold Coin"] = true,
+		["Steel Ball"] = true,
+		["Clackers"] = true,
+		["Caesar's Headband"] = true,
+		["Zeppeli's Hat"] = true,
+		["Zeppeli's Scarf"] = true,
+		["Ancient Scroll"] = true,
+		["Quinton's Glove"] = false,
+		["Stone Mask"] = true,
+		["Lucky Arrow"] = true,
+		["Lucky Stone Mask"] = true,
+		["Rib Cage of The Saint's Corpse"] = true,
+		["DIO's Diary"] = true,
+		["Dio's Diary"] = true,
+	}
+}
+
 return function(ctx)
 	local functionsContainer = ctx.functionsContainer
 	local currentY = ctx.currentY
@@ -9,10 +123,6 @@ return function(ctx)
 	local createSlider = ctx.createSlider
 	local createDivider = ctx.createDivider
 	local createButton = ctx.createButton
-
-	local YBAConfig = ctx.YBAConfig
-	local AntiTimeStopConfig = ctx.AntiTimeStopConfig
-	local AutofarmConfig = ctx.AutofarmConfig
 
 	local scrollFrame = ctx.scrollFrame
 	local showContent = ctx.showContent
@@ -113,13 +223,13 @@ return function(ctx)
 	antiTimeStopBtn.MouseButton1Click:Connect(function()
 		if not isAntiTimeStopEnabled then
 			AntiTimeStopConfig.Enabled = true
-			startAntiTimeStop()
+			if startAntiTimeStop then startAntiTimeStop() end
 			antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
 			antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
 			spawn(function()
 				task.wait(0.1)
 				AntiTimeStopConfig.Enabled = false
-				stopAntiTimeStop()
+				if stopAntiTimeStop then stopAntiTimeStop() end
 				antiTimeStopBtn.Text = "ANTI TIME STOP"
 				antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
 				print("Anti TS: ГОТОВО!")
@@ -130,16 +240,16 @@ return function(ctx)
 	createDivider()
 	createSectionHeader("👥 PLAYER ESP")
 	createToggleSlider("User Stand", false, function(v)
-		if v then startUserStandESP() else stopUserStandESP() end
+		if v then if startUserStandESP then startUserStandESP() end else if stopUserStandESP then stopUserStandESP() end end
 	end)
 	createToggleSlider("User Style", false, function(v)
-		if v then startUserStyleESP() else stopUserStyleESP() end
+		if v then if startUserStyleESP then startUserStyleESP() end else if stopUserStyleESP then stopUserStyleESP() end end
 	end)
 
 	createSectionHeader("📦 ITEM ESP")
 	createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
 		YBAConfig.ItemESP.Enabled = v
-		if v then startItemESP() else stopItemESP() end
+		if v then if startItemESP then startItemESP() end else if stopItemESP then stopItemESP() end end
 	end)
 
 	local itemSelectionHeader = Instance.new("TextLabel", functionsContainer)
@@ -160,9 +270,9 @@ return function(ctx)
 		local btn = createToggleSlider(itemName, defaultState, function(v)
 			YBAConfig.ItemESP.Items[itemName] = v
 			if not v then
-				for obj, esp in pairs(itemESPElements) do
+				for obj, esp in pairs(itemESPElements or {}) do
 					if esp and esp.itemName == itemName then
-						pcall(removeItemESP, {Object = obj})
+						if removeItemESP then pcall(removeItemESP, {Object = obj}) end
 					end
 				end
 			end
@@ -190,7 +300,7 @@ return function(ctx)
 
 	createSectionHeader("🤖 AUTOFARM")
 	createToggleSlider("Autofarm", isAutofarmEnabled, function(v)
-		if v then startAutofarm() else stopAutofarm() end
+		if v then if startAutofarm then startAutofarm() end else if stopAutofarm then stopAutofarm() end end
 	end)
 
 	createSectionHeader("📦 ITEMS FARM")
@@ -198,16 +308,16 @@ return function(ctx)
 		local btn = createToggleSlider(itemName, defaultState, function(v)
 			AutofarmConfig.Items[itemName] = v
 			if isAutofarmEnabled then
-				if ctx.autofarmCurrentTarget and ctx.autofarmCurrentTarget.Name == itemName and not v then
-					ctx.autofarmCurrentTarget = nil
+				if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
+					autofarmCurrentTarget = nil
 					autofarmPickingUp = false
-					for _, connection in ipairs(autofarmConnections) do
+					for _, connection in ipairs(autofarmConnections or {}) do
 						if connection then pcall(function() connection:Disconnect() end) end
 					end
 					autofarmConnections = {}
 					task.spawn(function()
 						task.wait(0.1)
-						if isAutofarmEnabled then processNextItem() end
+						if isAutofarmEnabled and processNextItem then processNextItem() end
 					end)
 				end
 			end
@@ -235,7 +345,6 @@ return function(ctx)
 
 	createDivider()
 	createSectionHeader("🤖 AUTO SELL")
-	-- Keep Autosell section remote-loaded by main if needed
 
 	if scrollFrame then
 		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
