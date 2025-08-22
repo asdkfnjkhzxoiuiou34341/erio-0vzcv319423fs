@@ -1,5 +1,38 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
+-- Проверка game ID для YBA
+local gameId = game.PlaceId
+local isYBAGame = (gameId == 2809202155)
+local YBAModule = nil
+
+print("Загрузка скрипта...")
+print("Game ID:", gameId)
+print("Это YBA?", isYBAGame)
+
+-- Загрузка YBA модуля только для YBA
+if isYBAGame then
+    print("Загрузка YBA Hacks модуля...")
+    local success, result = pcall(function()
+        return game:HttpGet("https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/yba_hacks.lua")
+    end)
+    
+    if success then
+        local ybaLoadSuccess, ybaModule = pcall(function()
+            return loadstring(result)()
+        end)
+        
+        if ybaLoadSuccess and ybaModule then
+            YBAModule = ybaModule
+            print("YBA Hacks модуль успешно загружен!")
+        else
+            print("Ошибка загрузки YBA модуля:", ybaModule)
+        end
+    else
+        print("Ошибка получения YBA модуля:", result)
+    end
+else
+    print("Не YBA игра - YBA Hacks будут недоступны")
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -67,119 +100,7 @@ local TeleportConfig = {
     StabilizationThreshold = 0.9,
 }
 
-local YBAConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    StandRange = 500, -- Уменьшили с 100000 до разумного значения
-    FreezePlayer = true,
-    SwitchCamera = true,
-    TransferControl = true,
-    AutoFindStands = true,
-    MaxStandDistance = 50, -- Уменьшили с 10000 до разумного значения
-    CameraDistance = 12, -- Уменьшили для лучшего обзора
-    CameraHeight = 8, -- Увеличили для лучшего обзора
-    StandControlSpeed = 1.0,
-    StandControlSmoothing = 0.1,
-    MouseSensitivity = 0.01,
-    CameraSmoothing = 0.08,
-    CameraFollowDistance = 20.2,
-    CameraFollowHeight = 6.1,
-    MouseLookSensitivity = 0.003,
-    StandRotationSpeed = 0.05,
-    UndergroundControl = {
-        FlightSpeed = 40, -- Дефолтная скорость полета
-        AutoNoClip = true,
-        OriginalPosition = nil,
-    },
-    ItemESP = {
-        Enabled = false,
-        ToggleKey = nil,
-        MaxDistance = 1000,
-        MaxRenderDistance = 5000,
-        UpdateInterval = 0.3,
-        ShowOutline = true,
-        ShowText = true,
-        ShowFill = true,
-        FillColor = Color3.fromRGB(255, 215, 0),
-        OutlineColor = Color3.fromRGB(255, 255, 0),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        TextBackgroundColor = Color3.fromRGB(0, 0, 0),
-        FillTransparency = 0.3,
-        OutlineTransparency = 0.1,
-        TextBackgroundTransparency = 0.3,
-        TextSize = 10,
-        DistanceTextSize = 9,
-        Font = Enum.Font.GothamBold,
-        Items = {
-            ["Mysterious Arrow"] = true,
-            ["Rokakaka"] = true,
-            ["Pure Rokakaka"] = true,
-            ["Diamond"] = true,
-            ["Gold Coin"] = true,
-            ["Steel Ball"] = true,
-            ["Clackers"] = true,
-            ["Caesar's Headband"] = true,
-            ["Zeppeli's Hat"] = true,
-            ["Zeppeli's Scarf"] = true,
-            ["Ancient Scroll"] = true,
-            ["Quinton's Glove"] = true,
-            ["Stone Mask"] = true,
-            ["Lucky Arrow"] = true,
-            ["Lucky Stone Mask"] = true,
-            ["Rib Cage of The Saint's Corpse"] = true,
-            ["DIO's Diary"] = true,
-        }
-    }
-}
-
-local AntiTimeStopConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    MovementSpeed = 1.5,
-    JumpPower = 50,
-    WalkSpeed = 16,
-    AutoActivate = true,
-    DetectionRange = 100,
-    VisualEffect = true,
-    SoundEffect = false,
-    AntiFreeze = true,
-    TimeStopBypass = true,
-    MovementOverride = true,
-    DisableOnAttack = true,
-    ServerSync = true,
-}
-
-local AutofarmConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    UseFlightMovement = true,
-    UseNoClipMovement = true,
-    FlightSpeed = 100,
-    PickupRadius = 8,
-    PickupDuration = 0.25,
-    PickupKey = Enum.KeyCode.E,
-    ScanInterval = 1,
-    Items = {
-        ["Mysterious Arrow"] = true,
-        ["Rokakaka"] = true,
-        ["Pure Rokakaka"] = true,
-        ["Diamond"] = true,
-        ["Gold Coin"] = true,
-        ["Steel Ball"] = true,
-        ["Clackers"] = true,
-        ["Caesar's Headband"] = true,
-        ["Zeppeli's Hat"] = true,
-        ["Zeppeli's Scarf"] = true,
-        ["Ancient Scroll"] = true,
-        ["Quinton's Glove"] = false,
-        ["Stone Mask"] = true,
-        ["Lucky Arrow"] = true,
-        ["Lucky Stone Mask"] = true,
-        ["Rib Cage of The Saint's Corpse"] = true,
-        ["DIO's Diary"] = true,
-        ["Dio's Diary"] = true,
-    }
-}
+-- YBA конфигурации перенесены в отдельный модуль
 
 
 
@@ -5261,18 +5182,26 @@ versionText.TextXAlignment = Enum.TextXAlignment.Center
 
 local navButtons = {
     {name = "Main", icon = "🏠"},
-    {name = "YBA Hacks", icon = "⚔️"},
     {name = "Settings", icon = "⚙️"}
 }
+
+-- Добавляем YBA Hacks только если это YBA игра
+if isYBAGame then
+    table.insert(navButtons, 2, {name = "YBA Hacks", icon = "⚔️"})
+end
 
 local selectedTab = "Main"
 
 -- Scroll position for each tab
 local tabScrollPositions = {
     ["Main"] = 0,
-    ["YBA Hacks"] = 0,
     ["Settings"] = 0
 }
+
+-- Добавляем YBA Hacks scroll position только если это YBA игра
+if isYBAGame then
+    tabScrollPositions["YBA Hacks"] = 0
+end
 
 for i, buttonData in ipairs(navButtons) do
     local navButton = Instance.new("TextButton", leftPanel)
@@ -6150,47 +6079,106 @@ function showContent(tabName)
         end)
         
     elseif tabName == "YBA Hacks" then
-        contentTitle.Text = getText("YBAHacks")
-        
-        -- 🎯 STAND RANGE заголовок как в Player ESP
-        createSectionHeader("🎯 STAND RANGE")
-        
-        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
-            YBAConfig.Enabled = v
-            if v then 
-                startYBA() 
-            else 
-                stopYBA() 
-            end
-        end)
-        
-        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), isUndergroundControlEnabled, function(v)
-            if v then
-                if startUndergroundControl then
-                    startUndergroundControl()
-                end
+        if isYBAGame then
+            contentTitle.Text = getText("YBAHacks")
+            
+            -- Загружаем YBA функции если модуль доступен
+            if YBAModule then
+                -- Используем функции из YBA модуля
+                print("Загрузка YBA Hacks интерфейса...")
+                -- Здесь будет код для создания YBA интерфейса
+                
+                -- 🎯 STAND RANGE заголовок как в Player ESP
+                createSectionHeader("🎯 STAND RANGE")
+                
+                -- Пока что базовые элементы
+                local notImplementedLabel = Instance.new("TextLabel", functionsContainer)
+                notImplementedLabel.Size = UDim2.new(1, -10, 0, 60)
+                notImplementedLabel.Position = UDim2.new(0, 5, 0, currentY)
+                notImplementedLabel.Text = "YBA Hacks загружены!\nФункции будут добавлены в следующем обновлении."
+                notImplementedLabel.Font = Enum.Font.GothamBold
+                notImplementedLabel.TextSize = 14
+                notImplementedLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                notImplementedLabel.BackgroundTransparency = 1
+                notImplementedLabel.TextWrapped = true
+                notImplementedLabel.TextXAlignment = Enum.TextXAlignment.Center
+                notImplementedLabel.TextYAlignment = Enum.TextYAlignment.Center
+                currentY = currentY + 60 + padding
             else
-                if stopUndergroundControl then
-                    stopUndergroundControl()
-                end
+                -- Модуль не загрузился
+                local errorLabel = Instance.new("TextLabel", functionsContainer)
+                errorLabel.Size = UDim2.new(1, -10, 0, 60)
+                errorLabel.Position = UDim2.new(0, 5, 0, currentY)
+                errorLabel.Text = "Ошибка загрузки YBA модуля.\nПроверьте подключение к интернету."
+                errorLabel.Font = Enum.Font.GothamBold
+                errorLabel.TextSize = 14
+                errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                errorLabel.BackgroundTransparency = 1
+                errorLabel.TextWrapped = true
+                errorLabel.TextXAlignment = Enum.TextXAlignment.Center
+                errorLabel.TextYAlignment = Enum.TextYAlignment.Center
+                currentY = currentY + 60 + padding
             end
-        end)
+        else
+            contentTitle.Text = "YBA Hacks"
+            
+            -- Заглушка для не-YBA игр
+            local notYbaLabel = Instance.new("TextLabel", functionsContainer)
+            notYbaLabel.Size = UDim2.new(1, -10, 0, 100)
+            notYbaLabel.Position = UDim2.new(0, 5, 0, currentY)
+            notYbaLabel.Text = "This is not yba"
+            notYbaLabel.Font = Enum.Font.GothamBold
+            notYbaLabel.TextSize = 24
+            notYbaLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            notYbaLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            notYbaLabel.BorderSizePixel = 1
+            notYbaLabel.BorderColor3 = Color3.fromRGB(100, 100, 100)
+            notYbaLabel.TextXAlignment = Enum.TextXAlignment.Center
+            notYbaLabel.TextYAlignment = Enum.TextYAlignment.Center
+            Instance.new("UICorner", notYbaLabel).CornerRadius = UDim.new(0, 8)
+            currentY = currentY + 100 + padding
+        end
         
-        local ybaNoClipStatusLabel = Instance.new("TextLabel", functionsContainer)
-        ybaNoClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-        ybaNoClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
-        ybaNoClipStatusLabel.Text = "NoClip Status: " .. (isNoClipping and "ON" or "OFF")
-        ybaNoClipStatusLabel.Font = Enum.Font.GothamBold
-        ybaNoClipStatusLabel.TextSize = 12
-        ybaNoClipStatusLabel.TextColor3 = isNoClipping and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
-        ybaNoClipStatusLabel.BackgroundTransparency = 1
-        ybaNoClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    elseif tabName == "Settings" then
+        contentTitle.Text = getText("MenuSettings")
+        
+        
+        createDivider()
+        
+        local accentColorLabel = Instance.new("TextLabel", functionsContainer)
+        accentColorLabel.Text = getText("AccentColor")
+        accentColorLabel.TextColor3 = Color3.new(1,1,1)
+        accentColorLabel.BackgroundTransparency = 1
+        accentColorLabel.Size = UDim2.new(1, -10, 0, 20)
+        accentColorLabel.Position = UDim2.new(0, 5, 0, currentY)
+        accentColorLabel.Font = Enum.Font.Gotham
+        accentColorLabel.TextSize = 14
+        accentColorLabel.TextXAlignment = Enum.TextXAlignment.Left
         currentY = currentY + 20 + padding
-        
-        local ybaNoClipToggle = createToggleSlider(getText("ForceNoClip"), isNoClipping, function(v)
-            if v then
-                startNoClip()
-                ybaNoClipStatusLabel.Text = "NoClip Status: ON"
+
+        local accentColors = {
+            Color3.fromRGB(0, 150, 0),
+            Color3.fromRGB(0, 100, 255),
+            Color3.fromRGB(255, 0, 100),
+            Color3.fromRGB(255, 150, 0),
+            Color3.fromRGB(150, 0, 255),
+            Color3.fromRGB(255, 255, 0),
+            Color3.fromRGB(0, 255, 255),
+            Color3.fromRGB(255, 50, 50),
+        }
+
+                local colorRow = Instance.new("Frame", functionsContainer)
+        colorRow.Size = UDim2.new(1, -10, 0, 35)
+        colorRow.Position = UDim2.new(0, 5, 0, currentY)
+        colorRow.BackgroundTransparency = 1
+
+        local colorLayout = Instance.new("UIListLayout", colorRow)
+        colorLayout.FillDirection = Enum.FillDirection.Horizontal
+        colorLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        colorLayout.Padding = UDim.new(0, 8)
+
+        for _, color in pairs(accentColors) do
+            local colorBtn = Instance.new("TextButton", colorRow)
                 ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
             else
                 stopNoClip()
