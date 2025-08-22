@@ -38,6 +38,31 @@ local Config = {
     MenuCollapsed = false,
 }
 
+-- YBA loader configuration
+local YBA_PLACE_ID = 2809202155
+local YBA_MODULE_URL = "https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/yba_hacks.lua"
+local YBA_MODULE_NAME = "yba_hacks.lua"
+_G.YBA_LOADED = _G.YBA_LOADED or false
+_G.YBA_LOADER = _G.YBA_LOADER or {}
+_G.YBA_LOADER.getModule = function()
+    if _G.YBA_MODULE then return _G.YBA_MODULE end
+    local ok, res = pcall(function()
+        return loadstring(readfile(YBA_MODULE_NAME))()
+    end)
+    if not ok then
+        ok, res = pcall(function()
+            return loadstring(game:HttpGet(YBA_MODULE_URL))()
+        end)
+    end
+    if ok and res then
+        _G.YBA_MODULE = res
+        _G.YBA_LOADED = true
+        return res
+    else
+        return nil, res
+    end
+end
+
 
 local MovementConfig = {
     Fly = {Enabled = false, Speed = 1, ToggleKey = nil},
@@ -2990,14 +3015,17 @@ UserInputService.InputBegan:Connect(function(input, gp)
                 startNoClip()
             end
         elseif YBAConfig.ToggleKey and input.KeyCode == YBAConfig.ToggleKey then
-            if YBAConfig.Enabled then
-                stopYBA()
+            if game.PlaceId == YBA_PLACE_ID then
+                if YBAConfig.Enabled then
+                    stopYBA()
+                else
+                    startYBA()
+                end
+                if guiCallbacks.yba then
+                    guiCallbacks.yba.Text = "Stand Range Hack: " .. (YBAConfig.Enabled and "ON" or "OFF")
+                end
             else
-                startYBA()
-            end
-            
-            if guiCallbacks.yba then
-                guiCallbacks.yba.Text = "Stand Range Hack: " .. (YBAConfig.Enabled and "ON" or "OFF")
+                print("YBA hotkey ignored: not in YBA place")
             end
 
         elseif AntiTimeStopConfig.ToggleKey and input.KeyCode == AntiTimeStopConfig.ToggleKey then
@@ -5201,6 +5229,23 @@ _G.stopAutofarm = function()
 end
 _G.AutofarmConfig = AutofarmConfig
 
+-- Export YBA functions for external module
+_G.YBA = {
+    YBAConfig = YBAConfig,
+    startYBA = startYBA,
+    stopYBA = stopYBA,
+    startUndergroundControl = startUndergroundControl,
+    stopUndergroundControl = stopUndergroundControl,
+    startItemESP = startItemESP,
+    stopItemESP = stopItemESP,
+    startUserStandESP = startUserStandESP,
+    stopUserStandESP = stopUserStandESP,
+    startUserStyleESP = startUserStyleESP,
+    stopUserStyleESP = stopUserStyleESP,
+    startAutofarm = startAutofarm,
+    stopAutofarm = stopAutofarm
+}
+
 local screenGui = Instance.new("ScreenGui", CoreGui)
 screenGui.Name = "SslkinGui"
 screenGui.ResetOnSpawn = false
@@ -6151,6 +6196,77 @@ function showContent(tabName)
         
     elseif tabName == "YBA Hacks" then
         contentTitle.Text = getText("YBAHacks")
+        -- Lazy-load YBA tab
+        if game.PlaceId ~= YBA_PLACE_ID then
+            local label = Instance.new("TextLabel", functionsContainer)
+            label.Size = UDim2.new(1, -10, 0, 24)
+            label.Position = UDim2.new(0, 5, 0, currentY)
+            label.Text = "This is not yba."
+            label.Font = Enum.Font.GothamBold
+            label.TextSize = 14
+            label.TextColor3 = Color3.new(1,1,1)
+            label.BackgroundTransparency = 1
+            label.TextXAlignment = Enum.TextXAlignment.Left
+            currentY = currentY + 24 + padding
+            functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+            selectedTab = tabName
+            if scrollFrame then
+                scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+            end
+            if scrollFrame and tabScrollPositions[tabName] then
+                scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+            end
+            return
+        end
+        local mod, err = _G.YBA_LOADER.getModule()
+        if not mod then
+            local warnLabel = Instance.new("TextLabel", functionsContainer)
+            warnLabel.Size = UDim2.new(1, -10, 0, 24)
+            warnLabel.Position = UDim2.new(0, 5, 0, currentY)
+            warnLabel.Text = "Failed to load YBA module"
+            warnLabel.Font = Enum.Font.GothamBold
+            warnLabel.TextSize = 14
+            warnLabel.TextColor3 = Color3.fromRGB(255,100,100)
+            warnLabel.BackgroundTransparency = 1
+            warnLabel.TextXAlignment = Enum.TextXAlignment.Left
+            currentY = currentY + 24 + padding
+            functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+            selectedTab = tabName
+            if scrollFrame then
+                scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+            end
+            if scrollFrame and tabScrollPositions[tabName] then
+                scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+            end
+            return
+        end
+        if mod and type(mod.renderYBATab) == "function" then
+            local newY = mod.renderYBATab({
+                rootContainer = functionsContainer,
+                currentY = currentY,
+                ui = {
+                    createToggleSlider = createToggleSlider,
+                    createSlider = createSlider,
+                    createDivider = createDivider,
+                    createSectionHeader = createSectionHeader,
+                    createButton = createButton,
+                    getText = getText
+                },
+                exports = _G.YBA
+            })
+            if typeof(newY) == "number" then
+                currentY = newY
+            end
+            functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
+            selectedTab = tabName
+            if scrollFrame then
+                scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
+            end
+            if scrollFrame and tabScrollPositions[tabName] then
+                scrollFrame.CanvasPosition = Vector2.new(0, tabScrollPositions[tabName])
+            end
+            return
+        end
         
         -- 🎯 STAND RANGE заголовок как в Player ESP
         createSectionHeader("🎯 STAND RANGE")
