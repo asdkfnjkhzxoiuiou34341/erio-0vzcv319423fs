@@ -67,70 +67,9 @@ local TeleportConfig = {
     StabilizationThreshold = 0.9,
 }
 
-local YBAConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    StandRange = 500, -- Уменьшили с 100000 до разумного значения
-    FreezePlayer = true,
-    SwitchCamera = true,
-    TransferControl = true,
-    AutoFindStands = true,
-    MaxStandDistance = 50, -- Уменьшили с 10000 до разумного значения
-    CameraDistance = 12, -- Уменьшили для лучшего обзора
-    CameraHeight = 8, -- Увеличили для лучшего обзора
-    StandControlSpeed = 1.0,
-    StandControlSmoothing = 0.1,
-    MouseSensitivity = 0.01,
-    CameraSmoothing = 0.08,
-    CameraFollowDistance = 20.2,
-    CameraFollowHeight = 6.1,
-    MouseLookSensitivity = 0.003,
-    StandRotationSpeed = 0.05,
-    UndergroundControl = {
-        FlightSpeed = 40, -- Дефолтная скорость полета
-        AutoNoClip = true,
-        OriginalPosition = nil,
-    },
-    ItemESP = {
-        Enabled = false,
-        ToggleKey = nil,
-        MaxDistance = 1000,
-        MaxRenderDistance = 5000,
-        UpdateInterval = 0.3,
-        ShowOutline = true,
-        ShowText = true,
-        ShowFill = true,
-        FillColor = Color3.fromRGB(255, 215, 0),
-        OutlineColor = Color3.fromRGB(255, 255, 0),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        TextBackgroundColor = Color3.fromRGB(0, 0, 0),
-        FillTransparency = 0.3,
-        OutlineTransparency = 0.1,
-        TextBackgroundTransparency = 0.3,
-        TextSize = 10,
-        DistanceTextSize = 9,
-        Font = Enum.Font.GothamBold,
-        Items = {
-            ["Mysterious Arrow"] = true,
-            ["Rokakaka"] = true,
-            ["Pure Rokakaka"] = true,
-            ["Diamond"] = true,
-            ["Gold Coin"] = true,
-            ["Steel Ball"] = true,
-            ["Clackers"] = true,
-            ["Caesar's Headband"] = true,
-            ["Zeppeli's Hat"] = true,
-            ["Zeppeli's Scarf"] = true,
-            ["Ancient Scroll"] = true,
-            ["Quinton's Glove"] = true,
-            ["Stone Mask"] = true,
-            ["Lucky Arrow"] = true,
-            ["Lucky Stone Mask"] = true,
-            ["Rib Cage of The Saint's Corpse"] = true,
-            ["DIO's Diary"] = true,
-        }
-    }
-}
+-- YBA config moved to external module
+
+local YBA_REMOTE_URL = "https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/huyna2_yba.lua"
 
 local AntiTimeStopConfig = {
     Enabled = false,
@@ -5452,7 +5391,6 @@ contentTitle.TextSize = 18
 contentTitle.TextColor3 = Color3.new(1, 1, 1)
 contentTitle.BackgroundTransparency = 1
 contentTitle.TextXAlignment = Enum.TextXAlignment.Center
-
 local scrollFrame = Instance.new("ScrollingFrame", rightPanel)
 scrollFrame.Name = "ScrollFrame"
 scrollFrame.Size = UDim2.new(1, -20, 1, -100)
@@ -6149,424 +6087,93 @@ function showContent(tabName)
             end
         end)
         
-    elseif tabName == "YBA Hacks" then
+        elseif tabName == "YBA Hacks" then
         contentTitle.Text = getText("YBAHacks")
         
-        -- 🎯 STAND RANGE заголовок как в Player ESP
-        createSectionHeader("🎯 STAND RANGE")
-        
-        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
-            YBAConfig.Enabled = v
-            if v then 
-                startYBA() 
-            else 
-                stopYBA() 
-            end
-        end)
-        
-        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), isUndergroundControlEnabled, function(v)
-            if v then
-                if startUndergroundControl then
-                    startUndergroundControl()
-                end
-            else
-                if stopUndergroundControl then
-                    stopUndergroundControl()
-                end
-            end
-        end)
-        
-        local ybaNoClipStatusLabel = Instance.new("TextLabel", functionsContainer)
-        ybaNoClipStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-        ybaNoClipStatusLabel.Position = UDim2.new(0, 5, 0, currentY)
-        ybaNoClipStatusLabel.Text = "NoClip Status: " .. (isNoClipping and "ON" or "OFF")
-        ybaNoClipStatusLabel.Font = Enum.Font.GothamBold
-        ybaNoClipStatusLabel.TextSize = 12
-        ybaNoClipStatusLabel.TextColor3 = isNoClipping and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
-        ybaNoClipStatusLabel.BackgroundTransparency = 1
-        ybaNoClipStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-        currentY = currentY + 20 + padding
-        
-        local ybaNoClipToggle = createToggleSlider(getText("ForceNoClip"), isNoClipping, function(v)
-            if v then
-                startNoClip()
-                ybaNoClipStatusLabel.Text = "NoClip Status: ON"
-                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(100,255,100)
-            else
-                stopNoClip()
-                ybaNoClipStatusLabel.Text = "NoClip Status: OFF"
-                ybaNoClipStatusLabel.TextColor3 = Color3.fromRGB(255,100,100)
-            end
-        end)
-        
-        createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
-            YBAConfig.UndergroundControl.FlightSpeed = v
-            if isUndergroundControlEnabled and controlledStandForUnderground then
-                print("YBA: Скорость подземного полета изменена на:", v)
-            end
-        end)
-        
-
-        
-        -- ⏰ ANTI TS заголовок как в Player ESP
-        createSectionHeader("⏰ ANTI TS")
-        
-        local         antiTimeStopBtn = Instance.new("TextButton", functionsContainer)
-        antiTimeStopBtn.Size = UDim2.new(1, -10, 0, 28)
-        antiTimeStopBtn.Position = UDim2.new(0, 5, 0, currentY)
-        antiTimeStopBtn.Text = getText("AntiTimeStop")
-        antiTimeStopBtn.Font = Enum.Font.GothamBold
-        antiTimeStopBtn.TextSize = 14
-        antiTimeStopBtn.TextColor3 = Color3.new(1,1,1)
-        antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-        antiTimeStopBtn.AutoButtonColor = false
-        Instance.new("UICorner", antiTimeStopBtn).CornerRadius = UDim.new(0,6)
-        currentY = currentY + 28 + padding
-        
-        antiTimeStopBtn.MouseButton1Click:Connect(function()
-            if not isAntiTimeStopEnabled then
-                AntiTimeStopConfig.Enabled = true
-                startAntiTimeStop()
-                antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
-                antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
-                
-                -- Быстрое отключение после освобождения
-                spawn(function()
-                    task.wait(0.1) -- Минимальное время для освобождения
-                    
-                    AntiTimeStopConfig.Enabled = false
-                    stopAntiTimeStop()
-                    antiTimeStopBtn.Text = "ANTI TIME STOP"
-                    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-                    print("Anti TS: ГОТОВО!")
-                end)
-            end
-        end)
-        
-
-        createDivider()
-        
-        -- 👥 PLAYER ESP заголовок
-        createSectionHeader("👥 PLAYER ESP")
-        
-        local userStandToggleBtn = createToggleSlider("User Stand", false, function(v)
-            if v then
-                startUserStandESP()
-            else
-                stopUserStandESP()
-            end
-        end)
-        
-        local userStyleToggleBtn = createToggleSlider("User Style", false, function(v)
-            if v then
-                startUserStyleESP()
-            else
-                stopUserStyleESP()
-            end
-        end)
-        
-        -- 📦 ITEM ESP заголовок
-        createSectionHeader("📦 ITEM ESP")
-        
-        local itemESPToggleBtn = createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
-            YBAConfig.ItemESP.Enabled = v
-            if v then 
-                startItemESP() 
-            else 
-                stopItemESP() 
-            end
-        end)
-        
-        local itemSelectionHeader = Instance.new("TextLabel", functionsContainer)
-        itemSelectionHeader.Size = UDim2.new(1, -10, 0, 25)
-        itemSelectionHeader.Position = UDim2.new(0, 5, 0, currentY)
-        itemSelectionHeader.Text = "📦 ITEM SELECTION"
-        itemSelectionHeader.Font = Enum.Font.GothamBold
-        itemSelectionHeader.TextSize = 14
-        itemSelectionHeader.TextColor3 = Color3.fromRGB(255, 255, 0)
-        itemSelectionHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-        itemSelectionHeader.BorderSizePixel = 1
-        itemSelectionHeader.BorderColor3 = Color3.fromRGB(100, 100, 120)
-        itemSelectionHeader.TextXAlignment = Enum.TextXAlignment.Left
-        Instance.new("UICorner", itemSelectionHeader).CornerRadius = UDim.new(0,4)
-        currentY = currentY + 25 + padding
-        
-        local function createItemToggle(itemName, defaultState)
-            local btn = createToggleSlider(itemName, defaultState, function(v)
-                YBAConfig.ItemESP.Items[itemName] = v
-                print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- ИСПРАВЛЕНО: Принудительно обновляем ESP независимо от общего состояния
-                if not v then
-                    -- При отключении предмета немедленно убираем все его ESP элементы
-                    print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
-                    for obj, esp in pairs(itemESPElements) do
-                        if esp and esp.itemName == itemName then
-                            print("YBA Item ESP: Удаляем ESP элемент для:", itemName)
-                            pcall(removeItemESP, {Object = obj})
-                        end
-                    end
-                else
-                    -- При включении предмета принудительно обновляем поиск если ESP активен
-                    if YBAConfig.ItemESP.Enabled then
-                        print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
-                    end
-                end
-            end)
-            return btn
+        local function renderNotYBA()
+            local lbl = Instance.new("TextLabel", functionsContainer)
+            lbl.Size = UDim2.new(1, -10, 0, 24)
+            lbl.Position = UDim2.new(0, 5, 0, currentY)
+            lbl.Text = "This is not yba."
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 14
+            lbl.TextColor3 = Color3.fromRGB(255, 100, 100)
+            lbl.BackgroundTransparency = 1
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            currentY = currentY + 24 + padding
         end
         
-        createItemToggle(getText("MysteriousArrow"), YBAConfig.ItemESP.Items["Mysterious Arrow"])
-        createItemToggle(getText("Rokakaka"), YBAConfig.ItemESP.Items["Rokakaka"])
-        createItemToggle(getText("PureRokakaka"), YBAConfig.ItemESP.Items["Pure Rokakaka"])
-        createItemToggle(getText("Diamond"), YBAConfig.ItemESP.Items["Diamond"])
-        createItemToggle(getText("GoldCoin"), YBAConfig.ItemESP.Items["Gold Coin"])
-        createItemToggle(getText("SteelBall"), YBAConfig.ItemESP.Items["Steel Ball"])
-        createItemToggle(getText("Clackers"), YBAConfig.ItemESP.Items["Clackers"])
-        createItemToggle(getText("CaesarsHeadband"), YBAConfig.ItemESP.Items["Caesar's Headband"])
-        createItemToggle(getText("ZeppeliHat"), YBAConfig.ItemESP.Items["Zeppeli's Hat"])
-        createItemToggle(getText("ZeppeliScarf"), YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
-        createItemToggle(getText("QuintonsGlove"), YBAConfig.ItemESP.Items["Quinton's Glove"])
-        createItemToggle(getText("StoneMask"), YBAConfig.ItemESP.Items["Stone Mask"])
-        createItemToggle(getText("RibCage"), YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
-        createItemToggle(getText("AncientScroll"), YBAConfig.ItemESP.Items["Ancient Scroll"])
-        createItemToggle(getText("DiosDiary"), YBAConfig.ItemESP.Items["DIO's Diary"])
-        createItemToggle(getText("LuckyStoneMask"), YBAConfig.ItemESP.Items["Lucky Stone Mask"])
-        createItemToggle(getText("LuckyArrow"), YBAConfig.ItemESP.Items["Lucky Arrow"])
-        
-        -- 🤖 AUTOFARM заголовок
-        createSectionHeader("🤖 AUTOFARM")
-        
-        -- Autofarm тумблер
-        createToggleSlider("Autofarm", isAutofarmEnabled, function(v)
-            if v then
-                startAutofarm()
-            else
-                stopAutofarm()
-            end
-        end)
-        
-        -- Заголовок для выбора предметов автофарма
-        createSectionHeader("📦 ITEMS FARM")
-        
-        -- Функция для создания переключателей предметов автофарма
-        local function createAutofarmItemToggle(itemName, defaultState)
-            local btn = createToggleSlider(itemName, defaultState, function(v)
-                AutofarmConfig.Items[itemName] = v
-                
-                -- ФИКС: Синхронизируем ОБА варианта ключей для предметов
-                if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" or itemName == "Таинственная стрела" then
-                    AutofarmConfig.Items["Mysterious Arrow"] = v -- с пробелом (ОСНОВНОЙ ключ для поиска)
-                    AutofarmConfig.Items["MysteriousArrow"] = v -- без пробела
-                elseif itemName == "GoldCoin" or itemName == "Gold Coin" or itemName == "Золотая монета" then
-                    AutofarmConfig.Items["Gold Coin"] = v -- с пробелом
-                    AutofarmConfig.Items["GoldCoin"] = v -- без пробела
-                end
-                
-                print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- Если автофарм активен, обновляем настройки
-                if isAutofarmEnabled then
-                    -- Очищаем данные предмета
-                    
-                    -- КРИТИЧНО: Если текущий целевой предмет был отключен, прерываем движение к нему
-                    if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
-                        print("🤖 AUTOFARM: Прерываем движение к предмету", itemName, "- он был отключен в настройках")
-                        autofarmCurrentTarget = nil
-                        autofarmPickingUp = false
-                        
-                        -- ПРИНУДИТЕЛЬНО отпускаем клавишу E если она зажата
-                        pcall(function()
-                            if game:GetService("VirtualInputManager") then
-                                game:GetService("VirtualInputManager"):SendKeyEvent(false, AutofarmConfig.PickupKey, false, game)
-                            end
-                            game:GetService("UserInputService").InputEnded:Fire(
-                                {KeyCode = AutofarmConfig.PickupKey, UserInputType = Enum.UserInputType.Keyboard},
-                                false
-                            )
-                        end)
-                        
-                        -- Отключаем все соединения движения и подбора
-                        for _, connection in ipairs(autofarmConnections) do
-                            if connection then
-                                pcall(function() connection:Disconnect() end)
-                            end
-                        end
-                        autofarmConnections = {}
-                        
-                        -- Немедленно ищем следующий предмет
-                        task.spawn(function()
-                            task.wait(0.1)
-                            if isAutofarmEnabled then
-                                processNextItem()
-                            end
-                        end)
-                    end
-                    
-                    -- Убираем лишний спам
-                end
-            end)
-            return btn
-        end
-        
-        -- Создаем переключатели для всех предметов автофарма
-        createAutofarmItemToggle("Mysterious Arrow", AutofarmConfig.Items["Mysterious Arrow"])
-        createAutofarmItemToggle("Rokakaka", AutofarmConfig.Items["Rokakaka"])
-        createAutofarmItemToggle("Pure Rokakaka", AutofarmConfig.Items["Pure Rokakaka"])
-        createAutofarmItemToggle("Diamond", AutofarmConfig.Items["Diamond"])
-        createAutofarmItemToggle("Gold Coin", AutofarmConfig.Items["Gold Coin"])
-        createAutofarmItemToggle("Steel Ball", AutofarmConfig.Items["Steel Ball"])
-        createAutofarmItemToggle("Clackers", AutofarmConfig.Items["Clackers"])
-        createAutofarmItemToggle("Caesar's Headband", AutofarmConfig.Items["Caesar's Headband"])
-        createAutofarmItemToggle("Zeppeli's Hat", AutofarmConfig.Items["Zeppeli's Hat"])
-        createAutofarmItemToggle("Zeppeli's Scarf", AutofarmConfig.Items["Zeppeli's Scarf"])
-        createAutofarmItemToggle("Quinton's Glove", AutofarmConfig.Items["Quinton's Glove"])
-        createAutofarmItemToggle("Stone Mask", AutofarmConfig.Items["Stone Mask"])
-        createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
-        createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
-        createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
-        createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
-        createAutofarmItemToggle("Lucky Arrow", AutofarmConfig.Items["Lucky Arrow"])
-        
-        -- AUTOSELL секция (загрузка модуля)
-        createDivider()
-        createSectionHeader("🤖 AUTO SELL")
-        
-        -- Проверяем загружен ли модуль автоселла
-        if _G.AutosellModule then
-            -- Модуль уже загружен, используем его функцию createGUI
-            if _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-                print("🤖 AUTOSELL: Создаем GUI через модуль...")
-                print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
-                local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-                print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
-                currentY = newCurrentY or currentY
-            else
-                -- Fallback на старый способ если функция createGUI недоступна
-                createSectionHeader("🤖 AUTO SELL CONTROLS")
-                
-                -- Главный тумблер автоселла
-                createToggleSlider("Auto Sell Enabled", false, function(v)
-                    if _G.AutosellModule then
-                        if v then
-                            _G.AutosellModule.start()
-                        else
-                            _G.AutosellModule.stop()
-                        end
-                    end
-                end)
-                
-                -- Кнопки быстрого управления
-                createButton("Enable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.enableAllItems then
-                        _G.AutosellModule.enableAllItems()
-                    end
-                end)
-                
-                createButton("Disable All Items for Sale", function()
-                    if _G.AutosellModule and _G.AutosellModule.disableAllItems then
-                        _G.AutosellModule.disableAllItems()
-                    end
-                end)
-            end
+        if game.PlaceId ~= 2809202155 then
+            renderNotYBA()
         else
-            -- Модуль не загружен, показываем кнопку загрузки
-        end
-
-        -- Кнопка загрузки модуля автоселла
-        local loadButton = createButton("Load Autosell Module", function()
-            print("🤖 AUTOSELL: Загружаем модуль автоселла...")
-            
-            if _G.AutosellModule then
-                print("🤖 AUTOSELL: Модуль уже загружен! Обновляем интерфейс...")
-                if loadButton then loadButton.Visible = destroy end
-                showContent("YBA Hacks")
-                return
-            end
-            
-            -- Пытаемся сначала загрузить локальный модуль, затем HTTP
-            local success, result = pcall(function()
-                local autosellCode = readfile("ckvb9wuefh9831")
-                return loadstring(autosellCode)()
+            local ok, modOrErr = pcall(function()
+                local code = game:HttpGet(YBA_REMOTE_URL)
+                local loaded = loadstring(code)
+                return loaded()
             end)
             
-            if not success then
-                success, result = pcall(function()
-                    local autosellCode = readfile("autosell.lua")
-                    return loadstring(autosellCode)()
-                end)
-            end
-            
-            if not success then
-                success, result = pcall(function()
-                    local autosellCode = game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/pizdec")
-                    return loadstring(autosellCode)()
-                end)
-            end
-            
-            if success and result then
-                print("🤖 AUTOSELL: Модуль загружен, создаем GUI...")
-                
-                -- Используем функцию createGUI из загруженного модуля
-                if _G.AutosellModule and _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-                    print("🤖 AUTOSELL: Создаем GUI через загруженный модуль...")
-                    print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
-                    local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-                    print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
-                    currentY = newCurrentY or currentY
-                else
-                    -- Fallback на старый способ если функция createGUI недоступна
-                    createDivider()
-                    createSectionHeader("🤖 AUTO SELL CONTROLS")
-                    
-                    -- Главный тумблер автоселла
-                    createToggleSlider("Auto Sell Enabled", false, function(v)
-                        if _G.AutosellModule then
-                            if v then
-                                _G.AutosellModule.start()
-                            else
-                                _G.AutosellModule.stop()
-                            end
-                        end
-                    end)
-                    
-                    -- Кнопки быстрого управления
-                    createButton("Enable All Items for Sale", function()
-                        if _G.AutosellModule and _G.AutosellModule.enableAllItems then
-                            _G.AutosellModule.enableAllItems()
-                        end
-                    end)
-                    
-                    createButton("Disable All Items for Sale", function()
-                        if _G.AutosellModule and _G.AutosellModule.disableAllItems then
-                            _G.AutosellModule.disableAllItems()
-                        end
-                    end)
+            if ok and type(modOrErr) == "function" then
+                local ctx = {
+                    functionsContainer = functionsContainer,
+                    currentY = currentY,
+                    getText = getText,
+                    createSectionHeader = createSectionHeader,
+                    createToggleSlider = createToggleSlider,
+                    createSlider = createSlider,
+                    createDivider = createDivider,
+                    createButton = createButton,
+                    -- configs
+                    YBAConfig = YBAConfig,
+                    AntiTimeStopConfig = AntiTimeStopConfig,
+                    AutofarmConfig = AutofarmConfig,
+                    MenuSettings = MenuSettings,
+                    -- ui
+                    scrollFrame = scrollFrame,
+                    showContent = showContent,
+                    -- underground control
+                    isUndergroundControlEnabled = isUndergroundControlEnabled,
+                    startUndergroundControl = startUndergroundControl,
+                    stopUndergroundControl = stopUndergroundControl,
+                    controlledStandForUnderground = controlledStandForUnderground,
+                    -- noclip
+                    isNoClipping = isNoClipping,
+                    startNoClip = startNoClip,
+                    stopNoClip = stopNoClip,
+                    -- anti ts
+                    isAntiTimeStopEnabled = isAntiTimeStopEnabled,
+                    startAntiTimeStop = startAntiTimeStop,
+                    stopAntiTimeStop = stopAntiTimeStop,
+                    -- player esp
+                    startUserStandESP = startUserStandESP,
+                    stopUserStandESP = stopUserStandESP,
+                    startUserStyleESP = startUserStyleESP,
+                    stopUserStyleESP = stopUserStyleESP,
+                    -- item esp
+                    itemESPElements = itemESPElements,
+                    removeItemESP = removeItemESP,
+                    startItemESP = startItemESP,
+                    stopItemESP = stopItemESP,
+                    -- yba core
+                    startYBA = startYBA,
+                    stopYBA = stopYBA,
+                    -- autofarm
+                    isAutofarmEnabled = isAutofarmEnabled,
+                    startAutofarm = startAutofarm,
+                    stopAutofarm = stopAutofarm,
+                    autofarmConnections = autofarmConnections,
+                    autofarmCurrentTarget = autofarmCurrentTarget,
+                    autofarmPickingUp = autofarmPickingUp,
+                    processNextItem = processNextItem,
+                }
+                local newY = modOrErr(ctx)
+                if type(newY) == "number" then
+                    currentY = newY
                 end
-                
-                print("🤖 AUTOSELL: GUI создан! Управление доступно выше.")
-                
-                -- Обновляем размер контейнера чтобы новые элементы отобразились
-                functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
-                
-                -- Принудительно обновляем прокрутку
-                if scrollFrame then
-                    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY)
-                end
-                
-                -- Скрываем кнопку загрузки после успешной загрузки
-                if loadButton then loadButton = false end
-                
-                -- Делаем задержку и полное обновление интерфейса
-                task.wait(0.5)
-                showContent("YBA Hacks")
             else
-                print("🤖 AUTOSELL: Ошибка загрузки модуля:", tostring(result))
-                print("🤖 AUTOSELL: Попробуйте:")
-                print("1. Разместить autosell.lua онлайн и обновить URL")
-                print("2. Или поместить autosell.lua в папку workspace")
+                renderNotYBA()
+                warn("Failed to load YBA module:", tostring(modOrErr))
             end
-        end)
+        end
     elseif tabName == "Settings" then
         contentTitle.Text = getText("MenuSettings")
         
