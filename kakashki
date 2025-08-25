@@ -502,7 +502,6 @@ local YBAFreeCamera = {} do
             local keyName = inputObj.KeyCode.Name
             if input[keyName] ~= nil then
                 input[keyName] = true
-                -- print("YBA Input: Нажата клавиша", keyName)
             end
         end))
 
@@ -512,7 +511,6 @@ local YBAFreeCamera = {} do
             local keyName = inputObj.KeyCode.Name
             if input[keyName] ~= nil then
                 input[keyName] = false
-                -- print("YBA Input: Отпущена клавиша", keyName)
             end
         end))
 
@@ -522,12 +520,10 @@ local YBAFreeCamera = {} do
                 -- ИСПРАВЛЕНО: инвертируем ось X для горизонтального поворота
                 local sensitivity = 0.003
                 input.MouseDelta = Vector2.new(inputObj.Delta.y * sensitivity, -inputObj.Delta.x * sensitivity)
-                -- print("YBA Input: Движение мыши", input.MouseDelta) -- Слишком много сообщений
             elseif inputObj.UserInputType == Enum.UserInputType.MouseWheel then
                 -- ИСПРАВЛЕНО: проверяем что GUI не активно и не обработано игрой
                 if not gameProcessed then
                     input.MouseWheel = -inputObj.Position.Z
-                    -- print("YBA Input: Колесо мыши", input.MouseWheel)
                 end
             end
         end))
@@ -553,7 +549,6 @@ local YBAFreeCamera = {} do
 
     local function stepFreecam(dt)
         if not targetStand or not targetStand.Root or not targetStand.Root.Parent then
-            -- print("YBA: Стенд потерян, останавливаем управление")
             YBAFreeCamera.Stop()
             return
         end
@@ -563,8 +558,6 @@ local YBAFreeCamera = {} do
         
         -- Отладочная информация (выводим каждые 5 секунд)
         if tick() - lastDebugTime > 5 then
-            -- print("YBA Debug: Камера работает, позиция стенда:", standPosition)
-            -- print("YBA Debug: Состояние ввода - W:", input.W, "A:", input.A, "S:", input.S, "D:", input.D, "Shift:", input.LeftShift)
             lastDebugTime = tick()
         end
 
@@ -630,7 +623,6 @@ local YBAFreeCamera = {} do
             if chatInFocus or isInputBeingProcessedByGame then
                 -- Выводим сообщение только при нажатии Space для избежания спама
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                    -- print("YBA: Ввод заблокирован - чат в фокусе:", chatInFocus, "gameProcessed:", isInputBeingProcessedByGame)
                 end
             end
         end
@@ -642,7 +634,6 @@ local YBAFreeCamera = {} do
         
         -- Отладка движения
         if move.Magnitude > 0 then
-            -- print("YBA: Движение детектировано:", moveX, moveY, moveZ)
         end
 
         local bv = standRoot:FindFirstChild("BodyVelocity")
@@ -747,11 +738,9 @@ local YBAFreeCamera = {} do
         end
         
         if not stand or not stand.Root then
-            -- print("YBA: Ошибка - стенд не найден")
             return false
         end
         
-        -- print("YBA: Запуск управления стендом: " .. stand.Name)
         
         targetStand = stand
         originalCameraCFrame = Camera.CFrame
@@ -775,14 +764,11 @@ local YBAFreeCamera = {} do
             local playerLookDirection = playerCFrame.LookVector
             local playerYRotation = math.atan2(playerLookDirection.X, playerLookDirection.Z)
             cameraRot = Vector2.new(0, playerYRotation)
-            -- print("YBA: Синхронизация с направлением игрока, угол:", math.deg(playerYRotation))
         else
             cameraRot = Vector2.new(0, 0)
         end
         
         -- НЕ переключаем тип камеры чтобы обойти античит YBA
-        -- print("YBA: Сохраняем оригинальный тип камеры для обхода античита")
-        -- print("YBA: Текущий тип камеры:", Camera.CameraType)
         
         -- Устанавливаем начальную позицию камеры за стендом с задержкой
         task.wait(0.1) -- Небольшая задержка чтобы не триггерить античит
@@ -792,7 +778,6 @@ local YBAFreeCamera = {} do
         if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local playerCFrame = player.Character.HumanoidRootPart.CFrame
             stand.Root.CFrame = CFrame.new(standPosition, standPosition + playerCFrame.LookVector)
-            -- print("YBA: Стенд повернут в направлении игрока")
         end
         
         -- Позиционируем камеру с учетом поворота стенда
@@ -805,26 +790,19 @@ local YBAFreeCamera = {} do
         )
         local initialCameraPosition = standPosition + cameraOffset
         Camera.CFrame = CFrame.lookAt(initialCameraPosition, standPosition)
-        -- print("YBA: Установлена начальная позиция камеры:", initialCameraPosition)
         
         -- Запускаем ввод и рендер
-    -- print("YBA: Запускаем систему ввода...")
         startInput()
-    -- print("YBA: Подключаем рендер...")
         -- Используем Heartbeat вместо Heartbeat для меньшей частоты
         renderConnection = RunService.Heartbeat:Connect(stepFreecam)
         fcRunning = true
         
-    -- print("YBA: Управление стендом успешно активировано!")
-    -- print("YBA: fcRunning =", fcRunning)
-    -- print("YBA: renderConnection =", renderConnection ~= nil)
         return true
     end
 
     function YBAFreeCamera.Stop()
         if not fcRunning then return end
         
-    -- print("YBA: Отключение управления стендом")
         
         -- Останавливаем ввод и рендер
         stopInput()
@@ -874,7 +852,6 @@ local YBAFreeCamera = {} do
         originalCameraType = nil
         fcRunning = false
         
-    -- print("YBA: Управление стендом успешно отключено")
     end
 
     function YBAFreeCamera.Toggle(stand)
@@ -1128,7 +1105,6 @@ local function startAntiTimeStop()
     
     createAntiTimeStopEffect()
     
-    -- print("Anti TS: Принудительное движение активировано")
     
     -- БЕЗОПАСНОЕ принудительное движение
     -- Оптимизация: добавляем ограничение частоты кадров для Anti TS
@@ -1186,7 +1162,6 @@ local function startAntiTimeStop()
             end
             
             bv.Velocity = moveVector.Unit * 20 -- Нормальная скорость движения
-    -- print("Anti TS: Принудительно двигаю игрока")
         else
             -- Убираем BodyVelocity когда не двигаемся
             local bv = root and root:FindFirstChild("AntiTSBodyVelocity")
@@ -1198,16 +1173,11 @@ local function startAntiTimeStop()
         -- РАБОТАЕМ ТОЛЬКО С ТВОИМ СТЕНДОМ!
         local myStand = nil
         
-    -- print("Anti TS: Ищем твой стенд...")
-    -- print("Anti TS: Range Hack активен?", isYBAEnabled)
-    -- print("Anti TS: controlledStand есть?", controlledStand ~= nil)
         
         -- Сначала проверяем активен ли Stand Range Hack - используем его стенд
         if isYBAEnabled and controlledStand and controlledStand.Root then
             myStand = controlledStand
-    -- print("Anti TS: Используем стенд из Range Hack -", controlledStand.Name or "Unknown")
         else
-    -- print("Anti TS: Range Hack неактивен, ищем стенд вручную...")
             
             -- УПРОЩЕННЫЙ поиск - просто ищем ВСЕ стенды рядом с игроком
             for _, obj in pairs(workspace:GetChildren()) do
@@ -1222,7 +1192,6 @@ local function startAntiTimeStop()
                                obj.Name:find("CD") or obj.Name:find("GE") or obj.Name:find("SF") or
                                obj.Name:find("MR") or obj.Name:find("PH") or obj.Name:find("SC") then
                                 myStand = {Root = standRoot, Model = obj, Name = obj.Name}
-    -- print("Anti TS: Найден стенд рядом -", obj.Name, "расстояние:", distance)
                                 break
                             end
                         end
@@ -1231,7 +1200,6 @@ local function startAntiTimeStop()
             end
             
             if not myStand then
-    -- print("Anti TS: НЕ НАЙДЕН СТЕНД РЯДОМ!")
                 -- Выводим что вообще есть рядом
                 for _, obj in pairs(workspace:GetChildren()) do
                     if obj:IsA("Model") and root then
@@ -1239,7 +1207,6 @@ local function startAntiTimeStop()
                         if objRoot then
                             local distance = (objRoot.Position - root.Position).Magnitude
                             if distance <= 20 then
-    -- print("Anti TS: Рядом модель:", obj.Name, "расстояние:", distance)
                             end
                         end
                     end
@@ -1265,7 +1232,6 @@ local function startAntiTimeStop()
                 end
                 
                 standBV.Velocity = moveVector.Unit * 25 -- Чуть быстрее стенда
-    -- print("Anti TS: Принудительно двигаю ТВОЙ стенд", myStand.Name or "Unknown")
             else
                 -- Убираем BodyVelocity со стенда когда не двигаемся
                 local standBV = standRoot:FindFirstChild("AntiTSStandBodyVelocity")
@@ -1511,7 +1477,6 @@ local function stopAntiTimeStop()
     end
     antiTimeStopConnections = {}
     
-    -- print("Anti Time Stop disabled")
 end
 
 
@@ -2280,11 +2245,9 @@ local function findStands()
     local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
     
     if not playerRoot then 
-    -- print("YBA: Игрок не найден или нет HumanoidRootPart")
         return stands 
     end
     
-    -- print("YBA: Начинаем поиск стендов в workspace...")
     
     local standNames = {
         "Stand", "StandModel", "StandPart", "StandRoot", "StandHumanoidRootPart",
@@ -2309,7 +2272,6 @@ local function findStands()
             for _, standName in ipairs(standNames) do
                 if obj.Name:find(standName) or obj.Name:lower():find(standName:lower()) then
                     isStand = true
-    -- print("YBA: Найдена потенциальная модель стенда:", obj.Name)
                     break
                 end
             end
@@ -2318,7 +2280,6 @@ local function findStands()
                 local standRoot = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("StandRoot") or obj:FindFirstChild("RootPart")
                 if standRoot then
                     local distance = (standRoot.Position - playerRoot.Position).Magnitude
-    -- print("YBA: Стенд", obj.Name, "на расстоянии:", distance)
                     if distance <= 20 then
                         foundCount = foundCount + 1
                         table.insert(stands, {
@@ -2327,18 +2288,14 @@ local function findStands()
                             Distance = distance,
                             Name = obj.Name
                         })
-    -- print("YBA: Добавлен стенд:", obj.Name)
                     else
-    -- print("YBA: Стенд", obj.Name, "слишком далеко:", distance)
                     end
                 else
-    -- print("YBA: У модели", obj.Name, "нет подходящего Root части")
                 end
             end
         end
     end
     
-    -- print("YBA: Проверено моделей:", checkedModels, "Найдено стендов:", foundCount)
     
     if #stands == 0 then
         for _, obj in pairs(workspace:GetDescendants()) do
@@ -2439,11 +2396,9 @@ end
 
 local function activateFreeCamera(stand)
     if not stand or not stand.Root then 
-    -- print("YBA: Ошибка - стенд или его Root не найден")
         return false
     end
     
-    -- print("YBA: Активируем управление стендом: " .. stand.Name)
 
     freeCameraActive = true
     freeCameraTarget = stand
@@ -2451,11 +2406,9 @@ local function activateFreeCamera(stand)
     -- Запускаем свободную камеру
     local success = YBAFreeCamera.Start(stand)
     if success then
-    -- print("YBA: Управление стендом успешно активировано!")
         controlledStand = stand -- Сохраняем ссылку на контролируемый стенд
         return true
     else
-    -- print("YBA: Не удалось активировать управление стендом")
         freeCameraActive = false
         freeCameraTarget = nil
         return false
@@ -2465,7 +2418,6 @@ end
 local function disableFreeCamera()
     if not freeCameraActive then return end
     
-    -- print("YBA: Отключаем управление стендом")
     
     freeCameraActive = false
     freeCameraTarget = nil
@@ -2487,7 +2439,6 @@ local function disableFreeCamera()
     end
     freeCameraConnections = {}
     
-    -- print("YBA: Управление стендом отключено")
 
     local player = Players.LocalPlayer
     if player and player.Character then
@@ -2514,54 +2465,41 @@ end
 
 local function controlStand(stand)
     if not stand or not stand.Root then 
-    -- print("YBA: Ошибка - стенд или его Root не найден")
         return 
     end
     
-    -- print("YBA: Начинаем управление стендом: " .. stand.Name)
     controlledStand = stand
 
     if activateFreeCamera(stand) then
-    -- print("YBA: Свободная камера активирована для стенда: " .. stand.Name)
     else
-    -- print("YBA: Не удалось активировать свободную камеру для стенда: " .. stand.Name)
     end
 end
 local function startYBA()
     if isYBAEnabled then 
-    -- print("YBA: Уже активирован!")
         return 
     end
     
-    -- print("YBA: Начинаем активацию Stand Range...")
     isYBAEnabled = true
     YBAConfig.Enabled = true
     
     if not findStands then 
-    -- print("YBA: Функция findStands не найдена!")
         return 
     end
     
-    -- print("YBA: Ищем стенды...")
     local stands = findStands()
-    -- print("YBA: Найдено стендов:", #stands)
     
     if #stands == 0 then 
-    -- print("YBA: Стенды не найдены! Проверьте, что у вас есть стенд.")
         isYBAEnabled = false
         YBAConfig.Enabled = false
         return 
     end
     
     local targetStand = stands[1]
-    -- print("YBA: Выбран стенд:", targetStand.Name, "Тип модели:", targetStand.Model.ClassName)
     
-    -- print("YBA: Найден стенд: " .. targetStand.Name .. " на расстоянии: " .. targetStand.Distance)
     
     -- Отсоединяем стенд от игрока (делаем его свободным)
     local player = Players.LocalPlayer
     if targetStand.Root and targetStand.Model then
-    -- print("YBA: Отсоединяем стенд от игрока...")
         
         -- Мягко отключаем автоуправление стендом
         local humanoid = targetStand.Model:FindFirstChild("Humanoid")
@@ -2576,18 +2514,14 @@ local function startYBA()
         local connectionsRemoved = 0
         for _, child in pairs(targetStand.Root:GetChildren()) do
             if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("ManualWeld") then
-    -- print("YBA: Найдена связь:", child.Name, child.ClassName)
                 if (child.Part0 and child.Part0.Parent == player.Character) or 
                    (child.Part1 and child.Part1.Parent == player.Character) then
-    -- print("YBA: Удаляем связь с игроком:", child.Name)
                     child:Destroy()
                     connectionsRemoved = connectionsRemoved + 1
                 end
             elseif child:IsA("Attachment") then
                 -- Удаляем все Attachment'ы которые могут связывать с игроком
-    -- print("YBA: Найдена привязка:", child.Name, child.ClassName)
                 if child.Name == "StandAttach" or child.Name == "RootRigAttachment" then
-    -- print("YBA: Удаляем подозрительную привязку:", child.Name)
                     child:Destroy()
                     connectionsRemoved = connectionsRemoved + 1
                 end
@@ -2601,13 +2535,11 @@ local function startYBA()
                     if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("ManualWeld") then
                         if (child.Part0 and child.Part0.Parent == player.Character) or 
                            (child.Part1 and child.Part1.Parent == player.Character) then
-    -- print("YBA: Удаляем связь из части", part.Name, ":", child.Name)
                             child:Destroy()
                             connectionsRemoved = connectionsRemoved + 1
                         end
                     elseif child:IsA("AlignPosition") or child:IsA("AlignOrientation") or child:IsA("BodyPosition") or child:IsA("BodyAngularVelocity") then
                         -- Удаляем все ограничения позиции/ориентации
-    -- print("YBA: Удаляем ограничение из части", part.Name, ":", child.Name, child.ClassName)
                         child:Destroy()
                         connectionsRemoved = connectionsRemoved + 1
                     end
@@ -2615,11 +2547,9 @@ local function startYBA()
             end
         end
         
-    -- print("YBA: Удалено связей с игроком:", connectionsRemoved)
         
         -- Альтернативный способ: переместить стенд в workspace и сделать независимым
         if targetStand.Model.Parent ~= workspace then
-    -- print("YBA: Перемещаем стенд в workspace из", targetStand.Model.Parent.Name)
             targetStand.Model.Parent = workspace
         end
         
@@ -2630,7 +2560,6 @@ local function startYBA()
         -- Убираем все существующие Body объекты
         for _, child in pairs(targetStand.Root:GetChildren()) do
             if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyGyro") or child:IsA("BodyAngularVelocity") then
-    -- print("YBA: Удаляем Body объект:", child.Name, child.ClassName)
                 child:Destroy()
                 connectionsRemoved = connectionsRemoved + 1
             end
@@ -2647,21 +2576,16 @@ local function startYBA()
             targetStand.Root.Velocity = Vector3.new(0, 0, 0)
             targetStand.Root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             
-    -- print("YBA: Стенд позиционирован на:", standPosition)
         end
         
-    -- print("YBA: Стенд отсоединен и готов к управлению")
     end
     
     if YBAConfig.FreezePlayer and freezePlayer then 
-    -- print("YBA: Замораживаем игрока...")
         freezePlayer() 
     end
     if YBAConfig.SwitchCamera then 
-    -- print("YBA: Переключение камеры включено")
     end
     if YBAConfig.TransferControl and activateFreeCamera then 
-    -- print("YBA: Активируем управление стендом...")
         activateFreeCamera(targetStand) 
     end
     
@@ -2701,18 +2625,14 @@ local function stopYBA()
     standControlConnections = {}
     controlledStand = nil
     
-    -- print("Stand Range Hack деактивирован")
-    -- print("Автоматически отключаем Underground Flight...")
     if stopUndergroundControl then
         stopUndergroundControl()
     end
 end
 
 local function startUndergroundControl()
-    -- print("=== ЗАПУСК ПОДЗЕМНОГО ПОЛЕТА ===")
     
     if isUndergroundControlEnabled then 
-    -- print("Подземный полет уже активен!")
         return 
     end
     
@@ -2722,39 +2642,30 @@ local function startUndergroundControl()
     local root = char and char:FindFirstChild("HumanoidRootPart")
     
     if not hum or not root then 
-    -- print("Персонаж не найден!")
         return 
     end
     
-    -- print("Персонаж найден, позиция:", root.Position)
     
     if not findStands then
-    -- print("Функция findStands не найдена!")
         return
     end
     
     local stands = findStands()
     if #stands == 0 then
-    -- print("Стенды не найдены! Убедитесь, что у вас есть стенд.")
         return
     end
     
     controlledStandForUnderground = stands[1].Root
     isUndergroundControlEnabled = true
     
-    -- print("Найден стенд:", stands[1].Name, "на расстоянии:", stands[1].Distance)
-    -- print("Перемещаем персонажа под стенд на 40 метров вниз")
     
     if not YBAConfig.UndergroundControl.OriginalPosition then
         YBAConfig.UndergroundControl.OriginalPosition = root.Position
-    -- print("Исходная позиция сохранена:", root.Position)
     end
     
     if YBAConfig.UndergroundControl.AutoNoClip and not isNoClipping and startNoClip then
         startNoClip()
-    -- print("NoClip включен для подземного полета")
     elseif not startNoClip then
-    -- print("ОШИБКА: Функция startNoClip не найдена!")
     end
     
     local flyOriginalJumpPower = hum.JumpPower
@@ -2770,9 +2681,6 @@ local function startUndergroundControl()
     local standPos = controlledStandForUnderground.Position
     local undergroundPos = Vector3.new(standPos.X, standPos.Y - 40, standPos.Z)
     
-    -- print("Стенд позиция:", standPos)
-    -- print("Целевая подземная позиция:", undergroundPos)
-    -- print("Текущая позиция персонажа:", root.Position)
     
     local initialBv = Instance.new("BodyVelocity", root)
     initialBv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
@@ -2780,20 +2688,16 @@ local function startUndergroundControl()
     local speed = 200
     initialBv.Velocity = direction * speed
     
-    -- print("Создан BodyVelocity со скоростью:", initialBv.Velocity)
     
     task.spawn(function()
         task.wait(1)
         if initialBv and initialBv.Parent then
             initialBv:Destroy()
-    -- print("Начальный BodyVelocity удален")
         end
     end)
     
-    -- print("Запускаем основной цикл подземного полета...")
     local undergroundFlyLoop = RunService.Heartbeat:Connect(function()
         if not isUndergroundControlEnabled or not controlledStandForUnderground or not controlledStandForUnderground.Parent then
-    -- print("Подземный полет остановлен - стенд не найден или функция отключена")
             if hum then
                 hum.JumpPower = flyOriginalJumpPower
                 hum.JumpHeight = flyOriginalJumpHeight
@@ -2858,14 +2762,11 @@ local function startUndergroundControl()
     local humanoid = char and char:FindFirstChild("Humanoid")
     if humanoid then
         local deathConnection = humanoid.Died:Connect(function()
-    -- print("Игрок умер, отключаем Underground Flight...")
             stopUndergroundControl()
         end)
         table.insert(undergroundControlConnections, deathConnection)
     end
     
-    -- print("Полет под землей за стендом активирован!")
-    -- print("Персонаж перенесен под стенд на расстоянии 40 метров под землей")
 end
 
 local function stopUndergroundControl()
@@ -2901,7 +2802,6 @@ local function stopUndergroundControl()
     
     if YBAConfig.UndergroundControl.OriginalPosition then
         if root then
-    -- print("Плавно возвращаем персонажа в исходную позицию...")
             
             local returnBv = Instance.new("BodyVelocity", root)
             returnBv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
@@ -2919,7 +2819,6 @@ local function stopUndergroundControl()
                     returnBv:Destroy()
                     returnConnection:Disconnect()
                     YBAConfig.UndergroundControl.OriginalPosition = nil
-    -- print("Персонаж успешно возвращен в исходную позицию")
                 end
             end)
         end
@@ -2927,7 +2826,6 @@ local function stopUndergroundControl()
     
     controlledStandForUnderground = nil
     
-    -- print("Полет под землей за стендом отключен!")
 end
 
 local function getAlivePlayers()
@@ -2970,7 +2868,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.Space then
         isInputBeingProcessedByGame = gameProcessed
         if gameProcessed then
-    -- print("YBA: Пробел заблокирован - gameProcessed = true (чат/GUI активно)")
         end
     end
 end)
@@ -3026,7 +2923,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
                     startTeleport()
                     TeleportConfig.Enabled = true
                 else
-    -- print("Сначала выберите игрока для телепортации")
                 end
             end
             
@@ -3108,14 +3004,12 @@ end)
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == Enum.KeyCode.LeftControl then
         isShiftPressed = true
-    -- print("Ctrl нажат - ускорение активировано")
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.LeftControl then
         isShiftPressed = false
-    -- print("Ctrl отпущен - ускорение деактивировано")
     end
 end)
 
@@ -3321,7 +3215,12 @@ local function getClosestTarget()
     end
     return closest
 end
+-- ОПТИМИЗАЦИЯ: Ограничение частоты ESP для снижения лагов
+local lastESPUpdate = 0
+local ESP_UPDATE_RATE = 1/20 -- 20 FPS для ESP
+
 RunService.Heartbeat:Connect(function()
+    local currentTime = tick()
     local cam = workspace.CurrentCamera
     for _, player in ipairs(Players:GetPlayers()) do
         if player == Players.LocalPlayer then continue end
@@ -3385,10 +3284,8 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     if inp.UserInputType == Enum.UserInputType.Keyboard then
         if Config.ESP.ToggleKey and inp.KeyCode == Config.ESP.ToggleKey then
             Config.ESP.Enabled = not Config.ESP.Enabled
-    -- print("ESP toggled:", Config.ESP.Enabled)
         elseif Config.Aimbot.ToggleKey and inp.KeyCode == Config.Aimbot.ToggleKey then
             Config.Aimbot.Enabled = not Config.Aimbot.Enabled
-    -- print("Aimbot toggled:", Config.Aimbot.Enabled)
         end
     end
 end)
@@ -3584,7 +3481,6 @@ local function findYBAItemsFast()
                         local distance = (part.Position - playerRoot.Position).Magnitude
                         
                         foundCount = foundCount + 1
-    -- print("YBA Item ESP: Найден предмет", itemName, "на расстоянии", math.floor(distance), "м")
                         
                         table.insert(items, {
                             Object = part,
@@ -3603,7 +3499,6 @@ local function findYBAItemsFast()
                         local distance = (part.Position - playerRoot.Position).Magnitude
                         
                         foundCount = foundCount + 1
-    -- print("YBA Item ESP: Найден дневник (по поиску)", itemName, "на расстоянии", math.floor(distance), "м")
                         
                         table.insert(items, {
                             Object = part,
@@ -3636,7 +3531,6 @@ local function findYBAItemsFast()
                             
                             if distance <= YBAConfig.ItemESP.MaxDistance then
                                 foundCount = foundCount + 1
-    -- print("YBA Item ESP: Быстрый поиск - найден возможный предмет", itemName, "на расстоянии", math.floor(distance), "м")
                                 
                                 table.insert(items, {
                                     Object = part,
@@ -3666,11 +3560,9 @@ local function findYBAItemsAlternative()
     local playerChar = player.Character
     local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
     if not playerRoot then 
-    -- print("YBA Item ESP: Игрок не найден (альтернативный поиск)")
         return items 
     end
 
-    -- print("YBA Item ESP: Альтернативный поиск по всему workspace...")
     
     local foundCount = 0
     local searchedModels = {}
@@ -3682,7 +3574,6 @@ local function findYBAItemsAlternative()
         for _, child in ipairs(parent:GetChildren()) do
             debugCount = debugCount + 1
             if debugCount % 500 == 0 then
-    -- print("YBA Item ESP: Альтернативный поиск - проверено объектов:", debugCount)
             end
             
             if child:IsA("Model") then
@@ -3690,7 +3581,6 @@ local function findYBAItemsAlternative()
                     searchedModels[child] = true
 
                     if YBA_ITEM_NAMES[child.Name] and YBAConfig.ItemESP.Items[child.Name] then
-    -- print("YBA Item ESP: Альтернативный поиск - найдена модель предмета:", child.Name)
 
                         for _, part in ipairs(child:GetDescendants()) do
                             if part:IsA("MeshPart") or part:IsA("Part") then
@@ -3698,7 +3588,6 @@ local function findYBAItemsAlternative()
                                 
                                 if distance <= YBAConfig.ItemESP.MaxDistance then
                                     foundCount = foundCount + 1
-    -- print("YBA Item ESP: Альтернативный поиск - найден предмет", child.Name, "на расстоянии", math.floor(distance), "м")
                                     
                                     table.insert(items, {
                                         Object = part,
@@ -3713,7 +3602,6 @@ local function findYBAItemsAlternative()
                             end
                         end
                     elseif string.find(string.lower(child.Name), "diary") and YBAConfig.ItemESP.Items["DIO's Diary"] then
-    -- print("YBA Item ESP: Альтернативный поиск - найден дневник:", child.Name)
 
                         for _, part in ipairs(child:GetDescendants()) do
                             if part:IsA("MeshPart") or part:IsA("Part") then
@@ -3721,7 +3609,6 @@ local function findYBAItemsAlternative()
                                 
                                 if distance <= YBAConfig.ItemESP.MaxDistance then
                                     foundCount = foundCount + 1
-    -- print("YBA Item ESP: Альтернативный поиск - найден дневник", child.Name, "на расстоянии", math.floor(distance), "м")
                                     
                                     table.insert(items, {
                                         Object = part,
@@ -3740,7 +3627,6 @@ local function findYBAItemsAlternative()
                            string.find(string.lower(child.Name), "rokakaka") or
                            string.find(string.lower(child.Name), "diamond") or
                            string.find(string.lower(child.Name), "coin") then
-    -- print("YBA Item ESP: Альтернативный поиск - найдена неизвестная модель (возможно предмет):", child.Name)
                         end
                     end
                 end
@@ -3754,26 +3640,20 @@ local function findYBAItemsAlternative()
 
     table.sort(items, function(a, b) return a.Distance < b.Distance end)
     
-    -- print("YBA Item ESP: Альтернативный поиск - всего проверено объектов:", debugCount)
-    -- print("YBA Item ESP: Альтернативный поиск - всего найдено предметов:", foundCount)
     
     return items
 end
 
 local function debugWorkspaceStructure()
-    -- print("YBA Item ESP: === ОТЛАДКА СТРУКТУРЫ WORKSPACE ===")
     
-    local function printFolderStructure(parent, prefix, maxDepth)
         if maxDepth <= 0 then return end
         
         for _, child in ipairs(parent:GetChildren()) do
             local childType = child.ClassName
             local childName = child.Name
             
-    -- print(prefix .. "├─ " .. childName .. " (" .. childType .. ")")
 
             if child:IsA("Folder") then
-                printFolderStructure(child, prefix .. "│  ", maxDepth - 1)
             end
 
             if child:IsA("Model") then
@@ -3787,16 +3667,12 @@ local function debugWorkspaceStructure()
                     end
                 end
                 if hasMeshPart or hasPart then
-    -- print(prefix .. "│  └─ [Содержит MeshPart/Part]")
                 end
             end
         end
     end
     
-    -- print("YBA Item ESP: Структура workspace (первые 3 уровня):")
-    printFolderStructure(workspace, "", 3)
     
-    -- print("YBA Item ESP: === КОНЕЦ ОТЛАДКИ ===")
 end
 
 local function createItemESP(item)
@@ -3812,7 +3688,6 @@ local function createItemESP(item)
         return nil
     end
     
-    -- print("YBA Item ESP: Создаем ESP для предмета:", item.Name)
     
     local esp = {}
     esp.itemName = item.Name 
@@ -3866,9 +3741,7 @@ local function createItemESP(item)
         
         if success and highlight then
             esp.highlight = highlight
-    -- print("YBA Item ESP: Highlight создан для:", item.Name)
         else
-    -- print("YBA Item ESP: Ошибка при создании Highlight для:", item.Name)
         end
     end
 
@@ -3940,9 +3813,7 @@ local function createItemESP(item)
             esp.distanceLabel = billboard.distanceLabel
             esp.background = billboard.background
             esp.border = billboard.border
-    -- print("YBA Item ESP: BillboardGui создан для:", item.Name)
         else
-    -- print("YBA Item ESP: Ошибка при создании BillboardGui для:", item.Name)
         end
     end
     
@@ -3956,7 +3827,6 @@ local function updateItemESP(item)
 
     if true then
         if not item.Object or not item.Object.Parent then
-    -- print("YBA Item ESP: Предмет больше не существует, удаляем ESP:", item.Name)
             removeItemESP(item)
             return
         end
@@ -3970,7 +3840,6 @@ local function updateItemESP(item)
         end
         
         if not currentParent or currentParent == workspace then
-    -- print("YBA Item ESP: Предмет перемещен из папки Items, удаляем ESP:", item.Name)
             removeItemESP(item)
             return
         end
@@ -4054,18 +3923,12 @@ local function removeItemESP(item)
 end
 local function startItemESP()
     if itemESPEnabled then 
-    -- print("YBA Item ESP: Уже активирован!")
         return 
     end
     itemESPEnabled = true
     
-    -- print("YBA Item ESP: Активирован!")
-    -- print("YBA Item ESP: Максимальная дистанция:", YBAConfig.ItemESP.MaxDistance)
-    -- print("YBA Item ESP: Показывать обводку:", YBAConfig.ItemESP.ShowOutline)
-    -- print("YBA Item ESP: Показывать текст:", YBAConfig.ItemESP.ShowText)
 
     local testItems = findYBAItems()
-    -- print("YBA Item ESP: Активирован! Найдено предметов:", #testItems)
     
     local lastUpdate = 0
     local updateInterval = YBAConfig.ItemESP.UpdateInterval 
@@ -4098,13 +3961,11 @@ local function startItemESP()
             if success2 and items2 and #items2 > 0 then
                 items = items2
                 success = true
-    -- print("YBA Item ESP: Используем обычный поиск, найдено предметов:", #items)
             else
                 local success3, items3 = pcall(findYBAItemsAlternative)
                 if success3 and items3 and #items3 > 0 then
                     items = items3
                     success = true
-    -- print("YBA Item ESP: Используем альтернативный поиск, найдено предметов:", #items)
                 end
             end
         end
@@ -4125,7 +3986,6 @@ local function startItemESP()
                     else
                         -- Предмет отключен в настройках - убираем ESP
                         if itemESPElements[item.Object] then
-    -- print("YBA Item ESP: Предмет", item.Name, "отключен в настройках - удаляем ESP")
                             pcall(removeItemESP, item)
                         end
                     end
@@ -4133,7 +3993,6 @@ local function startItemESP()
             end
 
             if math.floor(currentTime) % 5 == 0 then
-    -- print("YBA Item ESP: Активных ESP:", #items, "| Максимальная дистанция:", YBAConfig.ItemESP.MaxDistance)
             end
         end
 
@@ -4141,7 +4000,6 @@ local function startItemESP()
             -- Удаляем ESP если предмет больше не найден ИЛИ отключен в настройках
             if not currentItems[obj] or (esp and esp.itemName and not YBAConfig.ItemESP.Items[esp.itemName]) then
                 if esp and esp.itemName and not YBAConfig.ItemESP.Items[esp.itemName] then
-    -- print("YBA Item ESP: Очистка - предмет", esp.itemName, "отключен в настройках")
                 end
                 pcall(removeItemESP, {Object = obj})
             end
@@ -4178,7 +4036,6 @@ local function stopItemESP()
     if not itemESPEnabled then return end
     itemESPEnabled = false
     
-    -- print("YBA Item ESP: Деактивирован!")
 
     for obj, esp in pairs(itemESPElements) do
         pcall(removeItemESP, {Object = obj})
@@ -4196,20 +4053,16 @@ end
 
 -- Функции для User Stand ESP (заглушки)
 local function startUserStandESP()
-    -- print("YBA Player ESP: User Stand ESP активирован")
 end
 
 local function stopUserStandESP()
-    -- print("YBA Player ESP: User Stand ESP деактивирован")
 end
 
 -- Функции для User Style ESP (заглушки)
 local function startUserStyleESP()
-    -- print("YBA Player ESP: User Style ESP активирован")
 end
 
 local function stopUserStyleESP()
-    -- print("YBA Player ESP: User Style ESP деактивирован")
 end
 
 -- Autofarm Functions
@@ -4241,7 +4094,6 @@ local function startBackpackMonitoring()
     local lastItemCount = getBackpackItemCount()
     local lastCheckTime = tick()
     
-    -- print("AUTOFARM: Начинаем мониторинг рюкзака. Текущее количество предметов:", lastItemCount)
     
     -- Оптимизация: добавляем ограничение частоты кадров для Autofarm Backpack Monitor
     local lastBackpackMonitorUpdate = 0
@@ -4264,12 +4116,10 @@ local function startBackpackMonitoring()
             if currentItemCount > lastItemCount then
                 -- Количество предметов увеличилось - обновляем таймер
                 autofarmLastPickupTime = tick()
-    -- print("AUTOFARM: ✅ Количество предметов в рюкзаке увеличилось с", lastItemCount, "до", currentItemCount, "- таймер обновлен")
             elseif currentItemCount == lastItemCount then
                 -- Количество предметов не изменилось
                 local timeSinceLastPickup = autofarmLastPickupTime and autofarmLastPickupTime > 0 and (currentTime - autofarmLastPickupTime) or -1
                 if timeSinceLastPickup > 0 then
-    -- print("AUTOFARM: 📊 Количество предметов не изменилось:", currentItemCount, "Прошло", math.floor(timeSinceLastPickup), "секунд с последнего подбора")
                 end
             end
             
@@ -4287,26 +4137,21 @@ local function findAutofarmItems()
     local playerChar = player.Character
     local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
     if not playerRoot then 
-    -- print("AUTOFARM: Игрок не найден")
         return items 
     end
 
-    -- print("AUTOFARM: Начинаем поиск предметов...")
     
     -- Ищем по точному пути workspace > Item_Spawns > Items
     local itemSpawnsFolder = workspace:FindFirstChild("Item_Spawns")
     if not itemSpawnsFolder then
-    -- print("AUTOFARM: Папка Item_Spawns не найдена!")
         return items
     end
     
     local itemsFolder = itemSpawnsFolder:FindFirstChild("Items")
     if not itemsFolder then
-    -- print("AUTOFARM: Папка Items не найдена!")
         return items
     end
     
-    -- print("AUTOFARM: Папки найдены, сканируем модели...")
     local foundCount = 0
     
             for _, model in ipairs(itemsFolder:GetChildren()) do
@@ -4314,11 +4159,9 @@ local function findAutofarmItems()
                 -- ПРОВЕРЯЕМ ProximityPrompt - если его нет, предмет баганый
                 local proximityPrompt = model:FindFirstChild("ProximityPrompt")
                 if not proximityPrompt then
-    -- print("AUTOFARM: ⚠️ Предмет", model.Name, "не имеет ProximityPrompt - пропускаем (баганый)")
                 else
                     -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: проверяем что ProximityPrompt активен
                     if proximityPrompt.Enabled == false then
-    -- print("AUTOFARM: ⚠️ Предмет", model.Name, "имеет неактивный ProximityPrompt - пропускаем (баганый)")
                     else
                         -- Получаем название предмета из ProximityPrompt
                         local itemName = proximityPrompt.ObjectText or proximityPrompt.ActionText or model.Name
@@ -4368,7 +4211,6 @@ local function findAutofarmItems()
                                     Model = model,
                                     ProximityPrompt = proximityPrompt
                                 }
-    -- print("AUTOFARM: 🎯 Найден предмет", itemName, "на расстоянии", math.floor(distance), "м")
                                 table.insert(items, tempItem)
                                 foundCount = foundCount + 1
                             end
@@ -4381,7 +4223,6 @@ local function findAutofarmItems()
     -- Сортируем по расстоянию (ближайшие первыми)
     table.sort(items, function(a, b) return a.Distance < b.Distance end)
     
-    -- print("AUTOFARM: Найдено", foundCount, "предметов для подбора")
     return items
 end
 
@@ -4389,20 +4230,17 @@ local function moveToPosition(targetPosition, callback)
     local player = Players.LocalPlayer
     local character = player.Character
     if not character then
-    -- print("AUTOFARM: Персонаж не найден")
         return false
     end
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
-    -- print("AUTOFARM: HumanoidRootPart не найден")
         return false
     end
     
     -- Включаем NoClip для прохода через землю
     if AutofarmConfig.UseNoClipMovement and not isNoClipping then
         startNoClip()
-    -- print("AUTOFARM: NoClip включен для трёхэтапного движения")
     end
     
     -- Настраиваем персонажа для полета
@@ -4425,7 +4263,6 @@ local function moveToPosition(targetPosition, callback)
     -- Отключаем гравитацию если нужно
     if AutofarmConfig.UseFlightMovement then
         workspace.Gravity = 0
-    -- print("AUTOFARM: Гравитация отключена")
     end
     
     -- ТРЁХЭТАПНОЕ ДВИЖЕНИЕ:
@@ -4439,10 +4276,6 @@ local function moveToPosition(targetPosition, callback)
     local stage2Target = Vector3.new(targetPosition.X, -70, targetPosition.Z)  -- Полёт по X,Z на уровне -70
     local stage3Target = Vector3.new(targetPosition.X, targetPosition.Y - 2, targetPosition.Z)  -- Подъём к предмету с отступом -2
     
-    -- print("AUTOFARM: 🎯 Трёхэтапное движение к позиции", targetPosition)
-    -- print("AUTOFARM: Этап 1: Спуск на Y=-70 ->", stage1Target)
-    -- print("AUTOFARM: Этап 2: Полёт по X,Z ->", stage2Target) 
-    -- print("AUTOFARM: Этап 3: Подъём к предмету ->", stage3Target)
     
     local moveConnection
     
@@ -4491,15 +4324,12 @@ local function moveToPosition(targetPosition, callback)
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
             
             if currentStage == 1 then
-    -- print("AUTOFARM: ✅ Этап 1 завершён - спустились на Y=-70")
                 currentStage = 2
             elseif currentStage == 2 then
-    -- print("AUTOFARM: ✅ Этап 2 завершён - достигли позиции по X,Z")
                 currentStage = 3
             else
                 -- Этап 3 завершён - достигли предмета
                 local finalDistance = (stage3Target - humanoidRootPart.Position).Magnitude
-    -- print("AUTOFARM: ✅ Этап 3 завершён - достигли предмета, расстояние:", math.floor(finalDistance * 10) / 10, "м")
                 
                 moveConnection:Disconnect()
                 if callback then
@@ -4514,11 +4344,9 @@ local function moveToPosition(targetPosition, callback)
 end
 
 local function pickupItem(item)
-    -- print("AUTOFARM: Пытаемся подобрать предмет", item.Name)
     
     -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: предмет все еще включен в настройках автофарма
     if not AutofarmConfig.Items[item.Name] then
-    -- print("AUTOFARM: Предмет", item.Name, "был отключен в настройках во время подбора - пропускаем")
         task.spawn(function()
             if isAutofarmEnabled then
                 processNextItem()
@@ -4534,7 +4362,6 @@ local function pickupItem(item)
     local player = Players.LocalPlayer
     local character = player.Character
     if not character then
-    -- print("AUTOFARM: Персонаж не найден при подборе")
         autofarmPickingUp = false
         task.spawn(function()
             if isAutofarmEnabled then
@@ -4546,7 +4373,6 @@ local function pickupItem(item)
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
-    -- print("AUTOFARM: HumanoidRootPart не найден при подборе")
         autofarmPickingUp = false
         task.spawn(function()
             if isAutofarmEnabled then
@@ -4581,7 +4407,6 @@ local function pickupItem(item)
                     )
                 end)
                 isKeyPressed = false
-    -- print("AUTOFARM: Клавиша E отпущена при отключении автофарма")
             end
             pickupConnection:Disconnect()
             autofarmPickingUp = false
@@ -4612,7 +4437,6 @@ local function pickupItem(item)
         end)
         
         if not itemStillExists then
-    -- print("AUTOFARM: Предмет", item.Name, "исчез - возможно подобран")
             if isKeyPressed then
                 pcall(function()
                     if game:GetService("VirtualInputManager") then
@@ -4628,11 +4452,9 @@ local function pickupItem(item)
             
             -- Предмет исчез - считаем успешным подбором
             autofarmLastPickupTime = tick()
-    -- print("AUTOFARM: ✅ Предмет", item.Name, "подобран успешно")
             
             -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
             autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
-    -- print("AUTOFARM: Успешный подбор - переходим к предмету", autofarmCurrentItemIndex)
             
             pickupConnection:Disconnect()
             autofarmPickingUp = false
@@ -4653,7 +4475,6 @@ local function pickupItem(item)
         
         -- Если в радиусе подбора и еще не начали подбор и не ждем следующую попытку
         if horizontalDistance <= AutofarmConfig.PickupRadius and not hasStartedPickup and not waitingForNextAttempt then
-    -- print("AUTOFARM: 🔧 Начинаем подбор", item.Name, "(", math.floor(distance), "м)")
             hasStartedPickup = true
             pickupStartTime = tick()
             
@@ -4695,15 +4516,12 @@ local function pickupItem(item)
             end
             
             attempts = attempts + 1
-    -- print("AUTOFARM: Попытка", attempts, "/", maxAttempts, "для предмета", item.Name)
             
             -- Если сделали 2 попытки, переходим к следующему предмету
             if attempts >= maxAttempts then
-    -- print("AUTOFARM: Сделали", maxAttempts, "попытки для", item.Name, "- ЗАБИВАЕМ ХУЙ и летим дальше")
                 
                 -- УДАЛЯЕМ МОДЕЛЬ предмета после неудачных попыток
                 if item.Model and item.Model.Parent then
-    -- print("AUTOFARM: 🗑️ Удаляем модель предмета", item.Name, "после неудачных попыток")
                     pcall(function()
                         item.Model:Destroy()
                     end)
@@ -4711,7 +4529,6 @@ local function pickupItem(item)
                 
                 -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
                 autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
-    -- print("AUTOFARM: Переходим к предмету", autofarmCurrentItemIndex)
                 
                 pickupConnection:Disconnect()
                 autofarmPickingUp = false
@@ -4725,7 +4542,6 @@ local function pickupItem(item)
                 return
             else
                 -- ЖДЕМ 1 СЕКУНДУ перед следующей попыткой
-    -- print("AUTOFARM: Ждем 1 секунду перед следующей попыткой...")
                 waitingForNextAttempt = true
                 hasStartedPickup = false
                 
@@ -4754,7 +4570,6 @@ local function pickupItem(item)
         
         -- Таймаут общий - если слишком долго пытаемся подобрать
         if tick() - pickupStartTime > 15 then
-    -- print("AUTOFARM: Общий таймаут для", item.Name)
             if isKeyPressed then
                 pcall(function()
                     if game:GetService("VirtualInputManager") then
@@ -4772,7 +4587,6 @@ local function pickupItem(item)
             
             -- УДАЛЯЕМ МОДЕЛЬ предмета при таймауте
             if item.Model and item.Model.Parent then
-    -- print("AUTOFARM: 🗑️ Удаляем модель предмета", item.Name, "при таймауте")
                 pcall(function()
                     item.Model:Destroy()
                 end)
@@ -4780,7 +4594,6 @@ local function pickupItem(item)
             
             -- УВЕЛИЧИВАЕМ ИНДЕКС для следующего предмета
             autofarmCurrentItemIndex = autofarmCurrentItemIndex + 1
-    -- print("AUTOFARM: Таймаут - переходим к предмету", autofarmCurrentItemIndex)
             
             pickupConnection:Disconnect()
             autofarmPickingUp = false
@@ -4809,7 +4622,6 @@ function processNextItem()
     local timeSinceLastPickup = autofarmLastPickupTime and autofarmLastPickupTime > 0 and (currentTime - autofarmLastPickupTime) or -1
     
     if timeSinceLastPickup > 15 then
-    -- print("AUTOFARM: Неактивность", math.floor(timeSinceLastPickup), "секунд - ПОЛНЫЙ ПЕРЕЗАПУСК автофарма")
         
         task.spawn(function()
             -- Полностью останавливаем автофарм
@@ -4819,7 +4631,6 @@ function processNextItem()
             task.wait(0.2)
             
             -- Запускаем автофарм заново (как будто пользователь нажал кнопку)
-    -- print("AUTOFARM: Автоматический перезапуск...")
             startAutofarm()
         end)
         return
@@ -4829,20 +4640,16 @@ function processNextItem()
     local currentTime = tick()
     local timeSinceLastPickup = autofarmLastPickupTime and autofarmLastPickupTime > 0 and (currentTime - autofarmLastPickupTime) or -1
     if timeSinceLastPickup > 0 then
-    -- print("AUTOFARM DEBUG: Прошло", math.floor(timeSinceLastPickup), "секунд с последнего успешного подбора")
     else
-    -- print("AUTOFARM DEBUG: Таймер не инициализирован")
     end
     
     -- Сканируем новые предметы только если список пустой
     if #autofarmAllItems == 0 then
         autofarmAllItems = findAutofarmItems()
         autofarmCurrentItemIndex = 1
-    -- print("AUTOFARM: Найдено", #autofarmAllItems, "предметов для подбора")
     end
     
     if #autofarmAllItems == 0 then
-    -- print("AUTOFARM: Нет доступных предметов для подбора - ждем и сканируем снова")
         -- Если нет доступных предметов, ждем и сканируем снова
         task.spawn(function()
             task.wait(AutofarmConfig.ScanInterval)
@@ -4855,7 +4662,6 @@ function processNextItem()
     
     -- Берем следующий предмет по индексу
     if autofarmCurrentItemIndex > #autofarmAllItems then
-    -- print("AUTOFARM: Прошли все предметы в списке - сканируем заново")
         autofarmAllItems = {}
         autofarmCurrentItemIndex = 1
         task.spawn(function()
@@ -4869,15 +4675,12 @@ function processNextItem()
     
     local nextItem = autofarmAllItems[autofarmCurrentItemIndex]
     autofarmCurrentTarget = nextItem
-    -- print("AUTOFARM: Берем предмет", autofarmCurrentItemIndex, "/", #autofarmAllItems, "-", nextItem.Name)
     
     -- ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: предмет все еще включен в настройках автофарма
     if not AutofarmConfig.Items[nextItem.Name] then
-    -- print("AUTOFARM: Предмет", nextItem.Name, "был отключен в настройках - пропускаем")
         
         -- УДАЛЯЕМ МОДЕЛЬ предмета который отключен в настройках
         if nextItem.Model and nextItem.Model.Parent then
-    -- print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "отключенного в настройках")
             pcall(function()
                 nextItem.Model:Destroy()
             end)
@@ -4914,11 +4717,9 @@ function processNextItem()
     end)
     
     if not itemExists then
-    -- print("AUTOFARM: Предмет", nextItem.Name, "исчез ДО начала полета (нет физических частей) - сразу ищем следующий")
         
         -- УДАЛЯЕМ МОДЕЛЬ предмета который не существует
         if nextItem.Model and nextItem.Model.Parent then
-    -- print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "который не существует")
             pcall(function()
                 nextItem.Model:Destroy()
             end)
@@ -4934,7 +4735,6 @@ function processNextItem()
         return
     end
     
-    -- print("AUTOFARM: ✈️ Летим к предмету", nextItem.Name, "на расстоянии", math.floor(nextItem.Distance), "м")
     
     local targetPosition = Vector3.new(nextItem.Position.X, nextItem.Position.Y - 2, nextItem.Position.Z)
     pcall(function()
@@ -4960,11 +4760,9 @@ function processNextItem()
             if itemExistsAfterFlight then
                 pickupItem(nextItem)
             else
-    -- print("AUTOFARM: Предмет", nextItem.Name, "исчез ПОСЛЕ полета (нет физических частей) - сразу ищем следующий")
                 
                 -- УДАЛЯЕМ МОДЕЛЬ предмета который исчез после полета
                 if nextItem.Model and nextItem.Model.Parent then
-    -- print("AUTOFARM: 🗑️ Удаляем модель предмета", nextItem.Name, "который исчез после полета")
                     pcall(function()
                         nextItem.Model:Destroy()
                     end)
@@ -5014,7 +4812,6 @@ local function forceLoadEntireMap()
         Vector3.new(900, -70, 0),
     }
     
-    -- print("AUTOFARM: Летим по", #loadPoints, "точкам для прогрузки карты...")
     
     local bodyVelocity = Instance.new("BodyVelocity", humanoidRootPart)
     bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
@@ -5023,7 +4820,6 @@ local function forceLoadEntireMap()
     for i, point in ipairs(loadPoints) do
         if not isAutofarmEnabled then break end
         
-    -- print("🤖 AUTOFARM: Летим к точке прогрузки", i, "/", #loadPoints, "- позиция:", point)
         
         local startTime = tick()
         local maxFlightTime = 10 -- Максимум 10 секунд на одну точку
@@ -5050,7 +4846,6 @@ local function forceLoadEntireMap()
         task.wait(0.1)
         
         -- Показываем прогресс каждой точки
-    -- print("🤖 AUTOFARM: Прогрузка точки", i, "/", #loadPoints, "- позиция:", point, "завершена")
     end
     
     -- Очищаем BodyVelocity после прогрузки
@@ -5066,12 +4861,10 @@ local function forceLoadEntireMap()
     -- Быстрая финальная стабилизация
     task.wait(1)
     
-    -- print("🤖 AUTOFARM: Прогрузка карты завершена!")
 end
 
 function startAutofarm()
     if isAutofarmEnabled then
-    -- print("AUTOFARM: Уже активен!")
         return
     end
     
@@ -5082,23 +4875,19 @@ function startAutofarm()
             task.cancel(autofarmRestartTimer)
             autofarmRestartTimer = nil
         end
-    -- print("🤖 AUTOFARM: Отменен автоматический перезапуск - запуск вручную")
     end
     
     local player = Players.LocalPlayer
     local character = player.Character
     if not character then
-    -- print("AUTOFARM: Персонаж не найден!")
         return
     end
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then
-    -- print("AUTOFARM: HumanoidRootPart не найден!")
         return
     end
     
-    -- print("🤖 AUTOFARM: ЗАПУЩЕН!")
     isAutofarmEnabled = true
     AutofarmConfig.Enabled = true
     
@@ -5107,19 +4896,16 @@ function startAutofarm()
         local humanoid = character:FindFirstChild("Humanoid")
         if humanoid and not autofarmDeathCheckConnection then
             autofarmDeathCheckConnection = humanoid.Died:Connect(function()
-    -- print("🤖 AUTOFARM: Игрок умер! Сохраняем состояние функций и останавливаем...")
                 
                 -- Сохраняем состояние функций перед смертью
                 wasAutofarmEnabledBeforeDeath = AutofarmConfig.Enabled
                 wasAutosellEnabledBeforeDeath = _G.AutosellModule and _G.AutosellModule.isEnabled() or false
                 deathTrackingActive = true
                 
-    -- print("🤖 AUTOFARM: Состояние сохранено - Autofarm:", wasAutofarmEnabledBeforeDeath, "Autosell:", wasAutosellEnabledBeforeDeath)
                 
                 -- Останавливаем функции
                 stopAutofarm()
                 if _G.AutosellModule and _G.AutosellModule.stop then
-    -- print("🤖 AUTOFARM: Останавливаем автосел из-за смерти игрока...")
                     _G.AutosellModule.stop()
                 end
             end)
@@ -5138,13 +4924,10 @@ function startAutofarm()
         
         -- Восстанавливаем функции если они были включены перед смертью
         if deathTrackingActive then
-    -- print("🤖 AUTOFARM: Игрок возродился! Восстанавливаем функции...")
-    -- print("🤖 AUTOFARM: Восстанавливаем состояние - Autofarm:", wasAutofarmEnabledBeforeDeath, "Autosell:", wasAutosellEnabledBeforeDeath)
             
             -- Восстанавливаем автофарм если он был включен
             if wasAutofarmEnabledBeforeDeath then
                 task.wait(0.5) -- Даем время персонажу полностью загрузиться
-    -- print("🤖 AUTOFARM: Перезапускаем автофарм после возрождения...")
                 if not isAutofarmEnabled then
                     startAutofarm()
                 end
@@ -5153,7 +4936,6 @@ function startAutofarm()
             -- Восстанавливаем автосел если он был включен  
             if wasAutosellEnabledBeforeDeath then
                 task.wait(0.3) -- Даем время автофарму запуститься сначала
-    -- print("🤖 AUTOFARM: Перезапускаем автосел после возрождения...")
                 if _G.AutosellModule and _G.AutosellModule.start and not _G.AutosellModule.isEnabled() then
                     _G.AutosellModule.start()
                 end
@@ -5174,7 +4956,6 @@ function startAutofarm()
     -- Очищаем список предметов при запуске
     autofarmAllItems = {}
     autofarmCurrentItemIndex = 1
-    -- print("🤖 AUTOFARM: Список предметов очищен")
     
     -- НОВОЕ: Принудительная прогрузка карты перед началом фарма
     task.spawn(function()
@@ -5184,7 +4965,6 @@ function startAutofarm()
         
         -- ВАЖНО: Инициализируем время последнего подбора ПОСЛЕ прогрузки карты
         autofarmLastPickupTime = tick()
-    -- print("🤖 AUTOFARM: Таймер неактивности запущен после прогрузки карты")
         
         -- После прогрузки начинаем основной процесс
         if isAutofarmEnabled then
@@ -5200,7 +4980,6 @@ function stopAutofarm()
         return
     end
     
-    -- print("🤖 AUTOFARM: ОСТАНОВЛЕН!")
     isAutofarmEnabled = false
     AutofarmConfig.Enabled = false
     autofarmPickingUp = false
@@ -5209,7 +4988,6 @@ function stopAutofarm()
     -- Очищаем список предметов при остановке
     autofarmAllItems = {}
     autofarmCurrentItemIndex = 1
-    -- print("🤖 AUTOFARM: Список предметов очищен при остановке")
     
     -- Отменяем автоматический перезапуск если он был запланирован
     if autofarmAutoRestarting then
@@ -5218,7 +4996,6 @@ function stopAutofarm()
             task.cancel(autofarmRestartTimer)
             autofarmRestartTimer = nil
         end
-    -- print("🤖 AUTOFARM: Отменен автоматический перезапуск - остановка вручную")
     end
     
     -- ПРИНУДИТЕЛЬНО отпускаем клавишу E (фикс бага с зажатой кнопкой)
@@ -5230,7 +5007,6 @@ function stopAutofarm()
             {KeyCode = AutofarmConfig.PickupKey, UserInputType = Enum.UserInputType.Keyboard},
             false
         )
-    -- print("🤖 AUTOFARM: Клавиша E принудительно отпущена")
     end)
     
     -- Отключаем отслеживание смерти для автофарма
@@ -5272,7 +5048,6 @@ function stopAutofarm()
                     workspace.Gravity = 196.2
                 end
             else
-    -- print("AUTOFARM: Флай включен - НЕ восстанавливаем настройки персонажа")
             end
             
             -- ДОПОЛНИТЕЛЬНАЯ ОЧИСТКА: убираем все BodyVelocity объекты с персонажа
@@ -5280,7 +5055,6 @@ function stopAutofarm()
                 if part:IsA("BasePart") then
                     for _, child in pairs(part:GetChildren()) do
                         if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyGyro") then
-    -- print("AUTOFARM: Удаляем", child.ClassName, "из", part.Name)
                             child:Destroy()
                         end
                     end
@@ -5296,7 +5070,6 @@ function stopAutofarm()
         end
     end
     
-    -- print("AUTOFARM: Полностью остановлен")
 end
 
 -- Экспорт функций автофарма для модуля автоселла  
@@ -5305,7 +5078,6 @@ _G.isAutofarmEnabled = function() return isAutofarmEnabled end
 _G.startAutofarm = startAutofarm
 _G.stopAutofarm = function() 
     isAutofarmEnabled = false 
-    -- print("🤖 AUTOFARM: Остановлен через _G.stopAutofarm") 
 end
 _G.AutofarmConfig = AutofarmConfig
 
@@ -6310,7 +6082,6 @@ function showContent(tabName)
         createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
             YBAConfig.UndergroundControl.FlightSpeed = v
             if isUndergroundControlEnabled and controlledStandForUnderground then
-    -- print("YBA: Скорость подземного полета изменена на:", v)
             end
         end)
         
@@ -6346,7 +6117,6 @@ function showContent(tabName)
                     stopAntiTimeStop()
                     antiTimeStopBtn.Text = "ANTI TIME STOP"
                     antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-    -- print("Anti TS: ГОТОВО!")
                 end)
             end
         end)
@@ -6402,22 +6172,18 @@ function showContent(tabName)
         local function createItemToggle(itemName, defaultState)
             local btn = createToggleSlider(itemName, defaultState, function(v)
                 YBAConfig.ItemESP.Items[itemName] = v
-    -- print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
                 
                 -- ИСПРАВЛЕНО: Принудительно обновляем ESP независимо от общего состояния
                 if not v then
                     -- При отключении предмета немедленно убираем все его ESP элементы
-    -- print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
                     for obj, esp in pairs(itemESPElements) do
                         if esp and esp.itemName == itemName then
-    -- print("YBA Item ESP: Удаляем ESP элемент для:", itemName)
                             pcall(removeItemESP, {Object = obj})
                         end
                     end
                 else
                     -- При включении предмета принудительно обновляем поиск если ESP активен
                     if YBAConfig.ItemESP.Enabled then
-    -- print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
                     end
                 end
             end)
@@ -6471,7 +6237,6 @@ function showContent(tabName)
                     AutofarmConfig.Items["GoldCoin"] = v -- без пробела
                 end
                 
-    -- print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
                 
                 -- Если автофарм активен, обновляем настройки
                 if isAutofarmEnabled then
@@ -6479,7 +6244,6 @@ function showContent(tabName)
                     
                     -- КРИТИЧНО: Если текущий целевой предмет был отключен, прерываем движение к нему
                     if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
-    -- print("🤖 AUTOFARM: Прерываем движение к предмету", itemName, "- он был отключен в настройках")
                         autofarmCurrentTarget = nil
                         autofarmPickingUp = false
                         
@@ -6544,10 +6308,7 @@ function showContent(tabName)
         if _G.AutosellModule then
             -- Модуль уже загружен, используем его функцию createGUI
             if _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-    -- print("🤖 AUTOSELL: Создаем GUI через модуль...")
-    -- print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
                 local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-    -- print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
                 currentY = newCurrentY or currentY
             else
                 -- Fallback на старый способ если функция createGUI недоступна
@@ -6583,10 +6344,8 @@ function showContent(tabName)
 
         -- Кнопка загрузки модуля автоселла
         local loadButton = createButton("Load Autosell Module", function()
-    -- print("🤖 AUTOSELL: Загружаем модуль автоселла...")
             
             if _G.AutosellModule then
-    -- print("🤖 AUTOSELL: Модуль уже загружен! Обновляем интерфейс...")
                 if loadButton then loadButton.Visible = destroy end
                 showContent("YBA Hacks")
                 return
@@ -6613,14 +6372,10 @@ function showContent(tabName)
             end
             
             if success and result then
-    -- print("🤖 AUTOSELL: Модуль загружен, создаем GUI...")
                 
                 -- Используем функцию createGUI из загруженного модуля
                 if _G.AutosellModule and _G.AutosellModule.createGUI and type(_G.AutosellModule.createGUI) == "function" then
-    -- print("🤖 AUTOSELL: Создаем GUI через загруженный модуль...")
-    -- print("🤖 AUTOSELL: Параметры перед вызовом:", {functionsContainer = functionsContainer, currentY = currentY})
                     local newCurrentY = _G.AutosellModule.createGUI(functionsContainer, currentY, createToggleSlider, createSlider, createDivider, createSectionHeader, createButton)
-    -- print("🤖 AUTOSELL: Получили обратно currentY =", newCurrentY)
                     currentY = newCurrentY or currentY
                 else
                     -- Fallback на старый способ если функция createGUI недоступна
@@ -6652,7 +6407,6 @@ function showContent(tabName)
                     end)
                 end
                 
-    -- print("🤖 AUTOSELL: GUI создан! Управление доступно выше.")
                 
                 -- Обновляем размер контейнера чтобы новые элементы отобразились
                 functionsContainer.Size = UDim2.new(1, 0, 0, currentY)
@@ -6669,10 +6423,6 @@ function showContent(tabName)
                 task.wait(0.5)
                 showContent("YBA Hacks")
             else
-    -- print("🤖 AUTOSELL: Ошибка загрузки модуля:", tostring(result))
-    -- print("🤖 AUTOSELL: Попробуйте:")
-    -- print("1. Разместить autosell.lua онлайн и обновить URL")
-    -- print("2. Или поместить autosell.lua в папку workspace")
             end
         end)
     elseif tabName == "Settings" then
