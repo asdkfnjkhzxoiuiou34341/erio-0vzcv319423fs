@@ -8,6 +8,26 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
 
+-- ДОПОЛНИТЕЛЬНЫЕ ОПТИМИЗАЦИИ ДЛЯ АИМБОТА
+local AimbotOptimizations = {
+    MaxTargetFPS = 20, -- Максимум 20 FPS для аимбота
+    MaxESPFPS = 15, -- Максимум 15 FPS для ESP
+    TargetCacheTime = 0.1, -- Кэшировать цель на 0.1 секунды
+    MaxRenderDistance = 500, -- Не обрабатывать цели дальше 500 studs
+    MaxTargets = 10, -- Максимум 10 целей для обработки
+    SkipFrameCount = 3, -- Пропускать каждый 3-й кадр
+}
+
+local AimbotCache = {
+    lastUpdate = 0,
+    lastESPUpdate = 0,
+    currentTarget = nil,
+    targetCacheTime = 0,
+    frameSkipCounter = 0,
+    validTargets = {},
+    lastTargetScan = 0,
+}
+
 local Config = {
     ESP = {
         Enabled     = true,
@@ -30,7 +50,7 @@ local Config = {
         Enabled         = false,
         TeamCheck       = false,
         VisibilityCheck = true,
-        FOV             = 150,
+        FOV             = 100, -- Уменьшили с 150 до 100 для лучшей производительности
         ToggleKey       = nil,
         FOVColor        = Color3.fromRGB(255,128,128),
         FOVRainbow      = false,
@@ -38,6 +58,71 @@ local Config = {
     MenuCollapsed = false,
 }
 
+-- ОПТИМИЗИРОВАННЫЕ ФУНКЦИИ ДЛЯ АИМБОТА
+local function shouldSkipAimbotFrame()
+    AimbotCache.frameSkipCounter = AimbotCache.frameSkipCounter + 1
+    if AimbotCache.frameSkipCounter >= AimbotOptimizations.SkipFrameCount then
+        AimbotCache.frameSkipCounter = 0
+        return false
+    end
+    return true
+end
+
+local function isValidAimbotTarget(player)
+    if not player or not player.Character then return false end
+    local character = player.Character
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    -- Быстрая проверка расстояния без sqrt
+    local localPlayer = Players.LocalPlayer
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local distance = (humanoidRootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude
+    return distance <= AimbotOptimizations.MaxRenderDistance
+end
+
+local function getOptimizedTargetList()
+    local currentTime = tick()
+    -- Обновляем список целей только раз в 0.2 секунды
+    if currentTime - AimbotCache.lastTargetScan < 0.2 then
+        return AimbotCache.validTargets
+    end
+    
+    AimbotCache.lastTargetScan = currentTime
+    AimbotCache.validTargets = {}
+    
+    local count = 0
+    for _, player in pairs(Players:GetPlayers()) do
+        if count >= AimbotOptimizations.MaxTargets then break end
+        if player ~= Players.LocalPlayer and isValidAimbotTarget(player) then
+            table.insert(AimbotCache.validTargets, player)
+            count = count + 1
+        end
+    end
+    
+    return AimbotCache.validTargets
+end
+
+local function shouldUpdateAimbot()
+    local currentTime = tick()
+    if currentTime - AimbotCache.lastUpdate < (1 / AimbotOptimizations.MaxTargetFPS) then
+        return false
+    end
+    AimbotCache.lastUpdate = currentTime
+    return true
+end
+
+local function shouldUpdateESP()
+    local currentTime = tick()
+    if currentTime - AimbotCache.lastESPUpdate < (1 / AimbotOptimizations.MaxESPFPS) then
+        return false
+    end
+    AimbotCache.lastESPUpdate = currentTime
+    return true
+end
 
 local MovementConfig = {
     Fly = {Enabled = false, Speed = 1, ToggleKey = nil},
@@ -70,7 +155,7 @@ local TeleportConfig = {
 local YBAConfig = {
     Enabled = false,
     ToggleKey = nil,
-    StandRange = 500, -- Уменьшили с 100000 до разумного значения
+            StandRange = 300, -- Дополнительно уменьшили для лучшей производительности
     FreezePlayer = true,
     SwitchCamera = true,
     TransferControl = true,
@@ -94,9 +179,9 @@ local YBAConfig = {
     ItemESP = {
         Enabled = false,
         ToggleKey = nil,
-        MaxDistance = 1000,
-        MaxRenderDistance = 5000,
-        UpdateInterval = 0.3,
+        MaxDistance = 500, -- Уменьшили с 1000 для лучшей производительности
+        MaxRenderDistance = 2000, -- Уменьшили с 5000 для лучшей производительности
+        UpdateInterval = 0.5, -- Увеличили с 0.3 до 0.5 для лучшей производительности
         ShowOutline = true,
         ShowText = true,
         ShowFill = true,
@@ -929,6 +1014,8 @@ local function startFly()
         elseif input.KeyCode == Enum.KeyCode.LeftControl then ctrl.d = 0 end
     end)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Fly
+    local lastFlyUpdate = 0
     local renderConnection = RunService.RenderStepped:Connect(function()
         if not isFlying or not char or not char:FindFirstChild("Humanoid") or not root then
             if hum then
@@ -945,6 +1032,13 @@ local function startFly()
             renderConnection:Disconnect()
             return
         end
+        
+        -- Ограничиваем до 30 FPS для полета
+        local currentTime = tick()
+        if currentTime - lastFlyUpdate < 0.033 then
+            return
+        end
+        lastFlyUpdate = currentTime
         
         local cam = workspace.CurrentCamera
         if not cam then return end
@@ -6250,7 +6344,7 @@ function showContent(tabName)
         
         spawn(function()
             while true do
-                task.wait(2)
+                task.wait(5) -- Увеличили с 2 до 5 секунд для лучшей производительности
                 if selectedTab == "Main" then
                     createPlayerList()
                 end
