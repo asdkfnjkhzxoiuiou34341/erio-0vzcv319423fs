@@ -1131,10 +1131,19 @@ local function startAntiTimeStop()
         print("Anti TS: Принудительное движение активировано")
     
     -- БЕЗОПАСНОЕ принудительное движение
+    -- Оптимизация: добавляем ограничение частоты кадров для Anti TS
+    local lastAntiTSUpdate = 0
     local antiFreezeLoop = RunService.Heartbeat:Connect(function()
         if not isAntiTimeStopEnabled or not char or not char.Parent then
             return
         end
+        
+        -- Ограничиваем до 30 FPS для уменьшения нагрузки
+        local currentTime = tick()
+        if currentTime - lastAntiTSUpdate < 0.033 then
+            return
+        end
+        lastAntiTSUpdate = currentTime
         
         -- Просто убираем Anchored с основных частей (безопасно)
         if root then
@@ -1267,10 +1276,19 @@ local function startAntiTimeStop()
         end
     end)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для детекции атак
+    local lastAttackDetectionUpdate = 0
     local attackDetection = RunService.Heartbeat:Connect(function()
         if not isAntiTimeStopEnabled or not timeStopDetected or not char or not char.Parent then
             return
         end
+        
+        -- Ограничиваем до 20 FPS для детекции атак
+        local currentTime = tick()
+        if currentTime - lastAttackDetectionUpdate < 0.05 then
+            return
+        end
+        lastAttackDetectionUpdate = currentTime
         
         local isAttacking = false
         
@@ -1292,10 +1310,19 @@ local function startAntiTimeStop()
         end
     end)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для детекции Time Stop
+    local lastTimeStopDetectionUpdate = 0
     local timeStopDetection = RunService.Heartbeat:Connect(function()
         if not isAntiTimeStopEnabled or not char or not char.Parent then
             return
         end
+        
+        -- Ограничиваем до 15 FPS для детекции Time Stop
+        local currentTime = tick()
+        if currentTime - lastTimeStopDetectionUpdate < 0.067 then
+            return
+        end
+        lastTimeStopDetectionUpdate = currentTime
         
         local detected, timeStopPlayer, timeStopAbility = detectTimeStop()
         
@@ -1359,10 +1386,19 @@ local function startAntiTimeStop()
         end
     end)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для движения
+    local lastMovementOverrideUpdate = 0
     local movementOverride = RunService.Heartbeat:Connect(function()
         if not isAntiTimeStopEnabled or not timeStopDetected or not char or not char.Parent then
             return
         end
+        
+        -- Ограничиваем до 60 FPS для плавного движения
+        local currentTime = tick()
+        if currentTime - lastMovementOverrideUpdate < 0.017 then
+            return
+        end
+        lastMovementOverrideUpdate = currentTime
         
         if AntiTimeStopConfig.MovementOverride then
             local bv = root:FindFirstChild("AntiTimeStopBodyVelocity")
@@ -1505,10 +1541,19 @@ local function startNoClip()
     end
     
     
+    -- Оптимизация: добавляем ограничение частоты кадров для NoClip
+    local lastNoClipUpdate = 0
     local noClipLoop = RunService.Heartbeat:Connect(function()
         if not isNoClipping or not char or not char.Parent then
             return
         end
+        
+        -- Ограничиваем до 30 FPS для NoClip
+        local currentTime = tick()
+        if currentTime - lastNoClipUpdate < 0.033 then
+            return
+        end
+        lastNoClipUpdate = currentTime
         noclip()
     end)
     
@@ -1587,8 +1632,17 @@ local function startSpeedHack()
     local characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
     table.insert(speedHackConnections, characterAddedConnection)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Speed Hack
+    local lastSpeedUpdate = 0
     local speedLoop = RunService.Heartbeat:Connect(function()
         if not isSpeedHacking then return end
+        
+        -- Ограничиваем до 60 FPS для плавного движения
+        local currentTime = tick()
+        if currentTime - lastSpeedUpdate < 0.017 then
+            return
+        end
+        lastSpeedUpdate = currentTime
         
         local currentChar = Players.LocalPlayer.Character
         local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
@@ -1652,8 +1706,17 @@ local function startLongJump()
     table.insert(longJumpConnections, characterAddedConnection)
     
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Long Jump
+    local lastLongJumpUpdate = 0
     local longJumpLoop = RunService.Heartbeat:Connect(function()
         if not isLongJumping then return end
+        
+        -- Ограничиваем до 30 FPS для Long Jump
+        local currentTime = tick()
+        if currentTime - lastLongJumpUpdate < 0.033 then
+            return
+        end
+        lastLongJumpUpdate = currentTime
         
         local currentChar = Players.LocalPlayer.Character
         local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
@@ -1833,10 +1896,19 @@ local function createStealthTeleport()
         end
     end)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Stealth Teleport
+    local lastStealthTeleportUpdate = 0
     local stealthTeleportLoop = RunService.Heartbeat:Connect(function()
         if not isTeleporting or not targetChar or not targetChar.Parent then
             return
         end
+        
+        -- Ограничиваем до 60 FPS для плавного телепорта
+        local currentTime = tick()
+        if currentTime - lastStealthTeleportUpdate < 0.017 then
+            return
+        end
+        lastStealthTeleportUpdate = currentTime
         
         
         if isNoClipping and char and char.Parent then
@@ -3998,13 +4070,21 @@ local function startItemESP()
     local lastUpdate = 0
     local updateInterval = YBAConfig.ItemESP.UpdateInterval 
 
+    -- Оптимизация: добавляем ограничение частоты кадров для Item ESP
+    local lastItemESPUpdate = 0
     local itemESPLoop = RunService.Heartbeat:Connect(function()
         if not YBAConfig.ItemESP.Enabled then
             stopItemESP()
             return
         end
-
+        
+        -- Ограничиваем до 10 FPS для Item ESP (менее критично для производительности)
         local currentTime = tick()
+        if currentTime - lastItemESPUpdate < 0.1 then
+            return
+        end
+        lastItemESPUpdate = currentTime
+
         if currentTime - lastUpdate < updateInterval then
             return
         end
@@ -4070,10 +4150,19 @@ local function startItemESP()
     
     table.insert(itemESPConnections, itemESPLoop)
 
+    -- Оптимизация: добавляем ограничение частоты кадров для cleanup
+    local lastCleanupUpdate = 0
     local cleanupLoop = RunService.Heartbeat:Connect(function()
         if not YBAConfig.ItemESP.Enabled then
             return
         end
+        
+        -- Ограничиваем до 5 FPS для cleanup (очистка менее критична)
+        local currentTime = tick()
+        if currentTime - lastCleanupUpdate < 0.2 then
+            return
+        end
+        lastCleanupUpdate = currentTime
         
         for obj, esp in pairs(itemESPElements) do
             if not obj or not obj.Parent then
@@ -4154,12 +4243,20 @@ local function startBackpackMonitoring()
     
     print("AUTOFARM: Начинаем мониторинг рюкзака. Текущее количество предметов:", lastItemCount)
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Autofarm Backpack Monitor
+    local lastBackpackMonitorUpdate = 0
     local backpackMonitorConnection = RunService.Heartbeat:Connect(function()
         if not isAutofarmEnabled then
             return
         end
         
+        -- Ограничиваем до 5 FPS для мониторинга рюкзака
         local currentTime = tick()
+        if currentTime - lastBackpackMonitorUpdate < 0.2 then
+            return
+        end
+        lastBackpackMonitorUpdate = currentTime
+        
         local currentItemCount = getBackpackItemCount()
         
         -- Проверяем каждые 5 секунд
@@ -4349,6 +4446,8 @@ local function moveToPosition(targetPosition, callback)
     
     local moveConnection
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Autofarm Movement
+    local lastAutofarmMoveUpdate = 0
     moveConnection = RunService.Heartbeat:Connect(function()
         if not isAutofarmEnabled then
             -- При отключении автофарма очищаем BodyVelocity
@@ -4359,6 +4458,13 @@ local function moveToPosition(targetPosition, callback)
             moveConnection:Disconnect()
             return
         end
+        
+        -- Ограничиваем до 30 FPS для движения в автофарме
+        local currentTime = tick()
+        if currentTime - lastAutofarmMoveUpdate < 0.033 then
+            return
+        end
+        lastAutofarmMoveUpdate = currentTime
         
         local currentPos = humanoidRootPart.Position
         local currentTarget
@@ -4459,6 +4565,8 @@ local function pickupItem(item)
     local maxAttempts = 2
     local waitingForNextAttempt = false
     
+    -- Оптимизация: добавляем ограничение частоты кадров для Autofarm Pickup
+    local lastAutofarmPickupUpdate = 0
     pickupConnection = RunService.Heartbeat:Connect(function()
         if not isAutofarmEnabled then
             -- При отключении автофарма ОБЯЗАТЕЛЬНО отпускаем клавишу
