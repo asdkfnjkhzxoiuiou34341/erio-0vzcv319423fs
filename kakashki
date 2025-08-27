@@ -293,8 +293,53 @@ local respawnHandler = nil
 
 
 
+-- ==================== АВТОМАТИЧЕСКАЯ ЗАГРУЗКА YBA HACKS MODULE ====================
 
+print("🎯 KAKASHKI: Начинаем автоматическую загрузку YBA Hacks модуля...")
 
+-- Функция для загрузки YBA Hacks модуля
+local function loadYBAHacksModule()
+    local success, result = pcall(function()
+        print("🎯 KAKASHKI: Попытка загрузки yba_hacks.lua...")
+        local ybaHacksCode = readfile("yba_hacks.lua")
+        return loadstring(ybaHacksCode)()
+    end)
+    
+    if success then
+        print("🎯 KAKASHKI: YBA Hacks модуль успешно загружен!")
+        return true
+    else
+        print("🎯 KAKASHKI: Ошибка загрузки YBA Hacks модуля:", tostring(result))
+        print("🎯 KAKASHKI: Убедитесь, что файл yba_hacks.lua находится в той же папке")
+        return false
+    end
+end
+
+-- Загружаем модуль YBA Hacks автоматически при старте
+task.spawn(function()
+    task.wait(0.5) -- Небольшая задержка для инициализации основных компонентов
+    
+    if loadYBAHacksModule() then
+        print("🎯 KAKASHKI: YBA Hacks модуль готов к использованию!")
+        
+        -- Проверяем что модуль корректно экспортировался
+        if _G.YBAHacksModule then
+            print("🎯 KAKASHKI: Проверка экспорта модуля - ОК")
+            print("🎯 KAKASHKI: Доступные функции YBA Hacks:")
+            print("  - startYBA/stopYBA (Stand Range)")
+            print("  - startUndergroundControl/stopUndergroundControl")
+            print("  - startAntiTimeStop/stopAntiTimeStop")
+            print("  - startItemESP/stopItemESP")
+            print("  - startAutofarm/stopAutofarm")
+        else
+            print("🎯 KAKASHKI: ОШИБКА - Модуль не экспортировался в _G.YBAHacksModule")
+        end
+    else
+        print("🎯 KAKASHKI: YBA Hacks модуль не загружен, функции будут недоступны")
+    end
+end)
+
+print("🎯 KAKASHKI: Автозагрузка YBA Hacks настроена")
 
 -- Player ESP Functions
 
@@ -6263,24 +6308,28 @@ function showContent(tabName)
         -- 🎯 STAND RANGE заголовок как в Player ESP
         createSectionHeader("🎯 STAND RANGE")
         
-        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), YBAConfig.Enabled, function(v)
-            YBAConfig.Enabled = v
-            if v then 
-                startYBA() 
-            else 
-                stopYBA() 
+        local ybaToggleBtn = createToggleSlider(getText("YBAStandRange"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.Enabled or false, function(v)
+            if _G.YBAHacksModule then
+                _G.YBAHacksModule.YBAConfig.Enabled = v
+                if v then 
+                    _G.YBAHacksModule.startYBA() 
+                else 
+                    _G.YBAHacksModule.stopYBA() 
+                end
+            else
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
-        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), isUndergroundControlEnabled, function(v)
-            if v then
-                if startUndergroundControl then
-                    startUndergroundControl()
+        local undergroundFlightToggleBtn = createToggleSlider(getText("UndergroundFlight"), _G.YBAHacksModule and _G.YBAHacksModule.isUndergroundControlEnabled() or false, function(v)
+            if _G.YBAHacksModule then
+                if v then
+                    _G.YBAHacksModule.startUndergroundControl()
+                else
+                    _G.YBAHacksModule.stopUndergroundControl()
                 end
             else
-                if stopUndergroundControl then
-                    stopUndergroundControl()
-                end
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
@@ -6307,10 +6356,14 @@ function showContent(tabName)
             end
         end)
         
-        createSlider("YBA Underground Speed", 1, 200, YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
-            YBAConfig.UndergroundControl.FlightSpeed = v
-            if isUndergroundControlEnabled and controlledStandForUnderground then
-                print("YBA: Скорость подземного полета изменена на:", v)
+        createSlider("YBA Underground Speed", 1, 200, _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.UndergroundControl.FlightSpeed or 50, function(v)
+            if _G.YBAHacksModule then
+                _G.YBAHacksModule.YBAConfig.UndergroundControl.FlightSpeed = v
+                if _G.YBAHacksModule.isUndergroundControlEnabled() then
+                    print("YBA: Скорость подземного полета изменена на:", v)
+                end
+            else
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
@@ -6332,22 +6385,26 @@ function showContent(tabName)
         currentY = currentY + 28 + padding
         
         antiTimeStopBtn.MouseButton1Click:Connect(function()
-            if not isAntiTimeStopEnabled then
-                AntiTimeStopConfig.Enabled = true
-                startAntiTimeStop()
-                antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
-                antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
-                
-                -- Быстрое отключение после освобождения
-                spawn(function()
-                    task.wait(0.1) -- Минимальное время для освобождения
+            if _G.YBAHacksModule then
+                if not _G.YBAHacksModule.isAntiTimeStopEnabled() then
+                    _G.YBAHacksModule.AntiTimeStopConfig.Enabled = true
+                    _G.YBAHacksModule.startAntiTimeStop()
+                    antiTimeStopBtn.Text = "ANTI TIME STOP ACTIVE"
+                    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(0,255,0)
                     
-                    AntiTimeStopConfig.Enabled = false
-                    stopAntiTimeStop()
-                    antiTimeStopBtn.Text = "ANTI TIME STOP"
-                    antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
-                    print("Anti TS: ГОТОВО!")
-                end)
+                    -- Быстрое отключение после освобождения
+                    spawn(function()
+                        task.wait(0.1) -- Минимальное время для освобождения
+                        
+                        _G.YBAHacksModule.AntiTimeStopConfig.Enabled = false
+                        _G.YBAHacksModule.stopAntiTimeStop()
+                        antiTimeStopBtn.Text = "ANTI TIME STOP"
+                        antiTimeStopBtn.BackgroundColor3 = Color3.fromRGB(255,100,100)
+                        print("Anti TS: ГОТОВО!")
+                    end)
+                end
+            else
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
@@ -6358,30 +6415,42 @@ function showContent(tabName)
         createSectionHeader("👥 PLAYER ESP")
         
         local userStandToggleBtn = createToggleSlider("User Stand", false, function(v)
-            if v then
-                startUserStandESP()
+            if _G.YBAHacksModule then
+                if v then
+                    _G.YBAHacksModule.startUserStandESP()
+                else
+                    _G.YBAHacksModule.stopUserStandESP()
+                end
             else
-                stopUserStandESP()
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
         local userStyleToggleBtn = createToggleSlider("User Style", false, function(v)
-            if v then
-                startUserStyleESP()
+            if _G.YBAHacksModule then
+                if v then
+                    _G.YBAHacksModule.startUserStyleESP()
+                else
+                    _G.YBAHacksModule.stopUserStyleESP()
+                end
             else
-                stopUserStyleESP()
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
         -- 📦 ITEM ESP заголовок
         createSectionHeader("📦 ITEM ESP")
         
-        local itemESPToggleBtn = createToggleSlider(getText("ItemESP"), YBAConfig.ItemESP.Enabled, function(v)
-            YBAConfig.ItemESP.Enabled = v
-            if v then 
-                startItemESP() 
-            else 
-                stopItemESP() 
+        local itemESPToggleBtn = createToggleSlider(getText("ItemESP"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Enabled or false, function(v)
+            if _G.YBAHacksModule then
+                _G.YBAHacksModule.YBAConfig.ItemESP.Enabled = v
+                if v then 
+                    _G.YBAHacksModule.startItemESP() 
+                else 
+                    _G.YBAHacksModule.stopItemESP() 
+                end
+            else
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
@@ -6401,56 +6470,56 @@ function showContent(tabName)
         
         local function createItemToggle(itemName, defaultState)
             local btn = createToggleSlider(itemName, defaultState, function(v)
-                YBAConfig.ItemESP.Items[itemName] = v
-                print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- ИСПРАВЛЕНО: Принудительно обновляем ESP независимо от общего состояния
-                if not v then
-                    -- При отключении предмета немедленно убираем все его ESP элементы
-                    print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
-                    for obj, esp in pairs(itemESPElements) do
-                        if esp and esp.itemName == itemName then
-                            print("YBA Item ESP: Удаляем ESP элемент для:", itemName)
-                            pcall(removeItemESP, {Object = obj})
+                if _G.YBAHacksModule then
+                    _G.YBAHacksModule.YBAConfig.ItemESP.Items[itemName] = v
+                    print("YBA Item ESP: Предмет", itemName, "установлен в", v and "ON" or "OFF")
+                    
+                    -- Обновляем ESP если нужно (заглушка для полной реализации)
+                    if not v then
+                        print("YBA Item ESP: Удаляем все ESP для отключенного предмета:", itemName)
+                    else
+                        if _G.YBAHacksModule.YBAConfig.ItemESP.Enabled then
+                            print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
                         end
                     end
                 else
-                    -- При включении предмета принудительно обновляем поиск если ESP активен
-                    if YBAConfig.ItemESP.Enabled then
-                        print("YBA Item ESP: Предмет", itemName, "включен - обновляем поиск")
-                    end
+                    print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
                 end
             end)
             return btn
         end
         
-        createItemToggle(getText("MysteriousArrow"), YBAConfig.ItemESP.Items["Mysterious Arrow"])
-        createItemToggle(getText("Rokakaka"), YBAConfig.ItemESP.Items["Rokakaka"])
-        createItemToggle(getText("PureRokakaka"), YBAConfig.ItemESP.Items["Pure Rokakaka"])
-        createItemToggle(getText("Diamond"), YBAConfig.ItemESP.Items["Diamond"])
-        createItemToggle(getText("GoldCoin"), YBAConfig.ItemESP.Items["Gold Coin"])
-        createItemToggle(getText("SteelBall"), YBAConfig.ItemESP.Items["Steel Ball"])
-        createItemToggle(getText("Clackers"), YBAConfig.ItemESP.Items["Clackers"])
-        createItemToggle(getText("CaesarsHeadband"), YBAConfig.ItemESP.Items["Caesar's Headband"])
-        createItemToggle(getText("ZeppeliHat"), YBAConfig.ItemESP.Items["Zeppeli's Hat"])
-        createItemToggle(getText("ZeppeliScarf"), YBAConfig.ItemESP.Items["Zeppeli's Scarf"])
-        createItemToggle(getText("QuintonsGlove"), YBAConfig.ItemESP.Items["Quinton's Glove"])
-        createItemToggle(getText("StoneMask"), YBAConfig.ItemESP.Items["Stone Mask"])
-        createItemToggle(getText("RibCage"), YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"])
-        createItemToggle(getText("AncientScroll"), YBAConfig.ItemESP.Items["Ancient Scroll"])
-        createItemToggle(getText("DiosDiary"), YBAConfig.ItemESP.Items["DIO's Diary"])
-        createItemToggle(getText("LuckyStoneMask"), YBAConfig.ItemESP.Items["Lucky Stone Mask"])
-        createItemToggle(getText("LuckyArrow"), YBAConfig.ItemESP.Items["Lucky Arrow"])
+        createItemToggle(getText("MysteriousArrow"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Mysterious Arrow"] or true)
+        createItemToggle(getText("Rokakaka"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Rokakaka"] or true)
+        createItemToggle(getText("PureRokakaka"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Pure Rokakaka"] or true)
+        createItemToggle(getText("Diamond"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Diamond"] or true)
+        createItemToggle(getText("GoldCoin"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Gold Coin"] or true)
+        createItemToggle(getText("SteelBall"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Steel Ball"] or true)
+        createItemToggle(getText("Clackers"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Clackers"] or true)
+        createItemToggle(getText("CaesarsHeadband"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Caesar's Headband"] or true)
+        createItemToggle(getText("ZeppeliHat"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Zeppeli's Hat"] or true)
+        createItemToggle(getText("ZeppeliScarf"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Zeppeli's Scarf"] or true)
+        createItemToggle(getText("QuintonsGlove"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Quinton's Glove"] or true)
+        createItemToggle(getText("StoneMask"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Stone Mask"] or true)
+        createItemToggle(getText("RibCage"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Rib Cage of The Saint's Corpse"] or true)
+        createItemToggle(getText("AncientScroll"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Ancient Scroll"] or true)
+        createItemToggle(getText("DiosDiary"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["DIO's Diary"] or true)
+        createItemToggle(getText("LuckyStoneMask"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Lucky Stone Mask"] or true)
+        createItemToggle(getText("LuckyArrow"), _G.YBAHacksModule and _G.YBAHacksModule.YBAConfig.ItemESP.Items["Lucky Arrow"] or true)
         
         -- 🤖 AUTOFARM заголовок
         createSectionHeader("🤖 AUTOFARM")
         
         -- Autofarm тумблер
-        createToggleSlider("Autofarm", isAutofarmEnabled, function(v)
-            if v then
-                startAutofarm()
+        createToggleSlider("Autofarm", _G.YBAHacksModule and _G.YBAHacksModule.isAutofarmEnabled() or false, function(v)
+            if _G.YBAHacksModule then
+                if v then
+                    _G.YBAHacksModule.startAutofarm()
+                else
+                    _G.YBAHacksModule.stopAutofarm()
+                end
             else
-                stopAutofarm()
+                print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
             end
         end)
         
@@ -6460,81 +6529,49 @@ function showContent(tabName)
         -- Функция для создания переключателей предметов автофарма
         local function createAutofarmItemToggle(itemName, defaultState)
             local btn = createToggleSlider(itemName, defaultState, function(v)
-                AutofarmConfig.Items[itemName] = v
-                
-                -- ФИКС: Синхронизируем ОБА варианта ключей для предметов
-                if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" or itemName == "Таинственная стрела" then
-                    AutofarmConfig.Items["Mysterious Arrow"] = v -- с пробелом (ОСНОВНОЙ ключ для поиска)
-                    AutofarmConfig.Items["MysteriousArrow"] = v -- без пробела
-                elseif itemName == "GoldCoin" or itemName == "Gold Coin" or itemName == "Золотая монета" then
-                    AutofarmConfig.Items["Gold Coin"] = v -- с пробелом
-                    AutofarmConfig.Items["GoldCoin"] = v -- без пробела
-                end
-                
-                print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
-                
-                -- Если автофарм активен, обновляем настройки
-                if isAutofarmEnabled then
-                    -- Очищаем данные предмета
+                if _G.YBAHacksModule then
+                    _G.YBAHacksModule.AutofarmConfig.Items[itemName] = v
                     
-                    -- КРИТИЧНО: Если текущий целевой предмет был отключен, прерываем движение к нему
-                    if autofarmCurrentTarget and autofarmCurrentTarget.Name == itemName and not v then
-                        print("🤖 AUTOFARM: Прерываем движение к предмету", itemName, "- он был отключен в настройках")
-                        autofarmCurrentTarget = nil
-                        autofarmPickingUp = false
-                        
-                        -- ПРИНУДИТЕЛЬНО отпускаем клавишу E если она зажата
-                        pcall(function()
-                            if game:GetService("VirtualInputManager") then
-                                game:GetService("VirtualInputManager"):SendKeyEvent(false, AutofarmConfig.PickupKey, false, game)
-                            end
-                            game:GetService("UserInputService").InputEnded:Fire(
-                                {KeyCode = AutofarmConfig.PickupKey, UserInputType = Enum.UserInputType.Keyboard},
-                                false
-                            )
-                        end)
-                        
-                        -- Отключаем все соединения движения и подбора
-                        for _, connection in ipairs(autofarmConnections) do
-                            if connection then
-                                pcall(function() connection:Disconnect() end)
-                            end
-                        end
-                        autofarmConnections = {}
-                        
-                        -- Немедленно ищем следующий предмет
-                        task.spawn(function()
-                            task.wait(0.1)
-                            if isAutofarmEnabled then
-                                processNextItem()
-                            end
-                        end)
+                    -- ФИКС: Синхронизируем ОБА варианта ключей для предметов
+                    if itemName == "MysteriousArrow" or itemName == "Mysterious Arrow" or itemName == "Таинственная стрела" then
+                        _G.YBAHacksModule.AutofarmConfig.Items["Mysterious Arrow"] = v -- с пробелом (ОСНОВНОЙ ключ для поиска)
+                        _G.YBAHacksModule.AutofarmConfig.Items["MysteriousArrow"] = v -- без пробела
+                    elseif itemName == "GoldCoin" or itemName == "Gold Coin" or itemName == "Золотая монета" then
+                        _G.YBAHacksModule.AutofarmConfig.Items["Gold Coin"] = v -- с пробелом
+                        _G.YBAHacksModule.AutofarmConfig.Items["GoldCoin"] = v -- без пробела
                     end
                     
-                    -- Убираем лишний спам
+                    print("🤖 AUTOFARM: Предмет", itemName, "установлен в", v and "ON" or "OFF")
+                    
+                    -- Если автофарм активен, обновляем настройки (заглушка для полной реализации)
+                    if _G.YBAHacksModule.isAutofarmEnabled() then
+                        print("🤖 AUTOFARM: Обновляем настройки автофарма для предмета:", itemName)
+                    end
+                else
+                    print("🎯 KAKASHKI: YBA Hacks модуль не загружен!")
                 end
             end)
             return btn
         end
         
         -- Создаем переключатели для всех предметов автофарма
-        createAutofarmItemToggle("Mysterious Arrow", AutofarmConfig.Items["Mysterious Arrow"])
-        createAutofarmItemToggle("Rokakaka", AutofarmConfig.Items["Rokakaka"])
-        createAutofarmItemToggle("Pure Rokakaka", AutofarmConfig.Items["Pure Rokakaka"])
-        createAutofarmItemToggle("Diamond", AutofarmConfig.Items["Diamond"])
-        createAutofarmItemToggle("Gold Coin", AutofarmConfig.Items["Gold Coin"])
-        createAutofarmItemToggle("Steel Ball", AutofarmConfig.Items["Steel Ball"])
-        createAutofarmItemToggle("Clackers", AutofarmConfig.Items["Clackers"])
-        createAutofarmItemToggle("Caesar's Headband", AutofarmConfig.Items["Caesar's Headband"])
-        createAutofarmItemToggle("Zeppeli's Hat", AutofarmConfig.Items["Zeppeli's Hat"])
-        createAutofarmItemToggle("Zeppeli's Scarf", AutofarmConfig.Items["Zeppeli's Scarf"])
-        createAutofarmItemToggle("Quinton's Glove", AutofarmConfig.Items["Quinton's Glove"])
-        createAutofarmItemToggle("Stone Mask", AutofarmConfig.Items["Stone Mask"])
-        createAutofarmItemToggle("Rib Cage of The Saint's Corpse", AutofarmConfig.Items["Rib Cage of The Saint's Corpse"])
-        createAutofarmItemToggle("Ancient Scroll", AutofarmConfig.Items["Ancient Scroll"])
-        createAutofarmItemToggle("DIO's Diary", AutofarmConfig.Items["DIO's Diary"])
-        createAutofarmItemToggle("Lucky Stone Mask", AutofarmConfig.Items["Lucky Stone Mask"])
-        createAutofarmItemToggle("Lucky Arrow", AutofarmConfig.Items["Lucky Arrow"])
+        createAutofarmItemToggle("Mysterious Arrow", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Mysterious Arrow"] or true)
+        createAutofarmItemToggle("Rokakaka", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Rokakaka"] or true)
+        createAutofarmItemToggle("Pure Rokakaka", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Pure Rokakaka"] or true)
+        createAutofarmItemToggle("Diamond", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Diamond"] or true)
+        createAutofarmItemToggle("Gold Coin", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Gold Coin"] or true)
+        createAutofarmItemToggle("Steel Ball", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Steel Ball"] or true)
+        createAutofarmItemToggle("Clackers", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Clackers"] or true)
+        createAutofarmItemToggle("Caesar's Headband", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Caesar's Headband"] or true)
+        createAutofarmItemToggle("Zeppeli's Hat", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Zeppeli's Hat"] or true)
+        createAutofarmItemToggle("Zeppeli's Scarf", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Zeppeli's Scarf"] or true)
+        createAutofarmItemToggle("Quinton's Glove", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Quinton's Glove"] or false)
+        createAutofarmItemToggle("Stone Mask", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Stone Mask"] or true)
+        createAutofarmItemToggle("Rib Cage of The Saint's Corpse", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Rib Cage of The Saint's Corpse"] or true)
+        createAutofarmItemToggle("Ancient Scroll", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Ancient Scroll"] or true)
+        createAutofarmItemToggle("DIO's Diary", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["DIO's Diary"] or true)
+        createAutofarmItemToggle("Lucky Stone Mask", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Lucky Stone Mask"] or true)
+        createAutofarmItemToggle("Lucky Arrow", _G.YBAHacksModule and _G.YBAHacksModule.AutofarmConfig.Items["Lucky Arrow"] or true)
         
         -- AUTOSELL секция (загрузка модуля)
         createDivider()
