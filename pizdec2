@@ -364,8 +364,8 @@ local espSettings = {
     tracerColor = Color3.fromRGB(0, 255, 0),
     -- Настройки HP бара
     healthBarPosition = "Top", -- Top, Bottom, Left, Right
-    healthBarSize = 80, -- Длина/ширина в процентах от размера игрока
-    healthBarThickness = 4, -- Толщина полоски
+    healthBarSize = 120, -- Длина/ширина в процентах от размера игрока
+    healthBarThickness = 2, -- Толщина полоски
     healthBarBackground = Color3.fromRGB(60, 60, 60),
     healthBarForeground = Color3.fromRGB(0, 255, 0),
     healthBarLowHealth = Color3.fromRGB(255, 255, 0),
@@ -1453,9 +1453,9 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, box)
         
-        -- Оптимизированное обновление квадрата (60 FPS вместо каждого кадра)
+        -- Оптимизированное обновление квадрата (высокий FPS для быстрой отрисовки)
         spawn(function()
-            local updateRate = 1/60 -- 60 FPS для плавности
+            local updateRate = 1/120 -- 120 FPS для очень быстрой отрисовки
             while box and character.Parent and humanoidRootPart.Parent do
                 if espSettings.enabled and espSettings.boxes then
                     local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
@@ -1513,7 +1513,7 @@ local function createESPBox(player)
         
         -- Обновление HP бара
         spawn(function()
-            local updateRate = 1/30 -- 30 FPS для HP бара достаточно
+            local updateRate = 1/60 -- 60 FPS для быстрого обновления HP бара
             while healthBarBg and healthBarFill and character.Parent and humanoidRootPart.Parent do
                 if espSettings.enabled and espSettings.healthBar then
                     local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
@@ -1561,13 +1561,20 @@ local function createESPBox(player)
                                 healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
                                 healthBarBg.Position = Vector2.new(barX, barY)
                                 healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
-                            else -- Right
+                            elseif espSettings.healthBarPosition == "Right" then
                                 barX = vector.X + playerWidth/2 + 5
                                 barY = vector.Y - barSize/2
                                 healthBarBg.Size = Vector2.new(barThickness, barSize)
                                 healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
                                 healthBarBg.Position = Vector2.new(barX, barY)
                                 healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
+                            else -- По умолчанию Top если что-то пошло не так
+                                barX = vector.X - barSize/2
+                                barY = vector.Y - playerHeight/2 - barThickness - 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
                             end
                             
                             healthBarFill.Color = healthColor
@@ -1701,7 +1708,7 @@ local function createESPBox(player)
         
         -- Оптимизированное обновление трейсера
         spawn(function()
-            local updateRate = 1/60 -- 60 FPS для плавности трейсеров
+            local updateRate = 1/90 -- 90 FPS для плавности трейсеров
             while line and character.Parent and humanoidRootPart.Parent do
                 if espSettings.enabled and espSettings.tracers then
                     local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
@@ -2153,6 +2160,7 @@ if currentGame == "Centaura" and AimbotTab then
     
     CreateToggle(AimbotPredictionSection, "Предикт движения", "Прицеливание с упреждением по движущимся целям", false, function(state)
         aimbotPrediction = state
+        print("Предикт движения:", state and "включен" or "выключен") -- Для отладки
     end)
     
     CreateSlider(AimbotPredictionSection, "Сила предикта", "Насколько сильно упреждать движение (0.1-3.0)", 0.1, 3.0, 1.0, function(value)
@@ -2267,15 +2275,16 @@ local HealthBarSection = CreateSection(VisualTab, "💖 Настройки HP п
 CreateDropdown(HealthBarSection, "Позиция HP бара", "Где отображать полоску здоровья", 
     {"Top", "Bottom", "Left", "Right"}, "Top", function(option)
     espSettings.healthBarPosition = option
+    print("HP Bar позиция изменена на:", option) -- Для отладки
     updateESP()
 end)
 
-CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 120, 80, function(value)
+CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 150, 120, function(value)
     espSettings.healthBarSize = value
     updateESP()
 end)
 
-CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 2, 8, 4, function(value)
+CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 1, 8, 2, function(value)
     espSettings.healthBarThickness = value
     updateESP()
 end)
@@ -2562,8 +2571,8 @@ local function loadConfig(configName)
         espSettings.tracers = configData.espSettings.tracers or false
         espSettings.teamCheck = configData.espSettings.teamCheck or true
         espSettings.healthBarPosition = configData.espSettings.healthBarPosition or "Top"
-        espSettings.healthBarSize = configData.espSettings.healthBarSize or 80
-        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 4
+        espSettings.healthBarSize = configData.espSettings.healthBarSize or 120
+        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 2
         updateESP()
     end
     
@@ -2899,13 +2908,18 @@ if currentGame == "Centaura" then
     
     -- Функция для предикта движения
     local function predictTargetPosition(player, targetPart)
-        if not aimbotPrediction or not playerVelocities[player] then
+        if not aimbotPrediction or not playerVelocities[player] or not playerVelocities[player].velocity then
             return targetPart.Position
         end
         
-        local velocity = playerVelocities[player]
+        local velocity = playerVelocities[player].velocity
         local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
         local bulletTime = distance / 400 -- Примерная скорость пули в Centaura
+        
+        -- Проверяем что скорость не слишком большая (избегаем глюков)
+        if velocity.Magnitude > 100 then
+            return targetPart.Position -- Если скорость слишком большая, не используем предикт
+        end
         
         -- Предиктим позицию с учетом скорости и силы предикта
         local predictedPosition = targetPart.Position + (velocity * bulletTime * aimbotPredictionStrength)
