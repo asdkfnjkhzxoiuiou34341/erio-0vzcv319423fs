@@ -364,9 +364,26 @@ local espSettings = {
 -- ESP объекты и Drawing объекты
 local espObjects = {}
 local drawingObjects = {}
+local playerChams = {} -- Отдельное хранилище для чамсов
 
 -- FOV Circle
 local fovCircle = nil
+
+-- Система конфигов
+local configs = {}
+local currentConfig = "Default"
+local configFolder = "SSLKinUniScript"
+local configExtension = ".json"
+
+-- Проверка поддержки файловых функций
+local fileSystemSupported = pcall(function() return writefile and readfile and makefolder and isfolder end)
+
+-- Создание папки для конфигов
+if fileSystemSupported then
+    if not isfolder(configFolder) then
+        makefolder(configFolder)
+    end
+end
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -493,22 +510,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
 
--- Кнопка минимизации
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Parent = HeaderFrame
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 180, 60)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Position = UDim2.new(1, -80, 0, 15)
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = "─"
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 16
-
-local MinimizeCorner = Instance.new("UICorner")
-MinimizeCorner.CornerRadius = UDim.new(0, 6)
-MinimizeCorner.Parent = MinimizeButton
+-- Кнопка минимизации удалена
 
 -- Контейнер для контента
 local ContentContainer = Instance.new("Frame")
@@ -578,7 +580,6 @@ MainContentFix2.Position = UDim2.new(0, 0, 0, 0)
 MainContentFix2.Size = UDim2.new(1, 0, 0, 8)
 
 -- Состояние GUI
-local isMinimized = false
 local originalSize = UDim2.new(0, 800, 0, 550)
 local originalPosition = UDim2.new(0.5, -400, 0.5, -275)
 
@@ -595,7 +596,6 @@ end
 -- Функции показа/скрытия GUI
 local function ShowGUI()
     MainFrame.Visible = true
-    isMinimized = false
     
     if MainFrame.Size == originalSize then
         return -- Уже открыто
@@ -622,39 +622,10 @@ local function HideGUI()
     
     hideTween.Completed:Connect(function()
         MainFrame.Visible = false
-        isMinimized = false
     end)
 end
 
-local function MinimizeGUI()
-    if isMinimized then
-        -- Развернуть
-        isMinimized = false
-        ContentContainer.Visible = true
-        
-        local expandTween = CreateTween(MainFrame, {
-            Size = originalSize,
-            Position = originalPosition
-        }, 0.4, Enum.EasingStyle.Quad)
-        
-        expandTween:Play()
-    else
-        -- Свернуть
-        isMinimized = true
-        
-        local minimizeTween = CreateTween(MainFrame, {
-            Size = UDim2.new(0, 400, 0, 60),
-            Position = UDim2.new(0.5, -200, 0.5, -30)
-        }, 0.4, Enum.EasingStyle.Quad)
-        
-        minimizeTween:Play()
-        minimizeTween.Completed:Connect(function()
-            if isMinimized then
-                ContentContainer.Visible = false
-            end
-        end)
-    end
-end
+-- Функция MinimizeGUI удалена
 
 -- Система вкладок
 local tabs = {}
@@ -1118,6 +1089,68 @@ local function CreateSlider(parent, text, description, minValue, maxValue, defau
     return SliderFrame, updateSlider
 end
 
+-- Функция создания текстового поля
+local function CreateTextBox(parent, text, description, placeholder, callback)
+    local TextBoxFrame = Instance.new("Frame")
+    TextBoxFrame.Parent = parent
+    TextBoxFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    TextBoxFrame.BorderSizePixel = 0
+    TextBoxFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local TextBoxCorner = Instance.new("UICorner")
+    TextBoxCorner.CornerRadius = UDim.new(0, 8)
+    TextBoxCorner.Parent = TextBoxFrame
+    
+    local TextBoxText = Instance.new("TextLabel")
+    TextBoxText.Parent = TextBoxFrame
+    TextBoxText.BackgroundTransparency = 1
+    TextBoxText.Position = UDim2.new(0, 15, 0, 8)
+    TextBoxText.Size = UDim2.new(1, -30, 0, 20)
+    TextBoxText.Font = Enum.Font.GothamBold
+    TextBoxText.Text = text
+    TextBoxText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBoxText.TextSize = 14
+    TextBoxText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local TextBoxDesc = Instance.new("TextLabel")
+    TextBoxDesc.Parent = TextBoxFrame
+    TextBoxDesc.BackgroundTransparency = 1
+    TextBoxDesc.Position = UDim2.new(0, 15, 0, 28)
+    TextBoxDesc.Size = UDim2.new(1, -30, 0, 16)
+    TextBoxDesc.Font = Enum.Font.Gotham
+    TextBoxDesc.Text = description or ""
+    TextBoxDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    TextBoxDesc.TextSize = 11
+    TextBoxDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Текстовое поле
+    local TextBox = Instance.new("TextBox")
+    TextBox.Parent = TextBoxFrame
+    TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    TextBox.BorderSizePixel = 0
+    TextBox.Position = UDim2.new(0, 15, 0, 50)
+    TextBox.Size = UDim2.new(1, -30, 0, 25)
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.PlaceholderText = placeholder or "Введите текст..."
+    TextBox.Text = ""
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.TextSize = 12
+    TextBox.ClearTextOnFocus = false
+    
+    local TextBoxInputCorner = Instance.new("UICorner")
+    TextBoxInputCorner.CornerRadius = UDim.new(0, 6)
+    TextBoxInputCorner.Parent = TextBox
+    
+    -- События
+    TextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and callback then
+            callback(TextBox.Text)
+        end
+    end)
+    
+    return TextBoxFrame, TextBox
+end
+
 -- Функция создания выпадающего списка
 local function CreateDropdown(parent, text, description, options, defaultOption, callback)
     local DropdownFrame = Instance.new("Frame")
@@ -1216,6 +1249,7 @@ local function CreateDropdown(parent, text, description, options, defaultOption,
             DropdownButton.Text = option
             OptionsList.Visible = false
             isOpen = false
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80) -- Возвращаем нормальный размер
             
             if callback then
                 callback(option)
@@ -1231,6 +1265,23 @@ local function CreateDropdown(parent, text, description, options, defaultOption,
             DropdownFrame.Size = UDim2.new(1, 0, 0, 80 + (#options * 25))
         else
             DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        end
+    end)
+    
+    -- Закрытие dropdown при клике вне его области
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and isOpen then
+            local mousePosition = UserInputService:GetMouseLocation()
+            local framePosition = DropdownFrame.AbsolutePosition
+            local frameSize = DropdownFrame.AbsoluteSize
+            
+            -- Проверяем, находится ли клик вне dropdown
+            if mousePosition.X < framePosition.X or mousePosition.X > framePosition.X + frameSize.X or
+               mousePosition.Y < framePosition.Y or mousePosition.Y > framePosition.Y + frameSize.Y then
+                isOpen = false
+                OptionsList.Visible = false
+                DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+            end
         end
     end)
     
@@ -1256,6 +1307,91 @@ local function clearESP()
         end
     end
     drawingObjects = {}
+    
+    -- Очистка чамсов
+    clearChams()
+end
+
+local function clearChams()
+    -- Очистка только чамсов
+    for player, cham in pairs(playerChams) do
+        if cham and cham.Parent then
+            cham:Destroy()
+        end
+    end
+    playerChams = {}
+end
+
+local function updatePlayerChams(player)
+    if not espSettings.enabled or not espSettings.chams then
+        -- Удаляем чамс если он выключен
+        if playerChams[player] then
+            pcall(function()
+                playerChams[player]:Destroy()
+            end)
+            playerChams[player] = nil
+        end
+        return
+    end
+    
+    local character = player.Character
+    if not character then 
+        -- Удаляем чамс если персонажа нет
+        if playerChams[player] then
+            pcall(function()
+                playerChams[player]:Destroy()
+            end)
+            playerChams[player] = nil
+        end
+        return 
+    end
+    
+    -- Проверяем что чамс все еще существует и прикреплен к правильному персонажу
+    if playerChams[player] and (not playerChams[player].Parent or playerChams[player].Adornee ~= character) then
+        pcall(function()
+            playerChams[player]:Destroy()
+        end)
+        playerChams[player] = nil
+    end
+    
+    -- Создаем чамс только если его нет
+    if not playerChams[player] then
+        -- Упрощенная логика команд
+        local espColor = espSettings.enemyColor
+        if espSettings.teamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+            espColor = espSettings.allyColor
+        end
+        
+        local success, highlight = pcall(function()
+            local h = Instance.new("Highlight")
+            h.Name = "SSLKinESP_Chams"
+            h.Adornee = character
+            h.FillColor = espColor
+            h.FillTransparency = 0.7
+            h.OutlineColor = espColor
+            h.OutlineTransparency = 0
+            h.Parent = character -- Возвращаем обратно в character
+            return h
+        end)
+        
+        if success then
+            playerChams[player] = highlight
+        end
+    else
+        -- Обновляем цвет существующего чамса
+        if playerChams[player] and playerChams[player].Parent then
+            pcall(function()
+                local espColor = espSettings.enemyColor
+                if espSettings.teamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+                    espColor = espSettings.allyColor
+                end
+                
+                playerChams[player].FillColor = espColor
+                playerChams[player].OutlineColor = espColor
+                playerChams[player].Adornee = character
+            end)
+        end
+    end
 end
 
 local function getPlayerTeam(player)
@@ -1293,18 +1429,7 @@ local function createESPBox(player)
     local isEnemy = isPlayerEnemy(player)
     local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
     
-    -- Создание чамсов (обводка)
-    if espSettings.chams then
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "SSLKinESP"
-        highlight.Adornee = character
-        highlight.FillColor = espColor
-        highlight.FillTransparency = 0.7
-        highlight.OutlineColor = espColor
-        highlight.OutlineTransparency = 0
-        highlight.Parent = character
-        table.insert(espObjects, highlight)
-    end
+    -- Чамсы обрабатываются отдельно через updatePlayerChams
     
     -- Создание квадратов (Drawing)
     if espSettings.boxes then
@@ -1320,18 +1445,22 @@ local function createESPBox(player)
         -- Обновление квадрата
         spawn(function()
             while box and character.Parent and humanoidRootPart.Parent do
-                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-                if onScreen then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid then
-                        local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
-                        local scaleFactor = 1000 / distance
-                        local width = math.clamp(scaleFactor, 3, 15)
-                        local height = width * 1.5
-                        
-                        box.Size = Vector2.new(width, height)
-                        box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
-                        box.Visible = true
+                if espSettings.enabled and espSettings.boxes then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                            local scaleFactor = 1000 / distance
+                            local width = math.clamp(scaleFactor, 8, 25)
+                            local height = width * 1.5
+                            
+                            box.Size = Vector2.new(width, height)
+                            box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
+                            box.Visible = true
+                        else
+                            box.Visible = false
+                        end
                     else
                         box.Visible = false
                     end
@@ -1394,7 +1523,7 @@ local function createESPBox(player)
             
             -- Обновление дистанции
             spawn(function()
-                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and humanoidRootPart.Parent do
                     local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
                     distanceLabel.Text = math.floor(distance) .. "m"
                     wait(0.1)
@@ -1449,11 +1578,17 @@ local function createESPBox(player)
         
         -- Обновление трейсера
         spawn(function()
-            while line and character.Parent and humanoidRootPart.Parent do
+            while line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers do
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
-                    line.To = Vector2.new(vector.X, vector.Y)
-                    line.Visible = true
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        line.To = Vector2.new(vector.X, vector.Y)
+                        line.Visible = true
+                    else
+                        line.Visible = false
+                    end
                 else
                     line.Visible = false
                 end
@@ -1469,41 +1604,91 @@ local function createESPBox(player)
 end
 
 local function updateESP()
-    clearESP()
+    -- Очищаем только не-чамсы объекты
+    for _, espObj in pairs(espObjects) do
+        if espObj and espObj.Parent then
+            espObj:Destroy()
+        end
+    end
+    espObjects = {}
+    
+    for _, drawObj in pairs(drawingObjects) do
+        if drawObj then
+            pcall(function()
+                drawObj:Remove()
+            end)
+        end
+    end
+    drawingObjects = {}
     
     if espSettings.enabled then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
                 createESPBox(player)
+                updatePlayerChams(player) -- Обновляем чамсы отдельно
             end
         end
+    else
+        -- Очищаем чамсы если ESP выключен
+        clearChams()
     end
 end
 
 -- FOV Circle для аимбота
+local fovConnection = nil
+
 local function createFOVCircle()
+    -- Удаляем старый круг и соединение
     if fovCircle then
         pcall(function()
             fovCircle:Remove()
         end)
+        fovCircle = nil
+    end
+    
+    if fovConnection then
+        fovConnection:Disconnect()
+        fovConnection = nil
     end
     
     if currentGame == "Centaura" and showFOVCircle then
         fovCircle = Drawing.new("Circle")
-        fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        fovCircle.Radius = aimbotFOV
-        fovCircle.Color = Color3.fromRGB(255, 255, 255)
         fovCircle.Thickness = 2
-        fovCircle.Transparency = 0.7
+        fovCircle.NumSides = 30
+        fovCircle.Radius = aimbotFOV
         fovCircle.Filled = false
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Transparency = 0.7
         fovCircle.Visible = true
         
-        -- Обновление позиции и размера круга
-        spawn(function()
-            while fovCircle and showFOVCircle do
-                fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        -- Устанавливаем центр сразу
+        local centerX = Camera.ViewportSize.X / 2
+        local centerY = Camera.ViewportSize.Y / 2
+        
+        -- Пробуем разные свойства для позиции
+        if fovCircle.Center then
+            fovCircle.Center = Vector2.new(centerX, centerY)
+        elseif fovCircle.Position then
+            fovCircle.Position = Vector2.new(centerX, centerY)
+        end
+        
+        -- Обновление позиции и размера круга в реальном времени
+        fovConnection = RunService.Heartbeat:Connect(function()
+            if fovCircle and showFOVCircle then
+                local newCenterX = Camera.ViewportSize.X / 2
+                local newCenterY = Camera.ViewportSize.Y / 2
+                
+                -- Пробуем разные свойства для позиции
+                if fovCircle.Center then
+                    fovCircle.Center = Vector2.new(newCenterX, newCenterY)
+                elseif fovCircle.Position then
+                    fovCircle.Position = Vector2.new(newCenterX, newCenterY)
+                end
+                
                 fovCircle.Radius = aimbotFOV
-                wait()
+                fovCircle.Visible = true
+            elseif fovCircle then
+                fovCircle.Visible = false
             end
         end)
     end
@@ -1546,6 +1731,7 @@ if currentGame == "Centaura" then
 end
 
 local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
+local ConfigTab = CreateTab("Конфиги", "💾", Color3.fromRGB(100, 255, 200))
 
 -- ВКЛАДКА ИГРОКА
 local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
@@ -1932,6 +2118,474 @@ CreateToggle(ESPSection, "Проверка команды", "Разные цве
     updateESP()
 end)
 
+-- Функции для работы с JSON
+local function encodeJSON(data)
+    local function encode(val)
+        local type_val = type(val)
+        if type_val == "string" then
+            return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
+        elseif type_val == "number" or type_val == "boolean" then
+            return tostring(val)
+        elseif type_val == "table" then
+            local result = {}
+            local is_array = true
+            local count = 0
+            
+            for k, v in pairs(val) do
+                count = count + 1
+                if type(k) ~= "number" or k ~= count then
+                    is_array = false
+                    break
+                end
+            end
+            
+            if is_array then
+                for i, v in ipairs(val) do
+                    table.insert(result, encode(v))
+                end
+                return "[" .. table.concat(result, ",") .. "]"
+            else
+                for k, v in pairs(val) do
+                    table.insert(result, encode(tostring(k)) .. ":" .. encode(v))
+                end
+                return "{" .. table.concat(result, ",") .. "}"
+            end
+        else
+            return "null"
+        end
+    end
+    return encode(data)
+end
+
+local function decodeJSON(str)
+    local function decode(str, pos)
+        pos = pos or 1
+        if pos > #str then return nil, pos end
+        
+        local char = str:sub(pos, pos)
+        if char == '"' then
+            local endPos = pos + 1
+            while endPos <= #str and str:sub(endPos, endPos) ~= '"' do
+                if str:sub(endPos, endPos) == '\\' then
+                    endPos = endPos + 1
+                end
+                endPos = endPos + 1
+            end
+            return str:sub(pos + 1, endPos - 1):gsub('\\"', '"'):gsub('\\\\', '\\'), endPos + 1
+        elseif char == '{' then
+            local obj = {}
+            pos = pos + 1
+            while pos <= #str and str:sub(pos, pos) ~= '}' do
+                if str:sub(pos, pos) == ',' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == '}' then break end
+                
+                local key, newPos = decode(str, pos)
+                pos = newPos
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == ':' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                
+                local value
+                value, pos = decode(str, pos)
+                obj[key] = value
+            end
+            return obj, pos + 1
+        elseif char == '[' then
+            local arr = {}
+            pos = pos + 1
+            while pos <= #str and str:sub(pos, pos) ~= ']' do
+                if str:sub(pos, pos) == ',' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == ']' then break end
+                
+                local value
+                value, pos = decode(str, pos)
+                table.insert(arr, value)
+            end
+            return arr, pos + 1
+        elseif char:match('[%d%-]') then
+            local endPos = pos
+            while endPos <= #str and str:sub(endPos, endPos):match('[%d%.-]') do
+                endPos = endPos + 1
+            end
+            return tonumber(str:sub(pos, endPos - 1)), endPos
+        elseif str:sub(pos, pos + 3) == "true" then
+            return true, pos + 4
+        elseif str:sub(pos, pos + 4) == "false" then
+            return false, pos + 5
+        elseif str:sub(pos, pos + 3) == "null" then
+            return nil, pos + 4
+        end
+        return nil, pos + 1
+    end
+    
+    local result = decode(str:gsub('%s', ''))
+    return result
+end
+
+-- Функции для работы с файлами конфигов
+local function saveConfigToFile(configName, configData)
+    if not fileSystemSupported then return false end
+    
+    local filePath = configFolder .. "/" .. configName .. configExtension
+    local jsonData = encodeJSON(configData)
+    
+    local success = pcall(function()
+        writefile(filePath, jsonData)
+    end)
+    
+    return success
+end
+
+local function loadConfigFromFile(configName)
+    if not fileSystemSupported then return nil end
+    
+    local filePath = configFolder .. "/" .. configName .. configExtension
+    
+    local success, content = pcall(function()
+        return readfile(filePath)
+    end)
+    
+    if success and content then
+        local configData = decodeJSON(content)
+        return configData
+    end
+    
+    return nil
+end
+
+local function deleteConfigFile(configName)
+    if not fileSystemSupported then return false end
+    
+    local filePath = configFolder .. "/" .. configName .. configExtension
+    
+    local success = pcall(function()
+        delfile(filePath)
+    end)
+    
+    return success
+end
+
+local function getConfigFilesFromFolder()
+    if not fileSystemSupported then return {} end
+    
+    local configFiles = {}
+    
+    local success, files = pcall(function()
+        return listfiles(configFolder)
+    end)
+    
+    if success and files then
+        for _, filePath in pairs(files) do
+            local fileName = filePath:match("([^/\\]+)$") -- Получаем только имя файла
+            if fileName and fileName:sub(-#configExtension) == configExtension then
+                local configName = fileName:sub(1, -#configExtension - 1)
+                table.insert(configFiles, configName)
+            end
+        end
+    end
+    
+    return configFiles
+end
+
+-- Система конфигов
+local function saveConfig(configName)
+    local configData = {
+        -- Движение
+        speedEnabled = speedEnabled,
+        walkSpeed = walkSpeed,
+        jumpEnabled = jumpEnabled,
+        jumpPower = jumpPower,
+        infiniteJumpEnabled = infiniteJumpEnabled,
+        
+        -- Визуалы
+        fullBrightEnabled = fullBrightEnabled,
+        noFogEnabled = noFogEnabled,
+        
+        -- ESP
+        espSettings = {
+            enabled = espSettings.enabled,
+            boxes = espSettings.boxes,
+            chams = espSettings.chams,
+            names = espSettings.names,
+            distance = espSettings.distance,
+            health = espSettings.health,
+            tracers = espSettings.tracers,
+            teamCheck = espSettings.teamCheck
+        }
+    }
+    
+    -- Для Centaura добавляем настройки аимбота
+    if currentGame == "Centaura" then
+        configData.aimbotEnabled = aimbotEnabled
+        configData.aimbotFOV = aimbotFOV
+        configData.aimbotSmoothness = aimbotSmoothness
+        configData.aimbotTargetPart = aimbotTargetPart
+        configData.aimbotVisibleOnly = aimbotVisibleOnly
+        configData.aimbotTeamCheck = aimbotTeamCheck
+        configData.showFOVCircle = showFOVCircle
+    end
+    
+    configs[configName] = configData
+    
+    -- Сохраняем в файл если поддерживается
+    local fileSaved = false
+    if fileSystemSupported then
+        fileSaved = saveConfigToFile(configName, configData)
+    end
+    
+    local message = "Конфиг '" .. configName .. "' сохранен"
+    if fileSystemSupported then
+        message = message .. (fileSaved and " в файл!" or " в память (ошибка записи файла)!")
+    else
+        message = message .. " в память (файлы не поддерживаются)!"
+    end
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = message,
+        Duration = 3
+    })
+end
+
+local function loadConfig(configName)
+    local configData = configs[configName]
+    
+    -- Пытаемся загрузить из файла если не найден в памяти
+    if not configData and fileSystemSupported then
+        configData = loadConfigFromFile(configName)
+        if configData then
+            configs[configName] = configData -- Сохраняем в память для быстрого доступа
+        end
+    end
+    
+    if not configData then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+        return
+    end
+    
+    -- Загружаем движение
+    speedEnabled = configData.speedEnabled or false
+    walkSpeed = configData.walkSpeed or 16
+    jumpEnabled = configData.jumpEnabled or false
+    jumpPower = configData.jumpPower or 7.2
+    infiniteJumpEnabled = configData.infiniteJumpEnabled or false
+    
+    -- Загружаем визуалы
+    fullBrightEnabled = configData.fullBrightEnabled or false
+    noFogEnabled = configData.noFogEnabled or false
+    toggleFullBright(fullBrightEnabled)
+    toggleNoFog(noFogEnabled)
+    
+    -- Загружаем ESP
+    if configData.espSettings then
+        espSettings.enabled = configData.espSettings.enabled or false
+        espSettings.boxes = configData.espSettings.boxes or false
+        espSettings.chams = configData.espSettings.chams or false
+        espSettings.names = configData.espSettings.names or false
+        espSettings.distance = configData.espSettings.distance or false
+        espSettings.health = configData.espSettings.health or false
+        espSettings.tracers = configData.espSettings.tracers or false
+        espSettings.teamCheck = configData.espSettings.teamCheck or true
+        updateESP()
+    end
+    
+    -- Для Centaura загружаем аимбот
+    if currentGame == "Centaura" then
+        aimbotEnabled = configData.aimbotEnabled or false
+        aimbotFOV = configData.aimbotFOV or 90
+        aimbotSmoothness = configData.aimbotSmoothness or 5
+        aimbotTargetPart = configData.aimbotTargetPart or "Head"
+        aimbotVisibleOnly = configData.aimbotVisibleOnly or true
+        aimbotTeamCheck = configData.aimbotTeamCheck or true
+        showFOVCircle = configData.showFOVCircle or false
+        createFOVCircle()
+    end
+    
+    -- Применяем настройки к персонажу
+    restorePlayerSettings()
+    
+    currentConfig = configName
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Конфиг '" .. configName .. "' загружен!",
+        Duration = 3
+    })
+end
+
+local function deleteConfig(configName)
+    if configName == "Default" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Нельзя удалить конфиг по умолчанию!",
+            Duration = 3
+        })
+        return
+    end
+    
+    local found = false
+    
+    if configs[configName] then
+        configs[configName] = nil
+        found = true
+    end
+    
+    -- Удаляем файл если поддерживается
+    local fileDeleted = false
+    if fileSystemSupported then
+        fileDeleted = deleteConfigFile(configName)
+        if fileDeleted then found = true end
+    end
+    
+    if found then
+        local message = "Конфиг '" .. configName .. "' удален"
+        if fileSystemSupported then
+            message = message .. (fileDeleted and " (включая файл)!" or " из памяти!")
+        else
+            message = message .. " из памяти!"
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = message,
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+    end
+end
+
+local function getConfigNames(excludeDefault)
+    local names = {}
+    local nameSet = {}
+    
+    -- Добавляем конфиги из памяти
+    for name, _ in pairs(configs) do
+        if not (excludeDefault and name == "Default") and not nameSet[name] then
+            table.insert(names, name)
+            nameSet[name] = true
+        end
+    end
+    
+    -- Добавляем конфиги из файлов
+    if fileSystemSupported then
+        local fileConfigs = getConfigFilesFromFolder()
+        for _, name in pairs(fileConfigs) do
+            if not (excludeDefault and name == "Default") and not nameSet[name] then
+                table.insert(names, name)
+                nameSet[name] = true
+            end
+        end
+    end
+    
+    -- Если нет конфигов и не исключаем Default, добавляем его
+    if #names == 0 and not excludeDefault then
+        table.insert(names, "Default")
+    end
+    
+    return names
+end
+
+-- Создаем конфиг по умолчанию
+saveConfig("Default")
+
+-- ВКЛАДКА КОНФИГОВ
+local ConfigManagementSection = CreateSection(ConfigTab, "💾 Управление конфигами")
+
+-- Поле ввода имени конфига
+local configNameInput = ""
+local _, configTextBox = CreateTextBox(ConfigManagementSection, "Имя конфига", "Введите имя для нового конфига", "Например: MyConfig", function(text)
+    configNameInput = text
+end)
+
+CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки с введенным именем", function()
+    local configName = configTextBox.Text
+    if configName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Введите имя конфига!",
+            Duration = 3
+        })
+        return
+    end
+    
+    saveConfig(configName)
+    configTextBox.Text = ""
+end)
+
+local selectedConfigName = ""
+CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
+    getConfigNames(true), "", function(option)
+    selectedConfigName = option or ""
+    print("Выбран конфиг:", selectedConfigName) -- Для отладки
+end)
+
+CreateButton(ConfigManagementSection, "Загрузить выбранный конфиг", "Загрузить конфиг выбранный выше", function()
+    if selectedConfigName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
+    end
+    
+    loadConfig(selectedConfigName)
+end)
+
+CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
+    getConfigNames(), "Default", function(option)
+    deleteConfig(option)
+end)
+
+CreateButton(ConfigManagementSection, "Автосохранение", "Сохранить текущие настройки в автосохранение", function()
+    saveConfig("AutoSave_" .. os.date("%H-%M-%S"))
+end)
+
+-- Информация о файловой системе
+local FileSystemSection = CreateSection(ConfigTab, "📁 Информация о файлах")
+
+CreateButton(FileSystemSection, "Статус файловой системы", "Проверить поддержку сохранения в файлы", function()
+    local status = fileSystemSupported and "✅ Поддерживается" or "❌ Не поддерживается"
+    local message = "Файловая система: " .. status
+    
+    if fileSystemSupported then
+        message = message .. "\nПапка: workspace/" .. configFolder
+        message = message .. "\nФормат: JSON (.json)"
+        
+        local fileConfigs = getConfigFilesFromFolder()
+        message = message .. "\nФайлов конфигов: " .. #fileConfigs
+    else
+        message = message .. "\nКонфиги сохраняются только в память"
+        message = message .. "\nПосле перезапуска игры они исчезнут"
+    end
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "Файловая система",
+        Text = message,
+        Duration = 8
+    })
+end)
+
+CreateButton(FileSystemSection, "Обновить список конфигов", "Перезагрузить список конфигов из файлов", function()
+    -- Обновляем dropdown списки (это требует перезагрузки GUI или динамического обновления)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Список конфигов обновлен! Найдено: " .. #getConfigNames() .. " конфигов",
+        Duration = 3
+    })
+end)
+
 -- ВКЛАДКА РАЗНОЕ
 local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
 
@@ -1993,8 +2647,12 @@ local function setupNoclip()
     end
 end
 
--- Aimbot для Centaura
+-- Aimbot для Centaura (оптимизированный)
 if currentGame == "Centaura" then
+    local lastTargetCheck = 0
+    local currentTarget = nil
+    local targetCheckInterval = 0.1 -- Проверяем цели каждые 100мс вместо каждого кадра
+    
     local function getClosestEnemy()
         local closestPlayer = nil
         local shortestDistance = math.huge
@@ -2013,11 +2671,12 @@ if currentGame == "Centaura" then
                     
                     if distance < aimbotFOV and distance < shortestDistance then
                         if aimbotVisibleOnly then
+                            -- Оптимизированный raycast - только для ближайшей цели
                             local raycastParams = RaycastParams.new()
                             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
                             raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
                             
-                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, raycastParams)
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 500, raycastParams)
                             
                             if not raycastResult then
                                 closestPlayer = player
@@ -2035,62 +2694,167 @@ if currentGame == "Centaura" then
         return closestPlayer
     end
     
+    -- Оптимизированная система аимбота
     RunService.Heartbeat:Connect(function()
-        if aimbotEnabled then
-            local target = getClosestEnemy()
-            if target and target.Character and target.Character:FindFirstChild(aimbotTargetPart) then
-                local targetPart = target.Character[aimbotTargetPart]
+        if not aimbotEnabled then
+            currentTarget = nil
+            return
+        end
+        
+        local currentTime = tick()
+        
+        -- Обновляем цель только периодически
+        if currentTime - lastTargetCheck >= targetCheckInterval then
+            currentTarget = getClosestEnemy()
+            lastTargetCheck = currentTime
+        end
+        
+        -- Применяем прицеливание к текущей цели
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(aimbotTargetPart) then
+            local targetPart = currentTarget.Character[aimbotTargetPart]
+            if targetPart then
                 local targetPosition = targetPart.Position
-                
                 local camera = Camera
                 local currentCFrame = camera.CFrame
-                local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                 
-                camera.CFrame = currentCFrame:Lerp(targetCFrame, 1 / aimbotSmoothness)
+                -- Проверяем что цель в разумных пределах (не слишком далеко/близко)
+                local distance = (currentCFrame.Position - targetPosition).Magnitude
+                if distance > 5 and distance < 1000 then
+                    local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+                    
+                    -- Проверяем угол поворота чтобы избежать резких движений
+                    local angle = math.acos(math.clamp(currentCFrame.LookVector:Dot(targetCFrame.LookVector), -1, 1))
+                    
+                    if angle < math.rad(90) then -- Не поворачиваем больше чем на 90 градусов
+                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.2) -- Ограничиваем скорость еще больше
+                        local newCFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
+                        
+                        -- Дополнительная проверка что новая позиция камеры валидна
+                        if newCFrame.Position.Y > currentCFrame.Position.Y - 50 then
+                            camera.CFrame = newCFrame
+                        end
+                    else
+                        currentTarget = nil -- Цель слишком далеко по углу
+                    end
+                else
+                    currentTarget = nil -- Цель слишком далеко или близко
+                end
+            else
+                currentTarget = nil -- Цель потеряна
             end
         end
     end)
 end
 
--- Мониторинг игроков для ESP
+-- Постоянное обновление чамсов
+spawn(function()
+    while true do
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                updatePlayerChams(player)
+            end
+        end
+        wait(1) -- Обновляем чамсы каждую секунду
+    end
+end)
+
+-- Эти обработчики уже есть выше, убираем дубликаты
+
+-- Функция восстановления настроек после респавна
+local function restorePlayerSettings()
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            -- Восстановление скорости
+            if speedEnabled then
+                humanoid.WalkSpeed = walkSpeed
+            end
+            
+            -- Восстановление прыжка
+            if jumpEnabled then
+                humanoid.JumpHeight = jumpPower
+            end
+        end
+    end
+end
+
+-- Мониторинг респавна локального игрока
+LocalPlayer.CharacterAdded:Connect(function(character)
+    wait(1) -- Ждем полной загрузки персонажа
+    restorePlayerSettings()
+    
+    -- Обновляем ESP
+    if espSettings.enabled then
+        wait(0.5)
+        updateESP()
+    end
+end)
+
+-- Мониторинг смерти игроков (упрощенный)
+local connectedPlayers = {}
+
+local function connectPlayerDeath(player)
+    if connectedPlayers[player] or not player.Character then return end
+    
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        local connection = humanoid.Died:Connect(function()
+            -- Удаляем чамс сразу при смерти
+            if playerChams[player] then
+                pcall(function()
+                    playerChams[player]:Destroy()
+                end)
+                playerChams[player] = nil
+            end
+            
+            wait(0.5)
+            if espSettings.enabled then
+                updateESP()
+            end
+            connectedPlayers[player] = nil -- Убираем из списка после смерти
+        end)
+        connectedPlayers[player] = connection
+    end
+end
+
+-- Подключаем для всех текущих игроков
+for _, player in pairs(Players:GetPlayers()) do
+    connectPlayerDeath(player)
+end
+
+-- Подключаем для новых игроков
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
         wait(1)
+        connectPlayerDeath(player)
         if espSettings.enabled then
             updateESP()
         end
     end)
 end)
 
-Players.PlayerRemoving:Connect(function()
+-- Очищаем соединения при выходе игрока
+Players.PlayerRemoving:Connect(function(player)
+    if connectedPlayers[player] then
+        connectedPlayers[player]:Disconnect()
+        connectedPlayers[player] = nil
+    end
+    
+    -- Удаляем чамс игрока который покинул
+    if playerChams[player] then
+        pcall(function()
+            playerChams[player]:Destroy()
+        end)
+        playerChams[player] = nil
+    end
+    
     if espSettings.enabled then
         updateESP()
     end
 end)
 
--- Мониторинг смерти игроков
-spawn(function()
-    while true do
-        for _, player in pairs(Players:GetPlayers()) do
-            if player.Character then
-                local humanoid = player.Character:FindFirstChild("Humanoid")
-                if humanoid then
-                    humanoid.Died:Connect(function()
-                        wait(0.5)
-                        if espSettings.enabled then
-                            updateESP()
-                        end
-                    end)
-                end
-            end
-        end
-        wait(5)
-    end
-end)
-
 -- Обработчики кнопок
 CloseButton.MouseButton1Click:Connect(HideGUI)
-MinimizeButton.MouseButton1Click:Connect(MinimizeGUI)
 
 -- Горячие клавиши
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
