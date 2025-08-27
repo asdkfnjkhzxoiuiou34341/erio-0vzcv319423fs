@@ -1368,7 +1368,7 @@ local function clearChams()
 end
 
 local function updatePlayerChams(player)
-    if not espSettings.chams then
+    if not espSettings.enabled or not espSettings.chams then
         -- Удаляем чамс если он выключен
         if playerChams[player] then
             playerChams[player]:Destroy()
@@ -1387,19 +1387,25 @@ local function updatePlayerChams(player)
         return 
     end
     
+    -- Проверяем что чамс все еще существует и прикреплен к правильному персонажу
+    if playerChams[player] and (not playerChams[player].Parent or playerChams[player].Adornee ~= character) then
+        playerChams[player]:Destroy()
+        playerChams[player] = nil
+    end
+    
     -- Создаем чамс только если его нет
     if not playerChams[player] then
         local isEnemy = isPlayerEnemy(player)
         local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
         
         local highlight = Instance.new("Highlight")
-        highlight.Name = "SSLKinESP"
+        highlight.Name = "SSLKinESP_Chams"
         highlight.Adornee = character
         highlight.FillColor = espColor
         highlight.FillTransparency = 0.7
         highlight.OutlineColor = espColor
         highlight.OutlineTransparency = 0
-        highlight.Parent = character
+        highlight.Parent = CoreGui -- Помещаем в CoreGui вместо character
         
         playerChams[player] = highlight
     else
@@ -1407,8 +1413,11 @@ local function updatePlayerChams(player)
         local isEnemy = isPlayerEnemy(player)
         local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
         
-        playerChams[player].FillColor = espColor
-        playerChams[player].OutlineColor = espColor
+        if playerChams[player] and playerChams[player].Parent then
+            playerChams[player].FillColor = espColor
+            playerChams[player].OutlineColor = espColor
+            playerChams[player].Adornee = character -- Убеждаемся что привязан к правильному персонажу
+        end
     end
 end
 
@@ -1462,19 +1471,23 @@ local function createESPBox(player)
         
         -- Обновление квадрата
         spawn(function()
-            while box and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.boxes do
-                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-                if onScreen then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid and humanoid.Health > 0 then
-                        local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
-                        local scaleFactor = 1000 / distance
-                        local width = math.clamp(scaleFactor, 3, 15)
-                        local height = width * 1.5
-                        
-                        box.Size = Vector2.new(width, height)
-                        box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
-                        box.Visible = true
+            while box and character.Parent and humanoidRootPart.Parent do
+                if espSettings.enabled and espSettings.boxes then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                            local scaleFactor = 1000 / distance
+                            local width = math.clamp(scaleFactor, 20, 60)
+                            local height = width * 1.8
+                            
+                            box.Size = Vector2.new(width, height)
+                            box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
+                            box.Visible = true
+                        else
+                            box.Visible = false
+                        end
                     else
                         box.Visible = false
                     end
@@ -2479,13 +2492,13 @@ local function deleteConfig(configName)
     end
 end
 
-local function getConfigNames()
+local function getConfigNames(excludeDefault)
     local names = {}
     local nameSet = {}
     
     -- Добавляем конфиги из памяти
     for name, _ in pairs(configs) do
-        if not nameSet[name] then
+        if not (excludeDefault and name == "Default") and not nameSet[name] then
             table.insert(names, name)
             nameSet[name] = true
         end
@@ -2495,15 +2508,15 @@ local function getConfigNames()
     if fileSystemSupported then
         local fileConfigs = getConfigFilesFromFolder()
         for _, name in pairs(fileConfigs) do
-            if not nameSet[name] then
+            if not (excludeDefault and name == "Default") and not nameSet[name] then
                 table.insert(names, name)
                 nameSet[name] = true
             end
         end
     end
     
-    -- Убеждаемся что есть хотя бы Default
-    if #names == 0 then
+    -- Если нет конфигов и не исключаем Default, добавляем его
+    if #names == 0 and not excludeDefault then
         table.insert(names, "Default")
     end
     
@@ -2538,8 +2551,10 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
 end)
 
 CreateDropdown(ConfigManagementSection, "Загрузить конфиг", "Выберите конфиг для загрузки", 
-    getConfigNames(), "Default", function(option)
-    loadConfig(option)
+    getConfigNames(true), "", function(option)
+    if option and option ~= "" then
+        loadConfig(option)
+    end
 end)
 
 CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
@@ -2646,8 +2661,12 @@ local function setupNoclip()
     end
 end
 
--- Aimbot для Centaura
+-- Aimbot для Centaura (оптимизированный)
 if currentGame == "Centaura" then
+    local lastTargetCheck = 0
+    local currentTarget = nil
+    local targetCheckInterval = 0.1 -- Проверяем цели каждые 100мс вместо каждого кадра
+    
     local function getClosestEnemy()
         local closestPlayer = nil
         local shortestDistance = math.huge
@@ -2666,11 +2685,12 @@ if currentGame == "Centaura" then
                     
                     if distance < aimbotFOV and distance < shortestDistance then
                         if aimbotVisibleOnly then
+                            -- Оптимизированный raycast - только для ближайшей цели
                             local raycastParams = RaycastParams.new()
                             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
                             raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
                             
-                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, raycastParams)
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 500, raycastParams)
                             
                             if not raycastResult then
                                 closestPlayer = player
@@ -2688,18 +2708,36 @@ if currentGame == "Centaura" then
         return closestPlayer
     end
     
+    -- Оптимизированная система аимбота
     RunService.Heartbeat:Connect(function()
-        if aimbotEnabled then
-            local target = getClosestEnemy()
-            if target and target.Character and target.Character:FindFirstChild(aimbotTargetPart) then
-                local targetPart = target.Character[aimbotTargetPart]
+        if not aimbotEnabled then
+            currentTarget = nil
+            return
+        end
+        
+        local currentTime = tick()
+        
+        -- Обновляем цель только периодически
+        if currentTime - lastTargetCheck >= targetCheckInterval then
+            currentTarget = getClosestEnemy()
+            lastTargetCheck = currentTime
+        end
+        
+        -- Применяем прицеливание к текущей цели
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(aimbotTargetPart) then
+            local targetPart = currentTarget.Character[aimbotTargetPart]
+            if targetPart then
                 local targetPosition = targetPart.Position
                 
                 local camera = Camera
                 local currentCFrame = camera.CFrame
                 local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                 
-                camera.CFrame = currentCFrame:Lerp(targetCFrame, 1 / aimbotSmoothness)
+                -- Более плавное прицеливание
+                local lerpFactor = math.min(1 / aimbotSmoothness, 0.3) -- Ограничиваем максимальную скорость
+                camera.CFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
+            else
+                currentTarget = nil -- Цель потеряна
             end
         end
     end)
@@ -2708,14 +2746,12 @@ end
 -- Постоянное обновление чамсов
 spawn(function()
     while true do
-        if espSettings.enabled and espSettings.chams then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    updatePlayerChams(player)
-                end
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                updatePlayerChams(player)
             end
         end
-        wait(0.5) -- Обновляем чамсы каждые 0.5 секунд
+        wait(1) -- Обновляем чамсы каждую секунду
     end
 end)
 
