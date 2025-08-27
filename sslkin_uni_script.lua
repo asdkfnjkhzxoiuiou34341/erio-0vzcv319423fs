@@ -1,8 +1,8 @@
 --[[
     SSLKin Uni Script - Universal Roblox Script Hub
     Created by: SSLKin
-    Version: 3.1
-    Fixed ESP, Aimbot, and UI Issues
+    Version: 3.2
+    Fixed All Bugs + Config System
 --]]
 
 -- Защита от повторного запуска
