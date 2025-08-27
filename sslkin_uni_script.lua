@@ -1,8 +1,8 @@
 --[[
     SSLKin Uni Script - Universal Roblox Script Hub
     Created by: SSLKin
-    Version: 2.1
-    Modern & Beautiful Design with Sliders and Better ESP
+    Version: 3.0
+    Game-Specific Versions with Enhanced Features
 --]]
 
 -- Защита от повторного запуска
@@ -21,10 +21,22 @@ local CoreGui = game:GetService("CoreGui")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Teams = game:GetService("Teams")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = Workspace.CurrentCamera
+
+-- Определение игры
+local currentGame = "Universal"
+local gameSpecificFeatures = {}
+
+-- Centaura PlaceId
+local CENTAURA_PLACE_ID = 8735521924
+
+if game.PlaceId == CENTAURA_PLACE_ID then
+    currentGame = "Centaura"
+end
 
 -- Переменные состояния
 local isFlying = false
@@ -36,6 +48,16 @@ local speedEnabled = false
 local jumpEnabled = false
 local walkSpeed = 16
 local jumpPower = 50
+local fullBrightEnabled = false
+local noFogEnabled = false
+
+-- Centaura специфические переменные
+local aimbotEnabled = false
+local aimbotFOV = 90
+local aimbotSmoothness = 0.2
+local aimbotTargetPart = "Head"
+local aimbotVisibleOnly = true
+local aimbotTeamCheck = true
 
 -- ESP настройки
 local espSettings = {
@@ -45,13 +67,25 @@ local espSettings = {
     distance = false,
     health = false,
     tracers = false,
-    boxColor = Color3.fromRGB(255, 0, 0),
+    teamCheck = true,
+    enemyColor = Color3.fromRGB(255, 0, 0),
+    allyColor = Color3.fromRGB(0, 255, 0),
     nameColor = Color3.fromRGB(255, 255, 255),
     tracerColor = Color3.fromRGB(0, 255, 0)
 }
 
 -- ESP объекты
 local espObjects = {}
+
+-- Сохранение оригинальных значений освещения
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
 
 -- Создание ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
@@ -123,7 +157,7 @@ LogoLabel.BackgroundTransparency = 1
 LogoLabel.Position = UDim2.new(0, 20, 0, 5)
 LogoLabel.Size = UDim2.new(0, 50, 0, 50)
 LogoLabel.Font = Enum.Font.GothamBold
-LogoLabel.Text = "🚀"
+LogoLabel.Text = currentGame == "Centaura" and "⚔️" or "🚀"
 LogoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 LogoLabel.TextScaled = true
 
@@ -146,7 +180,7 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 80, 0, 35)
 SubtitleLabel.Size = UDim2.new(1, -200, 0, 20)
 SubtitleLabel.Font = Enum.Font.Gotham
-SubtitleLabel.Text = "Universal Roblox Script Hub v2.1"
+SubtitleLabel.Text = currentGame == "Centaura" and "Centaura Mode v3.0" or "Universal Mode v3.0"
 SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 SubtitleLabel.TextSize = 12
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -746,14 +780,158 @@ local function CreateSlider(parent, text, description, minValue, maxValue, defau
     return SliderFrame, updateSlider
 end
 
--- ESP Функции
+-- Функция создания выпадающего списка
+local function CreateDropdown(parent, text, description, options, defaultOption, callback)
+    local DropdownFrame = Instance.new("Frame")
+    DropdownFrame.Parent = parent
+    DropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    DropdownFrame.BorderSizePixel = 0
+    DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local DropdownCorner = Instance.new("UICorner")
+    DropdownCorner.CornerRadius = UDim.new(0, 8)
+    DropdownCorner.Parent = DropdownFrame
+    
+    local DropdownText = Instance.new("TextLabel")
+    DropdownText.Parent = DropdownFrame
+    DropdownText.BackgroundTransparency = 1
+    DropdownText.Position = UDim2.new(0, 15, 0, 8)
+    DropdownText.Size = UDim2.new(1, -30, 0, 20)
+    DropdownText.Font = Enum.Font.GothamBold
+    DropdownText.Text = text
+    DropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownText.TextSize = 14
+    DropdownText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local DropdownDesc = Instance.new("TextLabel")
+    DropdownDesc.Parent = DropdownFrame
+    DropdownDesc.BackgroundTransparency = 1
+    DropdownDesc.Position = UDim2.new(0, 15, 0, 28)
+    DropdownDesc.Size = UDim2.new(1, -30, 0, 16)
+    DropdownDesc.Font = Enum.Font.Gotham
+    DropdownDesc.Text = description or ""
+    DropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    DropdownDesc.TextSize = 11
+    DropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Кнопка выпадающего списка
+    local DropdownButton = Instance.new("TextButton")
+    DropdownButton.Parent = DropdownFrame
+    DropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    DropdownButton.BorderSizePixel = 0
+    DropdownButton.Position = UDim2.new(0, 15, 0, 50)
+    DropdownButton.Size = UDim2.new(1, -30, 0, 25)
+    DropdownButton.Font = Enum.Font.Gotham
+    DropdownButton.Text = defaultOption
+    DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownButton.TextSize = 12
+    DropdownButton.AutoButtonColor = false
+    
+    local DropdownButtonCorner = Instance.new("UICorner")
+    DropdownButtonCorner.CornerRadius = UDim.new(0, 6)
+    DropdownButtonCorner.Parent = DropdownButton
+    
+    local currentOption = defaultOption
+    local isOpen = false
+    
+    -- Создание списка опций (скрыт по умолчанию)
+    local OptionsList = Instance.new("Frame")
+    OptionsList.Parent = DropdownFrame
+    OptionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    OptionsList.BorderSizePixel = 0
+    OptionsList.Position = UDim2.new(0, 15, 0, 76)
+    OptionsList.Size = UDim2.new(1, -30, 0, #options * 25)
+    OptionsList.Visible = false
+    OptionsList.ZIndex = 10
+    
+    local OptionsCorner = Instance.new("UICorner")
+    OptionsCorner.CornerRadius = UDim.new(0, 6)
+    OptionsCorner.Parent = OptionsList
+    
+    local OptionsLayout = Instance.new("UIListLayout")
+    OptionsLayout.Parent = OptionsList
+    OptionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- Создание опций
+    for i, option in ipairs(options) do
+        local OptionButton = Instance.new("TextButton")
+        OptionButton.Parent = OptionsList
+        OptionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        OptionButton.BorderSizePixel = 0
+        OptionButton.Size = UDim2.new(1, 0, 0, 25)
+        OptionButton.Font = Enum.Font.Gotham
+        OptionButton.Text = option
+        OptionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        OptionButton.TextSize = 12
+        OptionButton.AutoButtonColor = false
+        
+        OptionButton.MouseEnter:Connect(function()
+            OptionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+        end)
+        
+        OptionButton.MouseLeave:Connect(function()
+            OptionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        end)
+        
+        OptionButton.MouseButton1Click:Connect(function()
+            currentOption = option
+            DropdownButton.Text = option
+            OptionsList.Visible = false
+            isOpen = false
+            
+            if callback then
+                callback(option)
+            end
+        end)
+    end
+    
+    DropdownButton.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        OptionsList.Visible = isOpen
+        
+        if isOpen then
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80 + (#options * 25))
+        else
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        end
+    end)
+    
+    return DropdownFrame
+end
+
+-- Функции ESP
 local function clearESP()
     for _, espObj in pairs(espObjects) do
-        if espObj then
+        if espObj and espObj.Parent then
             espObj:Destroy()
         end
     end
     espObjects = {}
+end
+
+local function getPlayerTeam(player)
+    if currentGame == "Centaura" then
+        -- В Centaura команды определяются через Team
+        return player.Team
+    else
+        -- Универсальная проверка команды
+        return player.Team
+    end
+end
+
+local function isPlayerEnemy(player)
+    if not espSettings.teamCheck then
+        return true -- Показывать всех если проверка команды отключена
+    end
+    
+    local localTeam = getPlayerTeam(LocalPlayer)
+    local playerTeam = getPlayerTeam(player)
+    
+    if not localTeam or not playerTeam then
+        return true -- Если команда не определена, считаем врагом
+    end
+    
+    return localTeam ~= playerTeam
 end
 
 local function createESPBox(player)
@@ -765,93 +943,107 @@ local function createESPBox(player)
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return end
     
+    local isEnemy = isPlayerEnemy(player)
+    local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
+    
     -- Создание обводки
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "SSLKinESP"
-    highlight.Adornee = character
-    highlight.FillColor = espSettings.boxColor
-    highlight.FillTransparency = 0.7
-    highlight.OutlineColor = espSettings.boxColor
-    highlight.OutlineTransparency = 0
-    highlight.Parent = character
+    if espSettings.boxes then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "SSLKinESP"
+        highlight.Adornee = character
+        highlight.FillColor = espColor
+        highlight.FillTransparency = 0.7
+        highlight.OutlineColor = espColor
+        highlight.OutlineTransparency = 0
+        highlight.Parent = character
+        table.insert(espObjects, highlight)
+    end
     
     -- Создание BillboardGui для дополнительной информации
-    local billboardGui = Instance.new("BillboardGui")
-    billboardGui.Name = "ESPInfo"
-    billboardGui.Adornee = humanoidRootPart
-    billboardGui.Size = UDim2.new(0, 200, 0, 100)
-    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-    billboardGui.Parent = Workspace
-    
-    -- Имя игрока
-    if espSettings.names then
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Parent = billboardGui
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Size = UDim2.new(1, 0, 0, 20)
-        nameLabel.Position = UDim2.new(0, 0, 0, 0)
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.Text = player.Name
-        nameLabel.TextColor3 = espSettings.nameColor
-        nameLabel.TextSize = 16
-        nameLabel.TextStrokeTransparency = 0
-        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    end
-    
-    -- Дистанция
-    if espSettings.distance then
-        local distanceLabel = Instance.new("TextLabel")
-        distanceLabel.Parent = billboardGui
-        distanceLabel.BackgroundTransparency = 1
-        distanceLabel.Size = UDim2.new(1, 0, 0, 16)
-        distanceLabel.Position = UDim2.new(0, 0, 0, 25)
-        distanceLabel.Font = Enum.Font.Gotham
-        distanceLabel.Text = "0m"
-        distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        distanceLabel.TextSize = 14
-        distanceLabel.TextStrokeTransparency = 0
-        distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    if espSettings.names or espSettings.distance or espSettings.health then
+        local billboardGui = Instance.new("BillboardGui")
+        billboardGui.Name = "ESPInfo"
+        billboardGui.Adornee = humanoidRootPart
+        billboardGui.Size = UDim2.new(0, 200, 0, 100)
+        billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+        billboardGui.AlwaysOnTop = true -- Видно через стены
+        billboardGui.Parent = Workspace
+        table.insert(espObjects, billboardGui)
         
-        -- Обновление дистанции
-        spawn(function()
-            while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
-                distanceLabel.Text = math.floor(distance) .. "m"
-                wait(0.1)
-            end
-        end)
-    end
-    
-    -- Здоровье
-    if espSettings.health then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            local healthLabel = Instance.new("TextLabel")
-            healthLabel.Parent = billboardGui
-            healthLabel.BackgroundTransparency = 1
-            healthLabel.Size = UDim2.new(1, 0, 0, 16)
-            healthLabel.Position = UDim2.new(0, 0, 0, 45)
-            healthLabel.Font = Enum.Font.Gotham
-            healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
-            healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-            healthLabel.TextSize = 14
-            healthLabel.TextStrokeTransparency = 0
-            healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        local yOffset = 0
+        
+        -- Имя игрока
+        if espSettings.names then
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Parent = billboardGui
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Size = UDim2.new(1, 0, 0, 20)
+            nameLabel.Position = UDim2.new(0, 0, 0, yOffset)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.Text = player.Name
+            nameLabel.TextColor3 = espSettings.nameColor
+            nameLabel.TextSize = 16
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            yOffset = yOffset + 25
+        end
+        
+        -- Дистанция
+        if espSettings.distance then
+            local distanceLabel = Instance.new("TextLabel")
+            distanceLabel.Parent = billboardGui
+            distanceLabel.BackgroundTransparency = 1
+            distanceLabel.Size = UDim2.new(1, 0, 0, 16)
+            distanceLabel.Position = UDim2.new(0, 0, 0, yOffset)
+            distanceLabel.Font = Enum.Font.Gotham
+            distanceLabel.Text = "0m"
+            distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            distanceLabel.TextSize = 14
+            distanceLabel.TextStrokeTransparency = 0
+            distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            yOffset = yOffset + 20
             
-            -- Обновление здоровья
-            humanoid.HealthChanged:Connect(function()
-                if healthLabel.Parent then
-                    healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
-                    local healthPercent = humanoid.Health / humanoid.MaxHealth
-                    if healthPercent > 0.6 then
-                        healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    elseif healthPercent > 0.3 then
-                        healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-                    else
-                        healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                    end
+            -- Обновление дистанции
+            spawn(function()
+                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
+                    distanceLabel.Text = math.floor(distance) .. "m"
+                    wait(0.1)
                 end
             end)
+        end
+        
+        -- Здоровье
+        if espSettings.health then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                local healthLabel = Instance.new("TextLabel")
+                healthLabel.Parent = billboardGui
+                healthLabel.BackgroundTransparency = 1
+                healthLabel.Size = UDim2.new(1, 0, 0, 16)
+                healthLabel.Position = UDim2.new(0, 0, 0, yOffset)
+                healthLabel.Font = Enum.Font.Gotham
+                healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                healthLabel.TextSize = 14
+                healthLabel.TextStrokeTransparency = 0
+                healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                
+                -- Обновление здоровья
+                humanoid.HealthChanged:Connect(function()
+                    if healthLabel.Parent then
+                        healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                        local healthPercent = humanoid.Health / humanoid.MaxHealth
+                        if healthPercent > 0.6 then
+                            healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                        elseif healthPercent > 0.3 then
+                            healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                        else
+                            healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                        end
+                    end
+                end)
+            end
         end
     end
     
@@ -859,7 +1051,7 @@ local function createESPBox(player)
     if espSettings.tracers then
         local line = Drawing.new("Line")
         line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-        line.Color = espSettings.tracerColor
+        line.Color = espColor
         line.Thickness = 2
         line.Transparency = 1
         line.Visible = true
@@ -883,9 +1075,6 @@ local function createESPBox(player)
         
         table.insert(espObjects, line)
     end
-    
-    table.insert(espObjects, highlight)
-    table.insert(espObjects, billboardGui)
 end
 
 local function updateESP()
@@ -900,14 +1089,79 @@ local function updateESP()
     end
 end
 
--- Создание вкладок
+-- Функции освещения
+local function toggleFullBright(enabled)
+    if enabled then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    else
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    end
+end
+
+local function toggleNoFog(enabled)
+    if enabled then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+    else
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.FogStart = originalLighting.FogStart
+    end
+end
+
+-- Создание вкладок в зависимости от игры
 local PlayerTab = CreateTab("Игрок", "👤", Color3.fromRGB(100, 150, 255))
 local GameTab = CreateTab("Игра", "🎮", Color3.fromRGB(255, 100, 150))
 local VisualTab = CreateTab("Визуалы", "👁", Color3.fromRGB(150, 255, 100))
+
+-- Добавляем вкладку Aimbot только для Centaura
+local AimbotTab = nil
+if currentGame == "Centaura" then
+    AimbotTab = CreateTab("Aimbot", "🎯", Color3.fromRGB(255, 80, 80))
+end
+
 local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
 
 -- ВКЛАДКА ИГРОКА
 local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
+
+-- Специальная проверка для Centaura - отключение полёта и noclip при взятии оружия
+if currentGame == "Centaura" then
+    local function checkWeaponEquipped()
+        if LocalPlayer.Character then
+            local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+            if tool then
+                -- Если оружие в руках, отключаем полёт и noclip
+                if isFlying then
+                    isFlying = false
+                    if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                            if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
+                                obj:Destroy()
+                            end
+                        end
+                    end
+                end
+                if isNoclipActive then
+                    isNoclipActive = false
+                end
+            end
+        end
+    end
+    
+    -- Проверяем каждую секунду
+    spawn(function()
+        while true do
+            checkWeaponEquipped()
+            wait(0.5)
+        end
+    end)
+end
 
 -- Скорость ходьбы
 CreateToggle(MovementSection, "Скорость ходьбы", "Включить/выключить изменение скорости", false, function(state)
@@ -973,85 +1227,87 @@ CreateSlider(MovementSection, "Значение прыжка", "От 7 до 100"
     end
 end)
 
--- Полёт
-CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
-    if state then
-        -- Включить полёт
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local humanoid = character:FindFirstChild("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if not humanoid or not rootPart then return end
-        
-        isFlying = true
-        
-        local bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        bodyVelocity.Parent = rootPart
-        
-        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-        bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
-        bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
-        bodyAngularVelocity.Parent = rootPart
-        
-        spawn(function()
-            while isFlying and bodyVelocity.Parent do
-                local moveVector = Vector3.new(0, 0, 0)
-                local cam = Camera
-                
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                    moveVector = moveVector + (cam.CFrame.LookVector * flySpeed)
+-- Полёт (отключен для Centaura)
+if currentGame ~= "Centaura" then
+    CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
+        if state then
+            -- Включить полёт
+            local character = LocalPlayer.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if not humanoid or not rootPart then return end
+            
+            isFlying = true
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+            bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+            bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+            bodyAngularVelocity.Parent = rootPart
+            
+            spawn(function()
+                while isFlying and bodyVelocity.Parent do
+                    local moveVector = Vector3.new(0, 0, 0)
+                    local cam = Camera
+                    
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        moveVector = moveVector + (cam.CFrame.LookVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        moveVector = moveVector - (cam.CFrame.LookVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        moveVector = moveVector - (cam.CFrame.RightVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        moveVector = moveVector + (cam.CFrame.RightVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        moveVector = moveVector + Vector3.new(0, flySpeed, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        moveVector = moveVector - Vector3.new(0, flySpeed, 0)
+                    end
+                    
+                    bodyVelocity.Velocity = moveVector
+                    RunService.Heartbeat:Wait()
                 end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                    moveVector = moveVector - (cam.CFrame.LookVector * flySpeed)
+            end)
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Полёт активирован!",
+                Duration = 3
+            })
+        else
+            -- Выключить полёт
+            isFlying = false
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                    if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
+                        obj:Destroy()
+                    end
                 end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                    moveVector = moveVector - (cam.CFrame.RightVector * flySpeed)
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                    moveVector = moveVector + (cam.CFrame.RightVector * flySpeed)
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                    moveVector = moveVector + Vector3.new(0, flySpeed, 0)
-                end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                    moveVector = moveVector - Vector3.new(0, flySpeed, 0)
-                end
-                
-                bodyVelocity.Velocity = moveVector
-                RunService.Heartbeat:Wait()
             end
-        end)
-        
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Полёт активирован!",
-            Duration = 3
-        })
-    else
-        -- Выключить полёт
-        isFlying = false
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
-                if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
-                    obj:Destroy()
-                end
-            end
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Полёт деактивирован!",
+                Duration = 3
+            })
         end
-        
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Полёт деактивирован!",
-            Duration = 3
-        })
-    end
-end)
-
-CreateSlider(MovementSection, "Скорость полёта", "От 10 до 200", 10, 200, 50, function(value)
-    flySpeed = value
-end)
+    end)
+    
+    CreateSlider(MovementSection, "Скорость полёта", "От 10 до 200", 10, 200, 50, function(value)
+        flySpeed = value
+    end)
+end
 
 -- ВКЛАДКА ИГРЫ
 local GameplaySection = CreateSection(GameTab, "🎯 Игровые функции")
@@ -1074,39 +1330,112 @@ CreateToggle(GameplaySection, "Бесконечные прыжки", "Позво
     end
 end)
 
-CreateToggle(GameplaySection, "Проход сквозь стены", "Отключает коллизию персонажа", false, function(state)
-    isNoclipActive = state
+-- Noclip (отключен для Centaura)
+if currentGame ~= "Centaura" then
+    CreateToggle(GameplaySection, "Проход сквозь стены", "Отключает коллизию персонажа", false, function(state)
+        isNoclipActive = state
+        
+        if state then
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Noclip активирован!",
+                Duration = 3
+            })
+        else
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Noclip деактивирован!",
+                Duration = 3
+            })
+        end
+    end)
+end
+
+-- ВКЛАДКА AIMBOT (только для Centaura)
+if currentGame == "Centaura" and AimbotTab then
+    local AimbotMainSection = CreateSection(AimbotTab, "🎯 Основные настройки")
+    
+    CreateToggle(AimbotMainSection, "Включить Aimbot", "Автоматическое прицеливание на врагов", false, function(state)
+        aimbotEnabled = state
+        
+        if state then
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Aimbot активирован!",
+                Duration = 3
+            })
+        else
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Aimbot деактивирован!",
+                Duration = 3
+            })
+        end
+    end)
+    
+    CreateSlider(AimbotMainSection, "FOV (поле зрения)", "Радиус захвата цели в градусах", 30, 180, 90, function(value)
+        aimbotFOV = value
+    end)
+    
+    CreateSlider(AimbotMainSection, "Плавность", "Скорость наведения (чем меньше, тем плавнее)", 0.1, 1, 0.2, function(value)
+        aimbotSmoothness = value
+    end)
+    
+    local AimbotTargetSection = CreateSection(AimbotTab, "🎯 Настройки прицеливания")
+    
+    CreateDropdown(AimbotTargetSection, "Часть тела", "Выберите часть тела для прицеливания", 
+        {"Head", "Torso", "HumanoidRootPart"}, "Head", function(option)
+        aimbotTargetPart = option
+    end)
+    
+    CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
+        aimbotVisibleOnly = state
+    end)
+    
+    CreateToggle(AimbotTargetSection, "Проверка команды", "Не прицеливаться на союзников", true, function(state)
+        aimbotTeamCheck = state
+    end)
+end
+
+-- ВКЛАДКА ВИЗУАЛОВ
+local LightingSection = CreateSection(VisualTab, "💡 Освещение")
+
+CreateToggle(LightingSection, "Полная яркость", "Убирает тени и делает всё ярким", false, function(state)
+    fullBrightEnabled = state
+    toggleFullBright(state)
     
     if state then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Noclip активирован!",
+            Text = "Полная яркость включена!",
             Duration = 3
         })
     else
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Noclip деактивирован!",
+            Text = "Полная яркость выключена!",
             Duration = 3
         })
     end
 end)
 
--- ВКЛАДКА ВИЗУАЛОВ
-local LightingSection = CreateSection(VisualTab, "💡 Освещение")
-
-CreateButton(LightingSection, "Полный яркий свет", "Убирает тени и делает всё ярким", function()
-    Lighting.Brightness = 2
-    Lighting.ClockTime = 14
-    Lighting.FogEnd = 100000
-    Lighting.GlobalShadows = false
-    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+CreateToggle(LightingSection, "Убрать туман", "Увеличивает дальность видимости", false, function(state)
+    noFogEnabled = state
+    toggleNoFog(state)
     
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Полный яркий свет активирован!",
-        Duration = 3
-    })
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман убран!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман восстановлен!",
+            Duration = 3
+        })
+    end
 end)
 
 local ESPSection = CreateSection(VisualTab, "👁 ESP Настройки")
@@ -1155,19 +1484,13 @@ CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", fal
     updateESP()
 end)
 
+CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
+    espSettings.teamCheck = state
+    updateESP()
+end)
+
 -- ВКЛАДКА РАЗНОЕ
 local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
-
-CreateButton(UtilitySection, "Убрать туман", "Увеличивает дальность видимости", function()
-    Lighting.FogEnd = 100000
-    Lighting.FogStart = 0
-    
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Туман убран!",
-        Duration = 3
-    })
-end)
 
 CreateButton(UtilitySection, "Информация об игре", "Показывает данные о текущей игре", function()
     local success, gameInfo = pcall(function()
@@ -1176,8 +1499,9 @@ CreateButton(UtilitySection, "Информация об игре", "Показы
     
     if success then
         local info = string.format(
-            "Игра: %s\nИгроков: %d\nВаш пинг: %d мс\nPlace ID: %d",
+            "Игра: %s\nРежим: %s\nИгроков: %d\nВаш пинг: %d мс\nPlace ID: %d",
             gameInfo.Name,
+            currentGame,
             #Players:GetPlayers(),
             math.floor(LocalPlayer:GetNetworkPing() * 1000),
             game.PlaceId
@@ -1207,18 +1531,79 @@ local function setupInfiniteJump()
 end
 
 local function setupNoclip()
-    RunService.Stepped:Connect(function()
-        if isNoclipActive and LocalPlayer.Character then
-            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide then
-                    part.CanCollide = false
+    if currentGame ~= "Centaura" then
+        RunService.Stepped:Connect(function()
+            if isNoclipActive and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            elseif not isNoclipActive and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = true
+                    end
                 end
             end
-        elseif not isNoclipActive and LocalPlayer.Character then
-            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CanCollide = true
+        end)
+    end
+end
+
+-- Aimbot для Centaura
+if currentGame == "Centaura" then
+    local function getClosestEnemy()
+        local closestPlayer = nil
+        local shortestDistance = math.huge
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(aimbotTargetPart) then
+                if aimbotTeamCheck and not isPlayerEnemy(player) then
+                    continue
                 end
+                
+                local targetPart = player.Character[aimbotTargetPart]
+                local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                
+                if onScreen then
+                    local distance = (Vector2.new(vector.X, vector.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+                    
+                    if distance < aimbotFOV and distance < shortestDistance then
+                        if aimbotVisibleOnly then
+                            local raycastParams = RaycastParams.new()
+                            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
+                            
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, raycastParams)
+                            
+                            if not raycastResult then
+                                closestPlayer = player
+                                shortestDistance = distance
+                            end
+                        else
+                            closestPlayer = player
+                            shortestDistance = distance
+                        end
+                    end
+                end
+            end
+        end
+        
+        return closestPlayer
+    end
+    
+    RunService.Heartbeat:Connect(function()
+        if aimbotEnabled then
+            local target = getClosestEnemy()
+            if target and target.Character and target.Character:FindFirstChild(aimbotTargetPart) then
+                local targetPart = target.Character[aimbotTargetPart]
+                local targetPosition = targetPart.Position
+                
+                local camera = Camera
+                local currentCFrame = camera.CFrame
+                local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+                
+                camera.CFrame = currentCFrame:Lerp(targetCFrame, aimbotSmoothness)
             end
         end
     end)
@@ -1272,9 +1657,9 @@ ShowGUI()
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
     Title = "SSLKin Uni Script",
-    Text = "v2.1 загружен! Нажмите Insert для открытия/закрытия",
+    Text = string.format("%s Mode v3.0 загружен! Insert для открытия/закрытия", currentGame),
     Duration = 5
 })
 
-print("SSLKin Uni Script v2.1 загружен успешно!")
+print(string.format("SSLKin Uni Script v3.0 загружен в режиме %s!", currentGame))
 print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
