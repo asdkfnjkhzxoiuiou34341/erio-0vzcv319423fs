@@ -1122,6 +1122,68 @@ local function CreateSlider(parent, text, description, minValue, maxValue, defau
     return SliderFrame, updateSlider
 end
 
+-- Функция создания текстового поля
+local function CreateTextBox(parent, text, description, placeholder, callback)
+    local TextBoxFrame = Instance.new("Frame")
+    TextBoxFrame.Parent = parent
+    TextBoxFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    TextBoxFrame.BorderSizePixel = 0
+    TextBoxFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local TextBoxCorner = Instance.new("UICorner")
+    TextBoxCorner.CornerRadius = UDim.new(0, 8)
+    TextBoxCorner.Parent = TextBoxFrame
+    
+    local TextBoxText = Instance.new("TextLabel")
+    TextBoxText.Parent = TextBoxFrame
+    TextBoxText.BackgroundTransparency = 1
+    TextBoxText.Position = UDim2.new(0, 15, 0, 8)
+    TextBoxText.Size = UDim2.new(1, -30, 0, 20)
+    TextBoxText.Font = Enum.Font.GothamBold
+    TextBoxText.Text = text
+    TextBoxText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBoxText.TextSize = 14
+    TextBoxText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local TextBoxDesc = Instance.new("TextLabel")
+    TextBoxDesc.Parent = TextBoxFrame
+    TextBoxDesc.BackgroundTransparency = 1
+    TextBoxDesc.Position = UDim2.new(0, 15, 0, 28)
+    TextBoxDesc.Size = UDim2.new(1, -30, 0, 16)
+    TextBoxDesc.Font = Enum.Font.Gotham
+    TextBoxDesc.Text = description or ""
+    TextBoxDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    TextBoxDesc.TextSize = 11
+    TextBoxDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Текстовое поле
+    local TextBox = Instance.new("TextBox")
+    TextBox.Parent = TextBoxFrame
+    TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    TextBox.BorderSizePixel = 0
+    TextBox.Position = UDim2.new(0, 15, 0, 50)
+    TextBox.Size = UDim2.new(1, -30, 0, 25)
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.PlaceholderText = placeholder or "Введите текст..."
+    TextBox.Text = ""
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.TextSize = 12
+    TextBox.ClearTextOnFocus = false
+    
+    local TextBoxInputCorner = Instance.new("UICorner")
+    TextBoxInputCorner.CornerRadius = UDim.new(0, 6)
+    TextBoxInputCorner.Parent = TextBox
+    
+    -- События
+    TextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and callback then
+            callback(TextBox.Text)
+        end
+    end)
+    
+    return TextBoxFrame, TextBox
+end
+
 -- Функция создания выпадающего списка
 local function CreateDropdown(parent, text, description, options, defaultOption, callback)
     local DropdownFrame = Instance.new("Frame")
@@ -1277,9 +1339,6 @@ local function clearESP()
         end
     end
     drawingObjects = {}
-    
-    -- Очистка данных игроков
-    playerESPData = {}
 end
 
 local function getPlayerTeam(player)
@@ -1314,9 +1373,6 @@ local function createESPBox(player)
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return end
     
-    -- Регистрируем игрока в системе ESP
-    playerESPData[player] = true
-    
     local isEnemy = isPlayerEnemy(player)
     local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
     
@@ -1344,9 +1400,9 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, box)
         
-        -- Обновление квадрата в реальном времени
-        local boxConnection = RunService.Heartbeat:Connect(function()
-            if box and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.boxes then
+        -- Обновление квадрата
+        spawn(function()
+            while box and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.boxes do
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
                     local humanoid = character:FindFirstChild("Humanoid")
@@ -1365,16 +1421,12 @@ local function createESPBox(player)
                 else
                     box.Visible = false
                 end
-            else
-                box.Visible = false
-                if boxConnection then
-                    boxConnection:Disconnect()
-                end
-                if box then
-                    pcall(function()
-                        box:Remove()
-                    end)
-                end
+                wait()
+            end
+            if box then
+                pcall(function()
+                    box:Remove()
+                end)
             end
         end)
     end
@@ -1423,15 +1475,12 @@ local function createESPBox(player)
             distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
             yOffset = yOffset + 20
             
-            -- Обновление дистанции в реальном времени
-            local distanceConnection = RunService.Heartbeat:Connect(function()
-                if distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and humanoidRootPart.Parent then
+            -- Обновление дистанции
+            spawn(function()
+                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and humanoidRootPart.Parent do
                     local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
                     distanceLabel.Text = math.floor(distance) .. "m"
-                else
-                    if distanceConnection then
-                        distanceConnection:Disconnect()
-                    end
+                    wait(0.1)
                 end
             end)
         end
@@ -1481,9 +1530,9 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, line)
         
-        -- Обновление трейсера в реальном времени
-        local tracerConnection = RunService.Heartbeat:Connect(function()
-            if line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers then
+        -- Обновление трейсера
+        spawn(function()
+            while line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers do
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
                     local humanoid = character:FindFirstChild("Humanoid")
@@ -1497,52 +1546,44 @@ local function createESPBox(player)
                 else
                     line.Visible = false
                 end
-            else
-                line.Visible = false
-                if tracerConnection then
-                    tracerConnection:Disconnect()
-                end
-                if line then
-                    pcall(function()
-                        line:Remove()
-                    end)
-                end
+                wait()
+            end
+            if line then
+                pcall(function()
+                    line:Remove()
+                end)
             end
         end)
     end
 end
 
--- Хранилище ESP объектов для каждого игрока
-local playerESPData = {}
-
 local function updateESP()
+    clearESP()
+    
     if espSettings.enabled then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
-                -- Создаем ESP только если его еще нет для этого игрока
-                if not playerESPData[player] then
-                    createESPBox(player)
-                end
+                createESPBox(player)
             end
         end
-        
-        -- Удаляем ESP для игроков которые покинули игру
-        for player, _ in pairs(playerESPData) do
-            if not Players:FindFirstChild(player.Name) then
-                playerESPData[player] = nil
-            end
-        end
-    else
-        clearESP()
     end
 end
 
 -- FOV Circle для аимбота
+local fovConnection = nil
+
 local function createFOVCircle()
+    -- Удаляем старый круг и соединение
     if fovCircle then
         pcall(function()
             fovCircle:Remove()
         end)
+        fovCircle = nil
+    end
+    
+    if fovConnection then
+        fovConnection:Disconnect()
+        fovConnection = nil
     end
     
     if currentGame == "Centaura" and showFOVCircle then
@@ -1556,10 +1597,13 @@ local function createFOVCircle()
         fovCircle.Visible = true
         
         -- Обновление позиции и размера круга в реальном времени
-        RunService.Heartbeat:Connect(function()
+        fovConnection = RunService.Heartbeat:Connect(function()
             if fovCircle and showFOVCircle then
                 fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                 fovCircle.Radius = aimbotFOV
+                fovCircle.Visible = true
+            elseif fovCircle then
+                fovCircle.Visible = false
             end
         end)
     end
@@ -2142,38 +2186,23 @@ local ConfigManagementSection = CreateSection(ConfigTab, "💾 Управлен�
 
 -- Поле ввода имени конфига
 local configNameInput = ""
-CreateButton(ConfigManagementSection, "Ввести имя конфига", "Введите имя для нового конфига в чат", function()
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "Ввод имени конфига",
-        Text = "Напишите в чат имя для конфига и нажмите Enter",
-        Duration = 5
-    })
-    
-    local connection
-    connection = LocalPlayer.Chatted:Connect(function(message)
-        configNameInput = message
-        connection:Disconnect()
-        
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Имя конфига установлено: " .. configNameInput,
-            Duration = 3
-        })
-    end)
+local _, configTextBox = CreateTextBox(ConfigManagementSection, "Имя конфига", "Введите имя для нового конфига", "Например: MyConfig", function(text)
+    configNameInput = text
 end)
 
-CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки", function()
-    if configNameInput == "" then
+CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки с введенным именем", function()
+    local configName = configTextBox.Text
+    if configName == "" then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Сначала введите имя конфига!",
+            Text = "Введите имя конфига!",
             Duration = 3
         })
         return
     end
     
-    saveConfig(configNameInput)
-    configNameInput = ""
+    saveConfig(configName)
+    configTextBox.Text = ""
 end)
 
 CreateDropdown(ConfigManagementSection, "Загрузить конфиг", "Выберите конфиг для загрузки", 
