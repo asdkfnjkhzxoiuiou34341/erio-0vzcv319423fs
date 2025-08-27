@@ -344,6 +344,8 @@ local aimbotTargetPart = "Head"
 local aimbotVisibleOnly = true
 local aimbotTeamCheck = true
 local showFOVCircle = false
+local aimbotPrediction = false
+local aimbotPredictionStrength = 1.0
 
 -- ESP настройки
 local espSettings = {
@@ -353,12 +355,21 @@ local espSettings = {
     names = false,
     distance = false,
     health = false,
+    healthBar = false,
     tracers = false,
     teamCheck = true,
     enemyColor = Color3.fromRGB(255, 0, 0),
     allyColor = Color3.fromRGB(0, 255, 0),
     nameColor = Color3.fromRGB(255, 255, 255),
-    tracerColor = Color3.fromRGB(0, 255, 0)
+    tracerColor = Color3.fromRGB(0, 255, 0),
+    -- Настройки HP бара
+    healthBarPosition = "Top", -- Top, Bottom, Left, Right
+    healthBarSize = 120, -- Длина/ширина в процентах от размера игрока
+    healthBarThickness = 2, -- Толщина полоски
+    healthBarBackground = Color3.fromRGB(60, 60, 60),
+    healthBarForeground = Color3.fromRGB(0, 255, 0),
+    healthBarLowHealth = Color3.fromRGB(255, 255, 0),
+    healthBarCriticalHealth = Color3.fromRGB(255, 0, 0)
 }
 
 -- ESP объекты и Drawing объекты
@@ -372,18 +383,236 @@ local fovCircle = nil
 -- Система конфигов
 local configs = {}
 local currentConfig = "Default"
-local configFolder = "SSLKinUniScript"
-local configExtension = ".json"
 
--- Проверка поддержки файловых функций
-local fileSystemSupported = pcall(function() return writefile and readfile and makefolder and isfolder end)
+-- Умная система сохранения для разных эксплойтов
+local HttpService = game:GetService("HttpService")
 
--- Создание папки для конфигов
-if fileSystemSupported then
-    if not isfolder(configFolder) then
-        makefolder(configFolder)
-    end
+-- Настройки сохранения
+local CONFIGS_FOLDER = "SSLKinConfigs"
+local storageMethod = "none"
+local storageInfo = ""
+
+-- Определяем эксплойт
+local executorName = "Unknown"
+if KRNL_LOADED then
+    executorName = "KRNL"
+elseif syn then
+    executorName = "Synapse X"
+elseif getgenv().SOLARA_LOADED or getgenv().solara then
+    executorName = "Solara"
+elseif FLUXUS_LOADED then
+    executorName = "Fluxus"
+elseif getgenv and getgenv().is_sirhurt_closure then
+    executorName = "SirHurt"
 end
+
+print("SSLKin: Определен эксплойт:", executorName)
+
+-- Проверяем разные методы сохранения
+local function detectStorageMethods()
+    -- 1. Проверяем файловую систему
+    local fileSuccess = pcall(function()
+        if not (isfolder and writefile and readfile and delfile and isfile) then 
+            return false 
+        end
+        
+        if not isfolder(CONFIGS_FOLDER) then
+            makefolder(CONFIGS_FOLDER)
+        end
+        
+        local testFile = CONFIGS_FOLDER .. "/test.txt"
+        writefile(testFile, "test")
+        local content = readfile(testFile)
+        delfile(testFile)
+        
+        return content == "test"
+    end)
+    
+    if fileSuccess then
+        storageMethod = "files"
+        storageInfo = "Папка: " .. CONFIGS_FOLDER
+        return true
+    end
+    
+    -- 2. Проверяем буфер обмена
+    local clipboardSuccess = pcall(function()
+        if setclipboard then
+            setclipboard("test")
+            return true
+        end
+        return false
+    end)
+    
+    if clipboardSuccess then
+        storageMethod = "clipboard"
+        storageInfo = "Через буфер обмена"
+        return true
+    end
+    
+    -- 3. Глобальное хранилище (работает во всех эксплойтах)
+    if getgenv then
+        storageMethod = "global"
+        storageInfo = "В памяти эксплойта"
+        
+        -- Инициализируем глобальное хранилище
+        if not getgenv().SSLKinConfigs then
+            getgenv().SSLKinConfigs = {}
+        end
+        return true
+    end
+    
+    storageMethod = "none"
+    storageInfo = "Недоступно"
+    return false
+end
+
+-- Проверяем методы при запуске
+detectStorageMethods()
+
+print("SSLKin: Метод сохранения:", storageMethod, "-", storageInfo)
+
+-- Универсальные функции сохранения
+local function saveConfigPersistent(configName, configData)
+    if storageMethod == "files" then
+        -- Сохранение в файл
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            local jsonData = HttpService:JSONEncode(configData)
+            writefile(filePath, jsonData)
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        -- Сохранение в глобальную память эксплойта
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = configData
+        end)
+        return success
+        
+    elseif storageMethod == "clipboard" then
+        -- Копирование в буфер обмена
+        local success = pcall(function()
+            local jsonData = HttpService:JSONEncode(configData)
+            local clipboardText = "-- SSLKin Config: " .. configName .. " (Сохрани в блокнот!)\n" .. jsonData
+            setclipboard(clipboardText)
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function loadConfigPersistent(configName)
+    if storageMethod == "files" then
+        -- Загрузка из файла
+        local success, result = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if not isfile(filePath) then return nil end
+            
+            local content = readfile(filePath)
+            return HttpService:JSONDecode(content)
+        end)
+        return success and result or nil
+        
+    elseif storageMethod == "global" then
+        -- Загрузка из глобальной памяти
+        local success, result = pcall(function()
+            return getgenv().SSLKinConfigs[configName]
+        end)
+        return success and result or nil
+    end
+    
+    return nil
+end
+
+local function deleteConfigPersistent(configName)
+    if storageMethod == "files" then
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if isfile(filePath) then
+                delfile(filePath)
+            end
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = nil
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function getPersistentConfigNames()
+    if storageMethod == "files" then
+        local success, result = pcall(function()
+            if not isfolder(CONFIGS_FOLDER) then return {} end
+            
+            local files = listfiles(CONFIGS_FOLDER)
+            local configNames = {}
+            
+            for _, filePath in pairs(files) do
+                local fileName = filePath:match("([^/\\]+)$")
+                if fileName and fileName:match("%.json$") then
+                    local configName = fileName:gsub("%.json$", "")
+                    table.insert(configNames, configName)
+                end
+            end
+            
+            return configNames
+        end)
+        return success and result or {}
+        
+    elseif storageMethod == "global" then
+        local success, result = pcall(function()
+            local names = {}
+            for configName, _ in pairs(getgenv().SSLKinConfigs) do
+                table.insert(names, configName)
+            end
+            return names
+        end)
+        return success and result or {}
+    end
+    
+    return {}
+end
+
+-- Загрузка всех сохраненных конфигов при запуске
+local function loadAllSavedConfigs()
+    if storageMethod == "none" then return end
+    
+    spawn(function()
+        wait(2) -- Ждем инициализацию GUI
+        
+        local savedConfigs = getPersistentConfigNames()
+        if #savedConfigs > 0 then
+            print("SSLKin: Найдено", #savedConfigs, "сохраненных конфигов:", table.concat(savedConfigs, ", "))
+            
+            -- Загружаем конфиги в память
+            for _, configName in pairs(savedConfigs) do
+                local configData = loadConfigPersistent(configName)
+                if configData then
+                    configs[configName] = configData
+                end
+            end
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Загружено " .. #savedConfigs .. " сохраненных конфигов! (" .. storageMethod .. ")",
+                Duration = 3
+            })
+        else
+            print("SSLKin: Сохраненных конфигов не найдено")
+        end
+    end)
+end
+
+-- Автосохранение при выходе убрано - не работает в клиенте
+
+-- Запускаем загрузку сохраненных конфигов
+loadAllSavedConfigs()
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -595,9 +824,11 @@ end
 
 -- Функции показа/скрытия GUI
 local function ShowGUI()
+    print("SSLKin: ShowGUI вызвана") -- Отладка
     MainFrame.Visible = true
     
     if MainFrame.Size == originalSize then
+        print("SSLKin: GUI уже открыто") -- Отладка
         return -- Уже открыто
     end
     
@@ -613,6 +844,7 @@ local function ShowGUI()
 end
 
 local function HideGUI()
+    print("SSLKin: HideGUI вызвана") -- Отладка
     local hideTween = CreateTween(MainFrame, {
         Size = UDim2.new(0, 0, 0, 0),
         Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -1431,7 +1663,7 @@ local function createESPBox(player)
     
     -- Чамсы обрабатываются отдельно через updatePlayerChams
     
-    -- Создание квадратов (Drawing)
+    -- Создание квадратов (Drawing) - оптимизированная версия
     if espSettings.boxes then
         local box = Drawing.new("Square")
         box.Visible = false
@@ -1442,8 +1674,9 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, box)
         
-        -- Обновление квадрата
+        -- Оптимизированное обновление квадрата (высокий FPS для быстрой отрисовки)
         spawn(function()
+            local updateRate = 1/120 -- 120 FPS для очень быстрой отрисовки
             while box and character.Parent and humanoidRootPart.Parent do
                 if espSettings.enabled and espSettings.boxes then
                     local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
@@ -1467,11 +1700,129 @@ local function createESPBox(player)
                 else
                     box.Visible = false
                 end
-                wait()
+                wait(updateRate) -- Фиксированная частота обновления
             end
             if box then
                 pcall(function()
                     box:Remove()
+                end)
+            end
+        end)
+    end
+    
+    -- Создание HP бара (Drawing)
+    if espSettings.healthBar then
+        local healthBarBg = Drawing.new("Square")
+        local healthBarFill = Drawing.new("Square")
+        
+        -- Настройка фонового бара
+        healthBarBg.Visible = false
+        healthBarBg.Color = espSettings.healthBarBackground
+        healthBarBg.Thickness = 1
+        healthBarBg.Transparency = 1
+        healthBarBg.Filled = true
+        
+        -- Настройка заполнения бара
+        healthBarFill.Visible = false
+        healthBarFill.Color = espSettings.healthBarForeground
+        healthBarFill.Thickness = 0
+        healthBarFill.Transparency = 1
+        healthBarFill.Filled = true
+        
+        table.insert(drawingObjects, healthBarBg)
+        table.insert(drawingObjects, healthBarFill)
+        
+        -- Обновление HP бара
+        spawn(function()
+            local updateRate = 1/60 -- 60 FPS для быстрого обновления HP бара
+            while healthBarBg and healthBarFill and character.Parent and humanoidRootPart.Parent do
+                if espSettings.enabled and espSettings.healthBar then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                            local scaleFactor = 1000 / distance
+                            local playerWidth = math.clamp(scaleFactor, 8, 25)
+                            local playerHeight = playerWidth * 1.5
+                            
+                            local healthPercent = humanoid.Health / humanoid.MaxHealth
+                            
+                            -- Определяем цвет основываясь на здоровье
+                            local healthColor = espSettings.healthBarForeground
+                            if healthPercent <= 0.3 then
+                                healthColor = espSettings.healthBarCriticalHealth
+                            elseif healthPercent <= 0.6 then
+                                healthColor = espSettings.healthBarLowHealth
+                            end
+                            
+                            -- Позиционирование HP бара
+                            local barSize = (playerWidth * espSettings.healthBarSize) / 100
+                            local barThickness = espSettings.healthBarThickness
+                            local barX, barY
+                            
+                            if espSettings.healthBarPosition == "Top" then
+                                barX = vector.X - barSize/2
+                                barY = vector.Y - playerHeight/2 - barThickness - 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
+                            elseif espSettings.healthBarPosition == "Bottom" then
+                                barX = vector.X - barSize/2
+                                barY = vector.Y + playerHeight/2 + 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
+                            elseif espSettings.healthBarPosition == "Left" then
+                                barX = vector.X - playerWidth/2 - barThickness - 5
+                                barY = vector.Y - barSize/2
+                                healthBarBg.Size = Vector2.new(barThickness, barSize)
+                                healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
+                            elseif espSettings.healthBarPosition == "Right" then
+                                barX = vector.X + playerWidth/2 + 5
+                                barY = vector.Y - barSize/2
+                                healthBarBg.Size = Vector2.new(barThickness, barSize)
+                                healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
+                            else -- По умолчанию Top если что-то пошло не так
+                                barX = vector.X - barSize/2
+                                barY = vector.Y - playerHeight/2 - barThickness - 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
+                            end
+                            
+                            healthBarFill.Color = healthColor
+                            healthBarBg.Visible = true
+                            healthBarFill.Visible = true
+                        else
+                            healthBarBg.Visible = false
+                            healthBarFill.Visible = false
+                        end
+                    else
+                        healthBarBg.Visible = false
+                        healthBarFill.Visible = false
+                    end
+                else
+                    healthBarBg.Visible = false
+                    healthBarFill.Visible = false
+                end
+                wait(updateRate)
+            end
+            if healthBarBg then
+                pcall(function()
+                    healthBarBg:Remove()
+                end)
+            end
+            if healthBarFill then
+                pcall(function()
+                    healthBarFill:Remove()
                 end)
             end
         end)
@@ -1576,23 +1927,28 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, line)
         
-        -- Обновление трейсера
+        -- Оптимизированное обновление трейсера
         spawn(function()
-            while line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers do
-                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-                if onScreen then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid and humanoid.Health > 0 then
-                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        line.To = Vector2.new(vector.X, vector.Y)
-                        line.Visible = true
+            local updateRate = 1/90 -- 90 FPS для плавности трейсеров
+            while line and character.Parent and humanoidRootPart.Parent do
+                if espSettings.enabled and espSettings.tracers then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                            line.To = Vector2.new(vector.X, vector.Y)
+                            line.Visible = true
+                        else
+                            line.Visible = false
+                        end
                     else
                         line.Visible = false
                     end
                 else
                     line.Visible = false
                 end
-                wait()
+                wait(updateRate)
             end
             if line then
                 pcall(function()
@@ -2010,6 +2366,7 @@ if currentGame == "Centaura" and AimbotTab then
         else
             aimbotTargetPart = "Head"
         end
+        print("Выбрана часть тела для аимбота:", aimbotTargetPart) -- Для отладки
     end)
     
     CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
@@ -2018,6 +2375,17 @@ if currentGame == "Centaura" and AimbotTab then
     
     CreateToggle(AimbotTargetSection, "Проверка команды", "Не прицеливаться на союзников", true, function(state)
         aimbotTeamCheck = state
+    end)
+    
+    local AimbotPredictionSection = CreateSection(AimbotTab, "🚀 Предикт движения")
+    
+    CreateToggle(AimbotPredictionSection, "Предикт движения", "Прицеливание с упреждением по движущимся целям", false, function(state)
+        aimbotPrediction = state
+        print("Предикт движения:", state and "включен" or "выключен") -- Для отладки
+    end)
+    
+    CreateSlider(AimbotPredictionSection, "Сила предикта", "Насколько сильно упреждать движение (0.1-3.0)", 0.1, 3.0, 1.0, function(value)
+        aimbotPredictionStrength = value
     end)
 end
 
@@ -2108,6 +2476,11 @@ CreateToggle(ESPSection, "Здоровье", "Показывает здоров�
     updateESP()
 end)
 
+CreateToggle(ESPSection, "HP полоска", "Показывает здоровье в виде полоски", false, function(state)
+    espSettings.healthBar = state
+    updateESP()
+end)
+
 CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
     espSettings.tracers = state
     updateESP()
@@ -2115,6 +2488,25 @@ end)
 
 CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
     espSettings.teamCheck = state
+    updateESP()
+end)
+
+local HealthBarSection = CreateSection(VisualTab, "💖 Настройки HP полоски")
+
+CreateDropdown(HealthBarSection, "Позиция HP бара", "Где отображать полоску здоровья", 
+    {"Top", "Bottom", "Left", "Right"}, "Top", function(option)
+    espSettings.healthBarPosition = option
+    print("HP Bar позиция изменена на:", option) -- Для отладки
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 150, 120, function(value)
+    espSettings.healthBarSize = value
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 1, 8, 2, function(value)
+    espSettings.healthBarThickness = value
     updateESP()
 end)
 
@@ -2224,73 +2616,10 @@ local function decodeJSON(str)
     return result
 end
 
--- Функции для работы с файлами конфигов
-local function saveConfigToFile(configName, configData)
-    if not fileSystemSupported then return false end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    local jsonData = encodeJSON(configData)
-    
-    local success = pcall(function()
-        writefile(filePath, jsonData)
-    end)
-    
-    return success
-end
 
-local function loadConfigFromFile(configName)
-    if not fileSystemSupported then return nil end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    
-    local success, content = pcall(function()
-        return readfile(filePath)
-    end)
-    
-    if success and content then
-        local configData = decodeJSON(content)
-        return configData
-    end
-    
-    return nil
-end
-
-local function deleteConfigFile(configName)
-    if not fileSystemSupported then return false end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    
-    local success = pcall(function()
-        delfile(filePath)
-    end)
-    
-    return success
-end
-
-local function getConfigFilesFromFolder()
-    if not fileSystemSupported then return {} end
-    
-    local configFiles = {}
-    
-    local success, files = pcall(function()
-        return listfiles(configFolder)
-    end)
-    
-    if success and files then
-        for _, filePath in pairs(files) do
-            local fileName = filePath:match("([^/\\]+)$") -- Получаем только имя файла
-            if fileName and fileName:sub(-#configExtension) == configExtension then
-                local configName = fileName:sub(1, -#configExtension - 1)
-                table.insert(configFiles, configName)
-            end
-        end
-    end
-    
-    return configFiles
-end
 
 -- Система конфигов
-local function saveConfig(configName)
+local function saveConfig(configName, saveToFile)
     local configData = {
         -- Движение
         speedEnabled = speedEnabled,
@@ -2311,8 +2640,12 @@ local function saveConfig(configName)
             names = espSettings.names,
             distance = espSettings.distance,
             health = espSettings.health,
+            healthBar = espSettings.healthBar,
             tracers = espSettings.tracers,
-            teamCheck = espSettings.teamCheck
+            teamCheck = espSettings.teamCheck,
+            healthBarPosition = espSettings.healthBarPosition,
+            healthBarSize = espSettings.healthBarSize,
+            healthBarThickness = espSettings.healthBarThickness
         }
     }
     
@@ -2325,38 +2658,46 @@ local function saveConfig(configName)
         configData.aimbotVisibleOnly = aimbotVisibleOnly
         configData.aimbotTeamCheck = aimbotTeamCheck
         configData.showFOVCircle = showFOVCircle
+        configData.aimbotPrediction = aimbotPrediction
+        configData.aimbotPredictionStrength = aimbotPredictionStrength
     end
     
+    -- Сохраняем в память
     configs[configName] = configData
     
-    -- Сохраняем в файл если поддерживается
-    local fileSaved = false
-    if fileSystemSupported then
-        fileSaved = saveConfigToFile(configName, configData)
-    end
+    local message = "Конфиг '" .. configName .. "' сохранен в память!"
     
-    local message = "Конфиг '" .. configName .. "' сохранен"
-    if fileSystemSupported then
-        message = message .. (fileSaved and " в файл!" or " в память (ошибка записи файла)!")
-    else
-        message = message .. " в память (файлы не поддерживаются)!"
+    -- Сохраняем постоянно если требуется
+    if saveToFile then
+        local persistentSaved = saveConfigPersistent(configName, configData)
+        if persistentSaved then
+            if storageMethod == "files" then
+                message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
+            elseif storageMethod == "global" then
+                message = "Конфиг '" .. configName .. "' сохранен в эксплойт! 🔧\n(Останется после перезапуска скрипта)"
+            elseif storageMethod == "clipboard" then
+                message = "Конфиг '" .. configName .. "' скопирован в буфер! 📋\nВставь в блокнот и сохрани!"
+            end
+        else
+            message = "Ошибка сохранения! Конфиг в памяти: " .. storageMethod
+        end
     end
     
     game.StarterGui:SetCore("SendNotification", {
         Title = "SSLKin Uni Script",
         Text = message,
-        Duration = 3
+        Duration = 4
     })
 end
 
-local function loadConfig(configName)
+local function loadConfig(configName, loadFromStorage)
     local configData = configs[configName]
     
-    -- Пытаемся загрузить из файла если не найден в памяти
-    if not configData and fileSystemSupported then
-        configData = loadConfigFromFile(configName)
+    -- Попытка загрузить из постоянного хранилища если не найден в памяти
+    if not configData and loadFromStorage then
+        configData = loadConfigPersistent(configName)
         if configData then
-            configs[configName] = configData -- Сохраняем в память для быстрого доступа
+            configs[configName] = configData -- Сохраняем в память
         end
     end
     
@@ -2390,8 +2731,12 @@ local function loadConfig(configName)
         espSettings.names = configData.espSettings.names or false
         espSettings.distance = configData.espSettings.distance or false
         espSettings.health = configData.espSettings.health or false
+        espSettings.healthBar = configData.espSettings.healthBar or false
         espSettings.tracers = configData.espSettings.tracers or false
         espSettings.teamCheck = configData.espSettings.teamCheck or true
+        espSettings.healthBarPosition = configData.espSettings.healthBarPosition or "Top"
+        espSettings.healthBarSize = configData.espSettings.healthBarSize or 120
+        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 2
         updateESP()
     end
     
@@ -2404,6 +2749,8 @@ local function loadConfig(configName)
         aimbotVisibleOnly = configData.aimbotVisibleOnly or true
         aimbotTeamCheck = configData.aimbotTeamCheck or true
         showFOVCircle = configData.showFOVCircle or false
+        aimbotPrediction = configData.aimbotPrediction or false
+        aimbotPredictionStrength = configData.aimbotPredictionStrength or 1.0
         createFOVCircle()
     end
     
@@ -2429,31 +2776,11 @@ local function deleteConfig(configName)
         return
     end
     
-    local found = false
-    
     if configs[configName] then
         configs[configName] = nil
-        found = true
-    end
-    
-    -- Удаляем файл если поддерживается
-    local fileDeleted = false
-    if fileSystemSupported then
-        fileDeleted = deleteConfigFile(configName)
-        if fileDeleted then found = true end
-    end
-    
-    if found then
-        local message = "Конфиг '" .. configName .. "' удален"
-        if fileSystemSupported then
-            message = message .. (fileDeleted and " (включая файл)!" or " из памяти!")
-        else
-            message = message .. " из памяти!"
-        end
-        
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = message,
+            Text = "Конфиг '" .. configName .. "' удален из памяти!",
             Duration = 3
         })
     else
@@ -2467,28 +2794,13 @@ end
 
 local function getConfigNames(excludeDefault)
     local names = {}
-    local nameSet = {}
     
-    -- Добавляем конфиги из памяти
     for name, _ in pairs(configs) do
-        if not (excludeDefault and name == "Default") and not nameSet[name] then
+        if not (excludeDefault and name == "Default") then
             table.insert(names, name)
-            nameSet[name] = true
         end
     end
     
-    -- Добавляем конфиги из файлов
-    if fileSystemSupported then
-        local fileConfigs = getConfigFilesFromFolder()
-        for _, name in pairs(fileConfigs) do
-            if not (excludeDefault and name == "Default") and not nameSet[name] then
-                table.insert(names, name)
-                nameSet[name] = true
-            end
-        end
-    end
-    
-    -- Если нет конфигов и не исключаем Default, добавляем его
     if #names == 0 and not excludeDefault then
         table.insert(names, "Default")
     end
@@ -2519,13 +2831,45 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
         return
     end
     
-    saveConfig(configName)
+    saveConfig(configName, false) -- Только в память
+    configTextBox.Text = ""
+end)
+
+CreateButton(ConfigManagementSection, "Сохранить постоянно 💾", "Сохранить конфиг для постоянного хранения", function()
+    local configName = configTextBox.Text
+    if configName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Введите имя конфига!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if storageMethod == "none" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Постоянное сохранение недоступно!",
+            Duration = 3
+        })
+        return
+    end
+    
+    saveConfig(configName, true) -- В память и постоянное хранилище
     configTextBox.Text = ""
 end)
 
 local selectedConfigName = ""
+local function refreshConfigDropdown()
+    local configNames = getConfigNames(true)
+    if #configNames > 0 then
+        selectedConfigName = configNames[1] -- Устанавливаем первый конфиг по умолчанию
+    end
+    return configNames
+end
+
 CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
-    getConfigNames(true), "", function(option)
+    refreshConfigDropdown(), selectedConfigName, function(option)
     selectedConfigName = option or ""
     print("Выбран конфиг:", selectedConfigName) -- Для отладки
 end)
@@ -2540,7 +2884,29 @@ CreateButton(ConfigManagementSection, "Загрузить выбранный к�
         return
     end
     
-    loadConfig(selectedConfigName)
+    loadConfig(selectedConfigName, false) -- Только из памяти
+end)
+
+CreateButton(ConfigManagementSection, "Загрузить из хранилища 💾", "Загрузить конфиг из постоянного хранилища", function()
+    if selectedConfigName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if storageMethod == "none" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Постоянное хранилище недоступно!",
+            Duration = 3
+        })
+        return
+    end
+    
+    loadConfig(selectedConfigName, true) -- Из постоянного хранилища
 end)
 
 CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
@@ -2548,42 +2914,62 @@ CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выбе
     deleteConfig(option)
 end)
 
-CreateButton(ConfigManagementSection, "Автосохранение", "Сохранить текущие настройки в автосохранение", function()
-    saveConfig("AutoSave_" .. os.date("%H-%M-%S"))
-end)
 
--- Информация о файловой системе
-local FileSystemSection = CreateSection(ConfigTab, "📁 Информация о файлах")
 
-CreateButton(FileSystemSection, "Статус файловой системы", "Проверить поддержку сохранения в файлы", function()
-    local status = fileSystemSupported and "✅ Поддерживается" or "❌ Не поддерживается"
-    local message = "Файловая система: " .. status
+-- Информация о сохранении
+local StorageSection = CreateSection(ConfigTab, "💾 Система сохранения")
+
+CreateButton(StorageSection, "Статус сохранения", "Информация о методе сохранения", function()
+    local message = "Эксплойт: " .. executorName .. "\n"
+    message = message .. "Метод сохранения: " .. storageMethod .. "\n"
+    message = message .. "Детали: " .. storageInfo
     
-    if fileSystemSupported then
-        message = message .. "\nПапка: workspace/" .. configFolder
-        message = message .. "\nФормат: JSON (.json)"
-        
-        local fileConfigs = getConfigFilesFromFolder()
-        message = message .. "\nФайлов конфигов: " .. #fileConfigs
+    if storageMethod == "files" then
+        message = message .. "\n✅ Файлы сохраняются навсегда"
+        message = message .. "\n✅ Автозагрузка при запуске"
+    elseif storageMethod == "global" then
+        message = message .. "\n⚠️ Конфиги остаются пока открыт эксплойт"
+        message = message .. "\n✅ Автозагрузка при перезапуске скрипта"
+    elseif storageMethod == "clipboard" then
+        message = message .. "\n⚠️ Нужно вручную сохранять в блокнот"
+        message = message .. "\n📋 Конфиги копируются в буфер обмена"
     else
-        message = message .. "\nКонфиги сохраняются только в память"
-        message = message .. "\nПосле перезапуска игры они исчезнут"
+        message = message .. "\n❌ Конфиги только в памяти"
+        message = message .. "\n❌ Исчезают при перезапуске"
     end
     
     game.StarterGui:SetCore("SendNotification", {
-        Title = "Файловая система",
+        Title = "Система сохранения",
         Text = message,
         Duration = 8
     })
 end)
 
-CreateButton(FileSystemSection, "Обновить список конфигов", "Перезагрузить список конфигов из файлов", function()
-    -- Обновляем dropdown списки (это требует перезагрузки GUI или динамического обновления)
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Список конфигов обновлен! Найдено: " .. #getConfigNames() .. " конфигов",
-        Duration = 3
-    })
+CreateButton(StorageSection, "Посмотреть сохраненные конфиги", "Список постоянно сохраненных конфигов", function()
+    if storageMethod == "none" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Постоянное хранилище недоступно!",
+            Duration = 3
+        })
+        return
+    end
+    
+    spawn(function()
+        local savedConfigs = getPersistentConfigNames()
+        local message = "Сохраненные конфиги: " .. #savedConfigs
+        if #savedConfigs > 0 then
+            message = message .. "\n" .. table.concat(savedConfigs, ", ")
+        else
+            message = message .. "\nХранилище пустое"
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Сохраненные конфиги",
+            Text = message,
+            Duration = 6
+        })
+    end)
 end)
 
 -- ВКЛАДКА РАЗНОЕ
@@ -2647,23 +3033,43 @@ local function setupNoclip()
     end
 end
 
--- Aimbot для Centaura (оптимизированный)
+-- Aimbot для Centaura (улучшенный с предиктом)
 if currentGame == "Centaura" then
     local lastTargetCheck = 0
     local currentTarget = nil
-    local targetCheckInterval = 0.1 -- Проверяем цели каждые 100мс вместо каждого кадра
+    local targetCheckInterval = 0.08 -- Проверяем цели каждые 80мс для лучшей отзывчивости
+    local playerVelocities = {} -- Отслеживание скорости игроков для предикта
     
     local function getClosestEnemy()
         local closestPlayer = nil
         local shortestDistance = math.huge
         
         for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(aimbotTargetPart) then
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                -- Проверяем что у игрока есть нужная часть тела
+                local targetPart = nil
+                if aimbotTargetPart == "Head" then
+                    targetPart = player.Character:FindFirstChild("Head")
+                elseif aimbotTargetPart == "Torso" then
+                    targetPart = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+                elseif aimbotTargetPart == "Left Arm" then
+                    targetPart = player.Character:FindFirstChild("Left Arm") or player.Character:FindFirstChild("LeftUpperArm")
+                elseif aimbotTargetPart == "Right Arm" then
+                    targetPart = player.Character:FindFirstChild("Right Arm") or player.Character:FindFirstChild("RightUpperArm")
+                elseif aimbotTargetPart == "Left Leg" then
+                    targetPart = player.Character:FindFirstChild("Left Leg") or player.Character:FindFirstChild("LeftUpperLeg")
+                elseif aimbotTargetPart == "Right Leg" then
+                    targetPart = player.Character:FindFirstChild("Right Leg") or player.Character:FindFirstChild("RightUpperLeg")
+                end
+                
+                if not targetPart then
+                    continue -- Пропускаем игрока если нет нужной части тела
+                end
+                
                 if aimbotTeamCheck and not isPlayerEnemy(player) then
                     continue
                 end
                 
-                local targetPart = player.Character[aimbotTargetPart]
                 local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
@@ -2671,12 +3077,13 @@ if currentGame == "Centaura" then
                     
                     if distance < aimbotFOV and distance < shortestDistance then
                         if aimbotVisibleOnly then
-                            -- Оптимизированный raycast - только для ближайшей цели
+                            -- Улучшенный raycast с большей точностью
                             local raycastParams = RaycastParams.new()
                             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
                             raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
                             
-                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 500, raycastParams)
+                            local direction = (targetPart.Position - Camera.CFrame.Position).Unit
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, direction * 1000, raycastParams)
                             
                             if not raycastResult then
                                 closestPlayer = player
@@ -2694,6 +3101,53 @@ if currentGame == "Centaura" then
         return closestPlayer
     end
     
+    -- Функция для предикта движения
+    local function predictTargetPosition(player, targetPart)
+        if not aimbotPrediction or not playerVelocities[player] or not playerVelocities[player].velocity then
+            return targetPart.Position
+        end
+        
+        local velocity = playerVelocities[player].velocity
+        local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
+        local bulletTime = distance / 400 -- Примерная скорость пули в Centaura
+        
+        -- Проверяем что скорость не слишком большая (избегаем глюков)
+        if velocity.Magnitude > 100 then
+            return targetPart.Position -- Если скорость слишком большая, не используем предикт
+        end
+        
+        -- Предиктим позицию с учетом скорости и силы предикта
+        local predictedPosition = targetPart.Position + (velocity * bulletTime * aimbotPredictionStrength)
+        return predictedPosition
+    end
+    
+    -- Отслеживание скорости игроков
+    spawn(function()
+        while true do
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local currentPos = player.Character.HumanoidRootPart.Position
+                    if playerVelocities[player] and playerVelocities[player].lastPos then
+                        local deltaTime = 0.1
+                        local velocity = (currentPos - playerVelocities[player].lastPos) / deltaTime
+                        playerVelocities[player] = {
+                            velocity = velocity,
+                            lastPos = currentPos
+                        }
+                    else
+                        playerVelocities[player] = {
+                            velocity = Vector3.new(0, 0, 0),
+                            lastPos = currentPos
+                        }
+                    end
+                else
+                    playerVelocities[player] = nil
+                end
+            end
+            wait(0.1)
+        end
+    end)
+    
     -- Оптимизированная система аимбота
     RunService.Heartbeat:Connect(function()
         if not aimbotEnabled then
@@ -2710,27 +3164,41 @@ if currentGame == "Centaura" then
         end
         
         -- Применяем прицеливание к текущей цели
-        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(aimbotTargetPart) then
-            local targetPart = currentTarget.Character[aimbotTargetPart]
+        if currentTarget and currentTarget.Character then
+            local targetPart = nil
+            if aimbotTargetPart == "Head" then
+                targetPart = currentTarget.Character:FindFirstChild("Head")
+            elseif aimbotTargetPart == "Torso" then
+                targetPart = currentTarget.Character:FindFirstChild("Torso") or currentTarget.Character:FindFirstChild("UpperTorso")
+            elseif aimbotTargetPart == "Left Arm" then
+                targetPart = currentTarget.Character:FindFirstChild("Left Arm") or currentTarget.Character:FindFirstChild("LeftUpperArm")
+            elseif aimbotTargetPart == "Right Arm" then
+                targetPart = currentTarget.Character:FindFirstChild("Right Arm") or currentTarget.Character:FindFirstChild("RightUpperArm")
+            elseif aimbotTargetPart == "Left Leg" then
+                targetPart = currentTarget.Character:FindFirstChild("Left Leg") or currentTarget.Character:FindFirstChild("LeftUpperLeg")
+            elseif aimbotTargetPart == "Right Leg" then
+                targetPart = currentTarget.Character:FindFirstChild("Right Leg") or currentTarget.Character:FindFirstChild("RightUpperLeg")
+            end
+            
             if targetPart then
-                local targetPosition = targetPart.Position
+                local targetPosition = predictTargetPosition(currentTarget, targetPart)
                 local camera = Camera
                 local currentCFrame = camera.CFrame
                 
-                -- Проверяем что цель в разумных пределах (не слишком далеко/близко)
+                -- Проверяем что цель в разумных пределах
                 local distance = (currentCFrame.Position - targetPosition).Magnitude
-                if distance > 5 and distance < 1000 then
+                if distance > 5 and distance < 1500 then
                     local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                     
                     -- Проверяем угол поворота чтобы избежать резких движений
                     local angle = math.acos(math.clamp(currentCFrame.LookVector:Dot(targetCFrame.LookVector), -1, 1))
                     
-                    if angle < math.rad(90) then -- Не поворачиваем больше чем на 90 градусов
-                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.2) -- Ограничиваем скорость еще больше
+                    if angle < math.rad(120) then -- Увеличили до 120 градусов для лучшего захвата
+                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.3) -- Немного увеличили максимальную скорость
                         local newCFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
                         
-                        -- Дополнительная проверка что новая позиция камеры валидна
-                        if newCFrame.Position.Y > currentCFrame.Position.Y - 50 then
+                        -- Дополнительная проверка валидности
+                        if newCFrame.Position.Y > currentCFrame.Position.Y - 100 then
                             camera.CFrame = newCFrame
                         end
                     else
@@ -2740,21 +3208,38 @@ if currentGame == "Centaura" then
                     currentTarget = nil -- Цель слишком далеко или близко
                 end
             else
-                currentTarget = nil -- Цель потеряна
+                currentTarget = nil -- Часть тела не найдена
             end
         end
     end)
+    
+    -- Очистка скоростей при выходе игроков
+    Players.PlayerRemoving:Connect(function(player)
+        playerVelocities[player] = nil
+    end)
 end
 
--- Постоянное обновление чамсов
+-- Улучшенное постоянное обновление чамсов
 spawn(function()
     while true do
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                updatePlayerChams(player)
+        if espSettings.enabled and espSettings.chams then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    updatePlayerChams(player)
+                end
             end
+        else
+            -- Если чамсы выключены, очищаем все
+            for player, cham in pairs(playerChams) do
+                if cham and cham.Parent then
+                    pcall(function()
+                        cham:Destroy()
+                    end)
+                end
+            end
+            playerChams = {}
         end
-        wait(1) -- Обновляем чамсы каждую секунду
+        wait(0.5) -- Обновляем чамсы каждые 0.5 секунды для лучшей отзывчивости
     end
 end)
 
@@ -2857,16 +3342,21 @@ end)
 CloseButton.MouseButton1Click:Connect(HideGUI)
 
 -- Горячие клавиши
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.Insert then
-        if MainFrame.Visible then
-            HideGUI()
-        else
-            ShowGUI()
+spawn(function()
+    wait(1) -- Ждем полной инициализации
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.Insert then
+            print("SSLKin: Insert нажат, MainFrame.Visible =", MainFrame.Visible) -- Отладка
+            if MainFrame.Visible then
+                HideGUI()
+            else
+                ShowGUI()
+            end
         end
-    end
+    end)
+    print("SSLKin: Горячие клавиши инициализированы")
 end)
 
 -- Инициализация
@@ -2880,6 +3370,8 @@ end
 
 -- Показать GUI при загрузке
 ShowGUI()
+
+
 
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
