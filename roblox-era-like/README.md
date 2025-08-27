@@ -21,8 +21,9 @@ This project provides a Roblox Lua script that mimics Era Hub-style behavior:
 
 ### Usage (Executor)
 
-Copy the contents of `loader.lua` into your executor, or host these files and 
-use a one-line bootstrap:
+Option A — Single file (recommended): open `era_like_single.lua`, copy all and paste into your executor.
+
+Option B — Multi-file: copy the contents of `loader.lua` into your executor, or host these files and use a one-line bootstrap:
 
 ```lua
 loadstring(game:HttpGet("https://your.cdn/loader.lua"))()
