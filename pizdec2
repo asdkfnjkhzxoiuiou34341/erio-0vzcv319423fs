@@ -388,6 +388,11 @@ local currentConfig = "Default"
 local HttpService = game:GetService("HttpService")
 local httpEnabled = false
 
+-- JSONBin настройки
+local JSONBIN_URL = "https://api.jsonbin.io/v3/b"
+local USER_BIN_ID = nil -- Будет создан автоматически
+local MASTER_KEY = "$2a$10$YourMasterKeyHere" -- Замени на свой ключ от jsonbin.io
+
 -- Проверяем доступность HTTP
 pcall(function()
     HttpService:GetAsync("https://httpbin.org/get", true)
@@ -395,6 +400,152 @@ pcall(function()
 end)
 
 print("SSLKin: HTTP сервис", httpEnabled and "✅ Доступен" or "❌ Недоступен")
+
+-- Функции для работы с JSONBin
+local function createUserBin()
+    if not httpEnabled then return false end
+    
+    local success, result = pcall(function()
+        local userData = {
+            user = LocalPlayer.Name,
+            userId = LocalPlayer.UserId,
+            configs = {
+                Default = {}
+            },
+            created = os.date("%Y-%m-%d %H:%M:%S")
+        }
+        
+        local headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Master-Key"] = MASTER_KEY
+        }
+        
+        local jsonData = HttpService:JSONEncode(userData)
+        local response = HttpService:PostAsync(JSONBIN_URL, jsonData, Enum.HttpContentType.ApplicationJson, false, headers)
+        local responseData = HttpService:JSONDecode(response)
+        
+        if responseData and responseData.metadata and responseData.metadata.id then
+            USER_BIN_ID = responseData.metadata.id
+            print("SSLKin: Создан новый бин:", USER_BIN_ID)
+            return true
+        end
+        return false
+    end)
+    
+    return success and result
+end
+
+local function saveConfigToCloud(configName, configData)
+    if not httpEnabled or not USER_BIN_ID then return false end
+    
+    local success, result = pcall(function()
+        -- Сначала получаем текущие данные
+        local headers = {
+            ["X-Master-Key"] = MASTER_KEY
+        }
+        
+        local getCurrentUrl = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
+        local currentResponse = HttpService:GetAsync(getCurrentUrl, false, headers)
+        local currentData = HttpService:JSONDecode(currentResponse)
+        
+        -- Обновляем конфиги
+        if not currentData.record then currentData.record = {} end
+        if not currentData.record.configs then currentData.record.configs = {} end
+        
+        currentData.record.configs[configName] = configData
+        currentData.record.lastUpdated = os.date("%Y-%m-%d %H:%M:%S")
+        
+        -- Отправляем обновленные данные
+        local updateHeaders = {
+            ["Content-Type"] = "application/json",
+            ["X-Master-Key"] = MASTER_KEY
+        }
+        
+        local updateUrl = JSONBIN_URL .. "/" .. USER_BIN_ID
+        local jsonData = HttpService:JSONEncode(currentData.record)
+        HttpService:RequestAsync({
+            Url = updateUrl,
+            Method = "PUT",
+            Headers = updateHeaders,
+            Body = jsonData
+        })
+        
+        return true
+    end)
+    
+    return success and result
+end
+
+local function loadConfigFromCloud(configName)
+    if not httpEnabled or not USER_BIN_ID then return nil end
+    
+    local success, result = pcall(function()
+        local headers = {
+            ["X-Master-Key"] = MASTER_KEY
+        }
+        
+        local url = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
+        local response = HttpService:GetAsync(url, false, headers)
+        local data = HttpService:JSONDecode(response)
+        
+        if data and data.record and data.record.configs and data.record.configs[configName] then
+            return data.record.configs[configName]
+        end
+        return nil
+    end)
+    
+    if success then
+        return result
+    else
+        return nil
+    end
+end
+
+local function getCloudConfigNames()
+    if not httpEnabled or not USER_BIN_ID then return {} end
+    
+    local success, result = pcall(function()
+        local headers = {
+            ["X-Master-Key"] = MASTER_KEY
+        }
+        
+        local url = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
+        local response = HttpService:GetAsync(url, false, headers)
+        local data = HttpService:JSONDecode(response)
+        
+        local names = {}
+        if data and data.record and data.record.configs then
+            for configName, _ in pairs(data.record.configs) do
+                table.insert(names, configName)
+            end
+        end
+        return names
+    end)
+    
+    return success and result or {}
+end
+
+-- Попытка найти существующий бин для пользователя
+local function findUserBin()
+    -- В бесплатной версии это сложно, поэтому создаем новый или используем сохраненный ID
+    -- В реальном использовании можно сохранить ID в локальных настройках
+    return false
+end
+
+-- Инициализация облачных конфигов
+spawn(function()
+    if httpEnabled then
+        wait(3) -- Ждем загрузки GUI
+        
+        if not findUserBin() then
+            if createUserBin() then
+                print("SSLKin: Облачные конфиги готовы!")
+            else
+                print("SSLKin: Ошибка создания облачного хранилища")
+            end
+        end
+    end
+end)
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -2398,7 +2549,7 @@ end
 
 
 -- Система конфигов
-local function saveConfig(configName)
+local function saveConfig(configName, saveToCloud)
     local configData = {
         -- Движение
         speedEnabled = speedEnabled,
@@ -2441,17 +2592,48 @@ local function saveConfig(configName)
         configData.aimbotPredictionStrength = aimbotPredictionStrength
     end
     
+    -- Сохраняем в память
     configs[configName] = configData
     
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Конфиг '" .. configName .. "' сохранен в память!",
-        Duration = 3
-    })
+    local message = "Конфиг '" .. configName .. "' сохранен в память!"
+    
+    -- Сохраняем в облако если требуется
+    if saveToCloud and httpEnabled and USER_BIN_ID then
+        spawn(function()
+            local cloudSaved = saveConfigToCloud(configName, configData)
+            if cloudSaved then
+                game.StarterGui:SetCore("SendNotification", {
+                    Title = "SSLKin Uni Script",
+                    Text = "Конфиг '" .. configName .. "' сохранен в облако! ☁️",
+                    Duration = 3
+                })
+            else
+                game.StarterGui:SetCore("SendNotification", {
+                    Title = "SSLKin Uni Script",
+                    Text = "Ошибка сохранения в облако! Сохранен только в память.",
+                    Duration = 3
+                })
+            end
+        end)
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = message,
+            Duration = 3
+        })
+    end
 end
 
-local function loadConfig(configName)
+local function loadConfig(configName, loadFromCloud)
     local configData = configs[configName]
+    
+    -- Попытка загрузить из облака если не найден в памяти
+    if not configData and loadFromCloud and httpEnabled and USER_BIN_ID then
+        configData = loadConfigFromCloud(configName)
+        if configData then
+            configs[configName] = configData -- Сохраняем в память
+        end
+    end
     
     if not configData then
         game.StarterGui:SetCore("SendNotification", {
@@ -2583,7 +2765,31 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
         return
     end
     
-    saveConfig(configName)
+    saveConfig(configName, false) -- Только в память
+    configTextBox.Text = ""
+end)
+
+CreateButton(ConfigManagementSection, "Сохранить в облако ☁️", "Сохранить конфиг в облачное хранилище", function()
+    local configName = configTextBox.Text
+    if configName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Введите имя конфига!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if not httpEnabled then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "HTTP сервис недоступен!",
+            Duration = 3
+        })
+        return
+    end
+    
+    saveConfig(configName, true) -- В память и облако
     configTextBox.Text = ""
 end)
 
@@ -2612,7 +2818,29 @@ CreateButton(ConfigManagementSection, "Загрузить выбранный к�
         return
     end
     
-    loadConfig(selectedConfigName)
+    loadConfig(selectedConfigName, false) -- Только из памяти
+end)
+
+CreateButton(ConfigManagementSection, "Загрузить из облака ☁️", "Загрузить конфиг из облачного хранилища", function()
+    if selectedConfigName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if not httpEnabled then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "HTTP сервис недоступен!",
+            Duration = 3
+        })
+        return
+    end
+    
+    loadConfig(selectedConfigName, true) -- Из облака
 end)
 
 CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
@@ -2630,6 +2858,9 @@ CreateButton(HttpSection, "Статус HTTP", "Проверить доступ�
     if httpEnabled then
         message = message .. "\nМожно сохранять конфиги онлайн"
         message = message .. "\nСинхронизация между устройствами"
+        if USER_BIN_ID then
+            message = message .. "\nБин ID: " .. USER_BIN_ID:sub(1, 8) .. "..."
+        end
     else
         message = message .. "\nПричина: HTTP заблокирован в игре"
         message = message .. "\nРешение: Включите HTTP в настройках"
@@ -2640,6 +2871,33 @@ CreateButton(HttpSection, "Статус HTTP", "Проверить доступ�
         Text = message,
         Duration = 8
     })
+end)
+
+CreateButton(HttpSection, "Посмотреть облачные конфиги", "Список конфигов в облаке", function()
+    if not httpEnabled or not USER_BIN_ID then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Облачное хранилище недоступно!",
+            Duration = 3
+        })
+        return
+    end
+    
+    spawn(function()
+        local cloudConfigs = getCloudConfigNames()
+        local message = "Конфиги в облаке: " .. #cloudConfigs
+        if #cloudConfigs > 0 then
+            message = message .. "\n" .. table.concat(cloudConfigs, ", ")
+        else
+            message = message .. "\nОблако пустое"
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Облачные конфиги",
+            Text = message,
+            Duration = 6
+        })
+    end)
 end)
 
 -- ВКЛАДКА РАЗНОЕ
