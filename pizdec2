@@ -364,6 +364,7 @@ local espSettings = {
 -- ESP объекты и Drawing объекты
 local espObjects = {}
 local drawingObjects = {}
+local playerChams = {} -- Отдельное хранилище для чамсов
 
 -- FOV Circle
 local fovCircle = nil
@@ -1351,6 +1352,64 @@ local function clearESP()
         end
     end
     drawingObjects = {}
+    
+    -- Очистка чамсов
+    clearChams()
+end
+
+local function clearChams()
+    -- Очистка только чамсов
+    for player, cham in pairs(playerChams) do
+        if cham and cham.Parent then
+            cham:Destroy()
+        end
+    end
+    playerChams = {}
+end
+
+local function updatePlayerChams(player)
+    if not espSettings.chams then
+        -- Удаляем чамс если он выключен
+        if playerChams[player] then
+            playerChams[player]:Destroy()
+            playerChams[player] = nil
+        end
+        return
+    end
+    
+    local character = player.Character
+    if not character then 
+        -- Удаляем чамс если персонажа нет
+        if playerChams[player] then
+            playerChams[player]:Destroy()
+            playerChams[player] = nil
+        end
+        return 
+    end
+    
+    -- Создаем чамс только если его нет
+    if not playerChams[player] then
+        local isEnemy = isPlayerEnemy(player)
+        local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "SSLKinESP"
+        highlight.Adornee = character
+        highlight.FillColor = espColor
+        highlight.FillTransparency = 0.7
+        highlight.OutlineColor = espColor
+        highlight.OutlineTransparency = 0
+        highlight.Parent = character
+        
+        playerChams[player] = highlight
+    else
+        -- Обновляем цвет существующего чамса
+        local isEnemy = isPlayerEnemy(player)
+        local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
+        
+        playerChams[player].FillColor = espColor
+        playerChams[player].OutlineColor = espColor
+    end
 end
 
 local function getPlayerTeam(player)
@@ -1388,18 +1447,7 @@ local function createESPBox(player)
     local isEnemy = isPlayerEnemy(player)
     local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
     
-    -- Создание чамсов (обводка)
-    if espSettings.chams then
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "SSLKinESP"
-        highlight.Adornee = character
-        highlight.FillColor = espColor
-        highlight.FillTransparency = 0.7
-        highlight.OutlineColor = espColor
-        highlight.OutlineTransparency = 0
-        highlight.Parent = character
-        table.insert(espObjects, highlight)
-    end
+    -- Чамсы обрабатываются отдельно через updatePlayerChams
     
     -- Создание квадратов (Drawing)
     if espSettings.boxes then
@@ -1570,14 +1618,33 @@ local function createESPBox(player)
 end
 
 local function updateESP()
-    clearESP()
+    -- Очищаем только не-чамсы объекты
+    for _, espObj in pairs(espObjects) do
+        if espObj and espObj.Parent then
+            espObj:Destroy()
+        end
+    end
+    espObjects = {}
+    
+    for _, drawObj in pairs(drawingObjects) do
+        if drawObj then
+            pcall(function()
+                drawObj:Remove()
+            end)
+        end
+    end
+    drawingObjects = {}
     
     if espSettings.enabled then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
                 createESPBox(player)
+                updatePlayerChams(player) -- Обновляем чамсы отдельно
             end
         end
+    else
+        -- Очищаем чамсы если ESP выключен
+        clearChams()
     end
 end
 
@@ -1600,18 +1667,38 @@ local function createFOVCircle()
     
     if currentGame == "Centaura" and showFOVCircle then
         fovCircle = Drawing.new("Circle")
-        fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        fovCircle.Radius = aimbotFOV
-        fovCircle.Color = Color3.fromRGB(255, 255, 255)
         fovCircle.Thickness = 2
-        fovCircle.Transparency = 0.7
+        fovCircle.NumSides = 30
+        fovCircle.Radius = aimbotFOV
         fovCircle.Filled = false
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Transparency = 0.7
         fovCircle.Visible = true
+        
+        -- Устанавливаем центр сразу
+        local centerX = Camera.ViewportSize.X / 2
+        local centerY = Camera.ViewportSize.Y / 2
+        
+        -- Пробуем разные свойства для позиции
+        if fovCircle.Center then
+            fovCircle.Center = Vector2.new(centerX, centerY)
+        elseif fovCircle.Position then
+            fovCircle.Position = Vector2.new(centerX, centerY)
+        end
         
         -- Обновление позиции и размера круга в реальном времени
         fovConnection = RunService.Heartbeat:Connect(function()
             if fovCircle and showFOVCircle then
-                fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                local newCenterX = Camera.ViewportSize.X / 2
+                local newCenterY = Camera.ViewportSize.Y / 2
+                
+                -- Пробуем разные свойства для позиции
+                if fovCircle.Center then
+                    fovCircle.Center = Vector2.new(newCenterX, newCenterY)
+                elseif fovCircle.Position then
+                    fovCircle.Position = Vector2.new(newCenterX, newCenterY)
+                end
+                
                 fovCircle.Radius = aimbotFOV
                 fovCircle.Visible = true
             elseif fovCircle then
@@ -2618,6 +2705,20 @@ if currentGame == "Centaura" then
     end)
 end
 
+-- Постоянное обновление чамсов
+spawn(function()
+    while true do
+        if espSettings.enabled and espSettings.chams then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    updatePlayerChams(player)
+                end
+            end
+        end
+        wait(0.5) -- Обновляем чамсы каждые 0.5 секунд
+    end
+end)
+
 -- Мониторинг игроков для ESP
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
@@ -2628,7 +2729,13 @@ Players.PlayerAdded:Connect(function(player)
     end)
 end)
 
-Players.PlayerRemoving:Connect(function()
+Players.PlayerRemoving:Connect(function(player)
+    -- Удаляем чамс игрока который покинул
+    if playerChams[player] then
+        playerChams[player]:Destroy()
+        playerChams[player] = nil
+    end
+    
     if espSettings.enabled then
         updateESP()
     end
