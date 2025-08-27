@@ -384,27 +384,42 @@ local fovCircle = nil
 local configs = {}
 local currentConfig = "Default"
 
--- Простое сохранение конфигов через эксплойт
+-- Умная система сохранения для разных эксплойтов
 local HttpService = game:GetService("HttpService")
 
 -- Настройки сохранения
 local CONFIGS_FOLDER = "SSLKinConfigs"
-local fileSystemWorking = false
+local storageMethod = "none"
+local storageInfo = ""
 
--- Проверяем файловую систему эксплойта
-local function testFileSystem()
-    local success = pcall(function()
-        if not isfolder then return false end
-        if not writefile then return false end
-        if not readfile then return false end
-        if not delfile then return false end
+-- Определяем эксплойт
+local executorName = "Unknown"
+if KRNL_LOADED then
+    executorName = "KRNL"
+elseif syn then
+    executorName = "Synapse X"
+elseif getgenv().SOLARA_LOADED or getgenv().solara then
+    executorName = "Solara"
+elseif FLUXUS_LOADED then
+    executorName = "Fluxus"
+elseif getgenv and getgenv().is_sirhurt_closure then
+    executorName = "SirHurt"
+end
+
+print("SSLKin: Определен эксплойт:", executorName)
+
+-- Проверяем разные методы сохранения
+local function detectStorageMethods()
+    -- 1. Проверяем файловую систему
+    local fileSuccess = pcall(function()
+        if not (isfolder and writefile and readfile and delfile and isfile) then 
+            return false 
+        end
         
-        -- Создаем папку если её нет
         if not isfolder(CONFIGS_FOLDER) then
             makefolder(CONFIGS_FOLDER)
         end
         
-        -- Тестируем запись/чтение
         local testFile = CONFIGS_FOLDER .. "/test.txt"
         writefile(testFile, "test")
         local content = readfile(testFile)
@@ -413,107 +428,171 @@ local function testFileSystem()
         return content == "test"
     end)
     
-    fileSystemWorking = success
-    return success
-end
-
--- Проверяем при запуске
-testFileSystem()
-
-print("SSLKin: Файловая система", fileSystemWorking and "✅ Работает" or "❌ Недоступна")
-
--- Простые функции для работы с файлами
-local function saveConfigToFile(configName, configData)
-    if not fileSystemWorking then return false end
+    if fileSuccess then
+        storageMethod = "files"
+        storageInfo = "Папка: " .. CONFIGS_FOLDER
+        return true
+    end
     
-    local success = pcall(function()
-        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
-        local jsonData = HttpService:JSONEncode(configData)
-        writefile(filePath, jsonData)
-    end)
-    
-    return success
-end
-
-local function loadConfigFromFile(configName)
-    if not fileSystemWorking then return nil end
-    
-    local success, result = pcall(function()
-        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
-        if not isfile(filePath) then return nil end
-        
-        local content = readfile(filePath)
-        return HttpService:JSONDecode(content)
-    end)
-    
-    return success and result or nil
-end
-
-local function deleteConfigFile(configName)
-    if not fileSystemWorking then return false end
-    
-    local success = pcall(function()
-        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
-        if isfile(filePath) then
-            delfile(filePath)
-        end
-    end)
-    
-    return success
-end
-
-local function getFileConfigNames()
-    if not fileSystemWorking then return {} end
-    
-    local success, result = pcall(function()
-        if not isfolder(CONFIGS_FOLDER) then return {} end
-        
-        local files = listfiles(CONFIGS_FOLDER)
-        local configNames = {}
-        
-        for _, filePath in pairs(files) do
-            local fileName = filePath:match("([^/\\]+)$")
-            if fileName and fileName:match("%.json$") then
-                local configName = fileName:gsub("%.json$", "")
-                table.insert(configNames, configName)
-            end
-        end
-        
-        return configNames
-    end)
-    
-    return success and result or {}
-end
-
--- Функция для копирования конфига в буфер обмена (запасной вариант)
-local function copyConfigToClipboard(configName, configData)
-    local success = pcall(function()
+    -- 2. Проверяем буфер обмена
+    local clipboardSuccess = pcall(function()
         if setclipboard then
-            local jsonData = HttpService:JSONEncode(configData)
-            local clipboardText = "-- SSLKin Config: " .. configName .. "\n" .. jsonData
-            setclipboard(clipboardText)
+            setclipboard("test")
             return true
         end
         return false
     end)
     
-    return success
+    if clipboardSuccess then
+        storageMethod = "clipboard"
+        storageInfo = "Через буфер обмена"
+        return true
+    end
+    
+    -- 3. Глобальное хранилище (работает во всех эксплойтах)
+    if getgenv then
+        storageMethod = "global"
+        storageInfo = "В памяти эксплойта"
+        
+        -- Инициализируем глобальное хранилище
+        if not getgenv().SSLKinConfigs then
+            getgenv().SSLKinConfigs = {}
+        end
+        return true
+    end
+    
+    storageMethod = "none"
+    storageInfo = "Недоступно"
+    return false
+end
+
+-- Проверяем методы при запуске
+detectStorageMethods()
+
+print("SSLKin: Метод сохранения:", storageMethod, "-", storageInfo)
+
+-- Универсальные функции сохранения
+local function saveConfigPersistent(configName, configData)
+    if storageMethod == "files" then
+        -- Сохранение в файл
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            local jsonData = HttpService:JSONEncode(configData)
+            writefile(filePath, jsonData)
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        -- Сохранение в глобальную память эксплойта
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = configData
+        end)
+        return success
+        
+    elseif storageMethod == "clipboard" then
+        -- Копирование в буфер обмена
+        local success = pcall(function()
+            local jsonData = HttpService:JSONEncode(configData)
+            local clipboardText = "-- SSLKin Config: " .. configName .. " (Сохрани в блокнот!)\n" .. jsonData
+            setclipboard(clipboardText)
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function loadConfigPersistent(configName)
+    if storageMethod == "files" then
+        -- Загрузка из файла
+        local success, result = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if not isfile(filePath) then return nil end
+            
+            local content = readfile(filePath)
+            return HttpService:JSONDecode(content)
+        end)
+        return success and result or nil
+        
+    elseif storageMethod == "global" then
+        -- Загрузка из глобальной памяти
+        local success, result = pcall(function()
+            return getgenv().SSLKinConfigs[configName]
+        end)
+        return success and result or nil
+    end
+    
+    return nil
+end
+
+local function deleteConfigPersistent(configName)
+    if storageMethod == "files" then
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if isfile(filePath) then
+                delfile(filePath)
+            end
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = nil
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function getPersistentConfigNames()
+    if storageMethod == "files" then
+        local success, result = pcall(function()
+            if not isfolder(CONFIGS_FOLDER) then return {} end
+            
+            local files = listfiles(CONFIGS_FOLDER)
+            local configNames = {}
+            
+            for _, filePath in pairs(files) do
+                local fileName = filePath:match("([^/\\]+)$")
+                if fileName and fileName:match("%.json$") then
+                    local configName = fileName:gsub("%.json$", "")
+                    table.insert(configNames, configName)
+                end
+            end
+            
+            return configNames
+        end)
+        return success and result or {}
+        
+    elseif storageMethod == "global" then
+        local success, result = pcall(function()
+            local names = {}
+            for configName, _ in pairs(getgenv().SSLKinConfigs) do
+                table.insert(names, configName)
+            end
+            return names
+        end)
+        return success and result or {}
+    end
+    
+    return {}
 end
 
 -- Загрузка всех сохраненных конфигов при запуске
 local function loadAllSavedConfigs()
-    if not fileSystemWorking then return end
+    if storageMethod == "none" then return end
     
     spawn(function()
         wait(2) -- Ждем инициализацию GUI
         
-        local savedConfigs = getFileConfigNames()
+        local savedConfigs = getPersistentConfigNames()
         if #savedConfigs > 0 then
             print("SSLKin: Найдено", #savedConfigs, "сохраненных конфигов:", table.concat(savedConfigs, ", "))
             
             -- Загружаем конфиги в память
             for _, configName in pairs(savedConfigs) do
-                local configData = loadConfigFromFile(configName)
+                local configData = loadConfigPersistent(configName)
                 if configData then
                     configs[configName] = configData
                 end
@@ -521,10 +600,22 @@ local function loadAllSavedConfigs()
             
             game.StarterGui:SetCore("SendNotification", {
                 Title = "SSLKin Uni Script",
-                Text = "Загружено " .. #savedConfigs .. " сохраненных конфигов!",
+                Text = "Загружено " .. #savedConfigs .. " сохраненных конфигов! (" .. storageMethod .. ")",
                 Duration = 3
             })
+        else
+            print("SSLKin: Сохраненных конфигов не найдено")
         end
+    end)
+end
+
+-- Автосохранение при выходе (для некоторых эксплойтов)
+if storageMethod ~= "none" then
+    game:BindToClose(function()
+        saveConfigPersistent("AutoSave_Exit", {
+            lastSession = os.date("%Y-%m-%d %H:%M:%S"),
+            currentSettings = configs[currentConfig] or configs["Default"]
+        })
     end)
 end
 
@@ -2581,21 +2672,19 @@ local function saveConfig(configName, saveToFile)
     
     local message = "Конфиг '" .. configName .. "' сохранен в память!"
     
-    -- Сохраняем в файл если требуется
-    if saveToFile and fileSystemWorking then
-        local fileSaved = saveConfigToFile(configName, configData)
-        if fileSaved then
-            message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
+    -- Сохраняем постоянно если требуется
+    if saveToFile then
+        local persistentSaved = saveConfigPersistent(configName, configData)
+        if persistentSaved then
+            if storageMethod == "files" then
+                message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
+            elseif storageMethod == "global" then
+                message = "Конфиг '" .. configName .. "' сохранен в эксплойт! 🔧\n(Останется после перезапуска скрипта)"
+            elseif storageMethod == "clipboard" then
+                message = "Конфиг '" .. configName .. "' скопирован в буфер! 📋\nВставь в блокнот и сохрани!"
+            end
         else
-            message = "Ошибка сохранения в файл! Сохранен только в память."
-        end
-    elseif saveToFile and not fileSystemWorking then
-        -- Если файлы не работают, копируем в буфер обмена
-        local clipboardSaved = copyConfigToClipboard(configName, configData)
-        if clipboardSaved then
-            message = "Конфиг '" .. configName .. "' скопирован в буфер обмена! 📋\nВставь в блокнот и сохрани."
-        else
-            message = "Файлы недоступны! Конфиг сохранен только в память."
+            message = "Ошибка сохранения! Конфиг в памяти: " .. storageMethod
         end
     end
     
@@ -2606,12 +2695,12 @@ local function saveConfig(configName, saveToFile)
     })
 end
 
-local function loadConfig(configName, loadFromCloud)
+local function loadConfig(configName, loadFromStorage)
     local configData = configs[configName]
     
-    -- Попытка загрузить из облака если не найден в памяти
-    if not configData and loadFromCloud and httpEnabled and USER_BIN_ID then
-        configData = loadConfigFromCloud(configName)
+    -- Попытка загрузить из постоянного хранилища если не найден в памяти
+    if not configData and loadFromStorage then
+        configData = loadConfigPersistent(configName)
         if configData then
             configs[configName] = configData -- Сохраняем в память
         end
@@ -2751,7 +2840,7 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
     configTextBox.Text = ""
 end)
 
-CreateButton(ConfigManagementSection, "Сохранить в облако ☁️", "Сохранить конфиг в облачное хранилище", function()
+CreateButton(ConfigManagementSection, "Сохранить постоянно 💾", "Сохранить конфиг для постоянного хранения", function()
     local configName = configTextBox.Text
     if configName == "" then
         game.StarterGui:SetCore("SendNotification", {
@@ -2762,16 +2851,16 @@ CreateButton(ConfigManagementSection, "Сохранить в облако ☁️
         return
     end
     
-    if not httpEnabled then
+    if storageMethod == "none" then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "HTTP сервис недоступен!",
+            Text = "Постоянное сохранение недоступно!",
             Duration = 3
         })
         return
     end
     
-    saveConfig(configName, true) -- В память и облако
+    saveConfig(configName, true) -- В память и постоянное хранилище
     configTextBox.Text = ""
 end)
 
@@ -2803,7 +2892,7 @@ CreateButton(ConfigManagementSection, "Загрузить выбранный к�
     loadConfig(selectedConfigName, false) -- Только из памяти
 end)
 
-CreateButton(ConfigManagementSection, "Загрузить из облака ☁️", "Загрузить конфиг из облачного хранилища", function()
+CreateButton(ConfigManagementSection, "Загрузить из хранилища 💾", "Загрузить конфиг из постоянного хранилища", function()
     if selectedConfigName == "" then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
@@ -2813,16 +2902,16 @@ CreateButton(ConfigManagementSection, "Загрузить из облака ☁�
         return
     end
     
-    if not httpEnabled then
+    if storageMethod == "none" then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "HTTP сервис недоступен!",
+            Text = "Постоянное хранилище недоступно!",
             Duration = 3
         })
         return
     end
     
-    loadConfig(selectedConfigName, true) -- Из облака
+    loadConfig(selectedConfigName, true) -- Из постоянного хранилища
 end)
 
 CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
@@ -2832,50 +2921,56 @@ end)
 
 
 
--- HTTP сервис для конфигов  
-local HttpSection = CreateSection(ConfigTab, "🌐 HTTP сохранение")
+-- Информация о сохранении
+local StorageSection = CreateSection(ConfigTab, "💾 Система сохранения")
 
-CreateButton(HttpSection, "Статус HTTP", "Проверить доступность HTTP сервиса", function()
-    local message = "HTTP сервис: " .. (httpEnabled and "✅ Доступен" or "❌ Недоступен")
-    if httpEnabled then
-        message = message .. "\nМожно сохранять конфиги онлайн"
-        message = message .. "\nСинхронизация между устройствами"
-        if USER_BIN_ID then
-            message = message .. "\nБин ID: " .. USER_BIN_ID:sub(1, 8) .. "..."
-        end
+CreateButton(StorageSection, "Статус сохранения", "Информация о методе сохранения", function()
+    local message = "Эксплойт: " .. executorName .. "\n"
+    message = message .. "Метод сохранения: " .. storageMethod .. "\n"
+    message = message .. "Детали: " .. storageInfo
+    
+    if storageMethod == "files" then
+        message = message .. "\n✅ Файлы сохраняются навсегда"
+        message = message .. "\n✅ Автозагрузка при запуске"
+    elseif storageMethod == "global" then
+        message = message .. "\n⚠️ Конфиги остаются пока открыт эксплойт"
+        message = message .. "\n✅ Автозагрузка при перезапуске скрипта"
+    elseif storageMethod == "clipboard" then
+        message = message .. "\n⚠️ Нужно вручную сохранять в блокнот"
+        message = message .. "\n📋 Конфиги копируются в буфер обмена"
     else
-        message = message .. "\nПричина: HTTP заблокирован в игре"
-        message = message .. "\nРешение: Включите HTTP в настройках"
+        message = message .. "\n❌ Конфиги только в памяти"
+        message = message .. "\n❌ Исчезают при перезапуске"
     end
     
     game.StarterGui:SetCore("SendNotification", {
-        Title = "HTTP Сервис",
+        Title = "Система сохранения",
         Text = message,
         Duration = 8
     })
 end)
 
-CreateButton(HttpSection, "Посмотреть облачные конфиги", "Список конфигов в облаке", function()
-    if not httpEnabled or not USER_BIN_ID then
+CreateButton(StorageSection, "Посмотреть сохраненные конфиги", "Список постоянно сохраненных конфигов", function()
+    if storageMethod == "none" then
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Облачное хранилище недоступно!",
+            Text = "Постоянное хранилище недоступно!",
             Duration = 3
         })
         return
     end
     
     spawn(function()
-        local cloudConfigs = getCloudConfigNames()
-        local message = "Конфиги в облаке: " .. #cloudConfigs
-        if #cloudConfigs > 0 then
-            message = message .. "\n" .. table.concat(cloudConfigs, ", ")
+        local savedConfigs = getPersistentConfigNames()
+        local message = "Сохраненные конфиги: " .. #savedConfigs
+        if #savedConfigs > 0 then
+            message = message .. "\n" .. table.concat(savedConfigs, ", ")
         else
-            message = message .. "\nОблако пустое"
+            message = message .. "\nХранилище пустое"
         end
         
         game.StarterGui:SetCore("SendNotification", {
-            Title = "Облачные конфиги",
+            Title = "Сохраненные конфиги",
             Text = message,
             Duration = 6
         })
