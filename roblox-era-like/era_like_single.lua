@@ -70,10 +70,10 @@ local theme = {
 		divider = Color3.fromRGB(45, 45, 52),
 	},
 	sizes = {
-		sidebarWidth = 260,
-		topbarHeight = 52,
-		round = 10,
-		spacing = 10,
+		sidebarWidth = 200,
+		topbarHeight = 40,
+		round = 8,
+		spacing = 6,
 	},
 	tween = { duration = 0.2 },
 }
@@ -117,7 +117,7 @@ local function createSidebar(parent, props)
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = (props and props.title) or "Era-like Hub"
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 20
+	title.TextSize = 18
 	title.TextColor3 = colors.text
 	title.Position = UDim2.fromOffset(10, 0)
 	title.Size = UDim2.new(1, -20, 1, 0)
@@ -128,22 +128,22 @@ local function createSidebar(parent, props)
 	subtitle.TextXAlignment = Enum.TextXAlignment.Left
 	subtitle.Text = (props and props.subtitle) or ""
 	subtitle.Font = Enum.Font.Gotham
-	subtitle.TextSize = 13
+	subtitle.TextSize = 12
 	subtitle.TextColor3 = colors.textDim
-	subtitle.Position = UDim2.fromOffset(10, 24)
-	subtitle.Size = UDim2.new(1, -20, 0, 20)
+	subtitle.Position = UDim2.fromOffset(10, 20)
+	subtitle.Size = UDim2.new(1, -20, 0, 16)
 	subtitle.Parent = header
 
 	self.buttonsContainer = Instance.new("Frame")
 	self.buttonsContainer.Name = "Buttons"
 	self.buttonsContainer.BackgroundTransparency = 1
-	self.buttonsContainer.Size = UDim2.new(1, -8, 1, -theme.sizes.topbarHeight - 24)
-	self.buttonsContainer.Position = UDim2.new(0, 8, 0, theme.sizes.topbarHeight + 22)
+	self.buttonsContainer.Size = UDim2.new(1, -8, 1, -theme.sizes.topbarHeight - 16)
+	self.buttonsContainer.Position = UDim2.new(0, 8, 0, theme.sizes.topbarHeight + 14)
 	self.buttonsContainer.LayoutOrder = 2
 	self.buttonsContainer.Parent = self.root
 
 	local list = Instance.new("UIListLayout")
-	list.Padding = UDim.new(0, 6)
+	list.Padding = UDim.new(0, 4)
 	list.SortOrder = Enum.SortOrder.LayoutOrder
 	list.Parent = self.buttonsContainer
 
@@ -170,12 +170,12 @@ local function createSidebar(parent, props)
 		local button = Instance.new("TextButton")
 		button.Name = tabId
 		button.Text = tabName
-		button.Size = UDim2.new(1, 0, 0, 36)
+		button.Size = UDim2.new(1, 0, 0, 32)
 		button.BackgroundColor3 = colors.surface2
 		button.BorderSizePixel = 0
 		button.TextColor3 = colors.text
 		button.Font = Enum.Font.Gotham
-		button.TextSize = 16
+		button.TextSize = 14
 		button.AutoButtonColor = false
 		button.Parent = self.buttonsContainer
 
@@ -227,17 +227,17 @@ local function createTabs(parent, props)
 		page.Visible = false
 		page.Parent = self.root
 
-		local padding = Instance.new("UIPadding")
-		padding.PaddingTop = UDim.new(0, 16)
-		padding.PaddingLeft = UDim.new(0, 16)
-		padding.PaddingRight = UDim.new(0, 16)
-		padding.PaddingBottom = UDim.new(0, 16)
-		padding.Parent = page
+			local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 12)
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.PaddingRight = UDim.new(0, 12)
+	padding.PaddingBottom = UDim.new(0, 12)
+	padding.Parent = page
 
-		local list = Instance.new("UIListLayout")
-		list.Padding = UDim.new(0, 10)
-		list.SortOrder = Enum.SortOrder.LayoutOrder
-		list.Parent = page
+	local list = Instance.new("UIListLayout")
+	list.Padding = UDim.new(0, 8)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Parent = page
 
 		self.pages[tabId] = page
 		return page
@@ -273,12 +273,19 @@ local function createUI(props)
 	local tabs = createTabs(root, props)
 
 	local api = {}
+	api.visible = true
+	api.screenGui = screenGui
+	
 	function api.addTab(tabId, tabName)
 		sidebar.addTab(tabId, tabName)
 		return tabs.addPage(tabId, tabName)
 	end
 	function api.onTabChanged(cb)
 		api._onTabChanged = cb
+	end
+	function api.toggle()
+		api.visible = not api.visible
+		screenGui.Enabled = api.visible
 	end
 	function sidebar.onTabSelected(callback)
 		-- Wrap to also call external onTabChanged
@@ -307,17 +314,17 @@ local function mountAimbot(ctx)
 	header.BackgroundTransparency = 1
 	header.Text = "Combat: Aimbot (demo UI)"
 	header.Font = Enum.Font.GothamBold
-	header.TextSize = 18
+	header.TextSize = 16
 	header.TextColor3 = Color3.fromRGB(235,235,240)
-	header.Size = UDim2.new(1, -10, 0, 24)
+	header.Size = UDim2.new(1, -10, 0, 20)
 	header.Parent = page
 
 	local toggle = Instance.new("TextButton")
 	toggle.Name = "AimbotToggle"
-	toggle.Size = UDim2.new(0, 220, 0, 36)
+	toggle.Size = UDim2.new(0, 180, 0, 28)
 	toggle.Text = "Enable Aimbot: OFF"
 	toggle.Font = Enum.Font.Gotham
-	toggle.TextSize = 16
+	toggle.TextSize = 14
 	toggle.TextColor3 = Color3.fromRGB(235,235,240)
 	toggle.BackgroundColor3 = Color3.fromRGB(35,35,40)
 	toggle.BorderSizePixel = 0
@@ -325,7 +332,7 @@ local function mountAimbot(ctx)
 	toggle.Parent = page
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = toggle
 
 	local enabled = false
@@ -342,17 +349,17 @@ local function mountESP(ctx)
 	header.BackgroundTransparency = 1
 	header.Text = "Visuals: ESP (demo UI)"
 	header.Font = Enum.Font.GothamBold
-	header.TextSize = 18
+	header.TextSize = 16
 	header.TextColor3 = Color3.fromRGB(235,235,240)
-	header.Size = UDim2.new(1, -10, 0, 24)
+	header.Size = UDim2.new(1, -10, 0, 20)
 	header.Parent = page
 
 	local toggle = Instance.new("TextButton")
 	toggle.Name = "ESPToggle"
-	toggle.Size = UDim2.new(0, 220, 0, 36)
+	toggle.Size = UDim2.new(0, 180, 0, 28)
 	toggle.Text = "Enable ESP: OFF"
 	toggle.Font = Enum.Font.Gotham
-	toggle.TextSize = 16
+	toggle.TextSize = 14
 	toggle.TextColor3 = Color3.fromRGB(235,235,240)
 	toggle.BackgroundColor3 = Color3.fromRGB(35,35,40)
 	toggle.BorderSizePixel = 0
@@ -360,7 +367,7 @@ local function mountESP(ctx)
 	toggle.Parent = page
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = toggle
 
 	local enabled = false
@@ -479,6 +486,15 @@ task.wait(0.2)
 setProgress(fill, 1)
 task.wait(0.2)
 destroySplash(splashGui)
+
+-- Add toggle key (Insert)
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Insert then
+		app.toggle()
+	end
+end)
 
 if app and app.onTabChanged then
 	app.onTabChanged(function(tabId)
