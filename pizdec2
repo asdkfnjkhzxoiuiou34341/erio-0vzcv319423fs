@@ -386,13 +386,79 @@ local currentConfig = "Default"
 local configFolder = "SSLKinUniScript"
 local configExtension = ".json"
 
--- Проверка поддержки файловых функций
-local fileSystemSupported = pcall(function() return writefile and readfile and makefolder and isfolder end)
+-- Альтернативные папки для разных эксплойтов
+local configFolders = {
+    "SSLKinUniScript",
+    "workspace/SSLKinUniScript", 
+    "autoexec/SSLKinUniScript",
+    "scripts/SSLKinUniScript"
+}
 
--- Создание папки для конфигов
+-- Проверка поддержки файловых функций
+local fileSystemSupported = false
+local workingFolder = nil
+
+-- Тестируем разные методы файловой системы
+for _, folder in ipairs(configFolders) do
+    local success = pcall(function()
+        if writefile and readfile and makefolder and isfolder then
+            if not isfolder(folder) then
+                makefolder(folder)
+            end
+            -- Тестовый файл
+            local testFile = folder .. "/test.txt"
+            writefile(testFile, "test")
+            local content = readfile(testFile)
+            if content == "test" then
+                delfile(testFile)
+                workingFolder = folder
+                fileSystemSupported = true
+                return true
+            end
+        end
+        return false
+    end)
+    
+    if success and workingFolder then
+        print("SSLKin: Используется папка для конфигов:", workingFolder)
+        break
+    end
+end
+
 if fileSystemSupported then
-    if not isfolder(configFolder) then
-        makefolder(configFolder)
+    configFolder = workingFolder
+    print("SSLKin: Файловая система поддерживается!")
+else
+    print("SSLKin: Файловая система НЕ поддерживается. Конфиги будут сохранены только в памяти.")
+end
+
+-- Функция автозагрузки конфигов при запуске
+local function autoLoadConfigs()
+    if fileSystemSupported then
+        spawn(function()
+            wait(2) -- Ждем инициализации GUI
+            local configFiles = getConfigFilesFromFolder()
+            if #configFiles > 0 then
+                print("SSLKin: Найдено", #configFiles, "сохраненных конфигов")
+                
+                -- Пытаемся загрузить последний использованный конфиг
+                local lastConfigName = "AutoSave"
+                for _, configName in pairs(configFiles) do
+                    if configName:find("AutoSave") then
+                        lastConfigName = configName
+                        break
+                    end
+                end
+                
+                -- Если есть автосохранение, загружаем его
+                if lastConfigName and lastConfigName ~= "" then
+                    print("SSLKin: Автозагрузка конфига:", lastConfigName)
+                    loadConfig(lastConfigName)
+                end
+            else
+                print("SSLKin: Сохраненных конфигов не найдено")
+            end
+        end)
     end
 end
 
@@ -2743,6 +2809,12 @@ CreateButton(ConfigManagementSection, "Автосохранение", "Сохр�
     saveConfig("AutoSave_" .. os.date("%H-%M-%S"))
 end)
 
+CreateButton(ConfigManagementSection, "Сохранить и выйти", "Сохранить текущий конфиг и выйти из игры", function()
+    saveConfig("AutoSave_Exit_" .. os.date("%H-%M-%S"))
+    wait(1)
+    game:Shutdown()
+end)
+
 -- Информация о файловой системе
 local FileSystemSection = CreateSection(ConfigTab, "📁 Информация о файлах")
 
@@ -2751,20 +2823,23 @@ CreateButton(FileSystemSection, "Статус файловой системы", 
     local message = "Файловая система: " .. status
     
     if fileSystemSupported then
-        message = message .. "\nПапка: workspace/" .. configFolder
+        message = message .. "\nПапка: " .. configFolder
         message = message .. "\nФормат: JSON (.json)"
         
         local fileConfigs = getConfigFilesFromFolder()
         message = message .. "\nФайлов конфигов: " .. #fileConfigs
+        message = message .. "\n✅ Автосохранение: Включено"
+        message = message .. "\n✅ Автозагрузка: Включена"
     else
-        message = message .. "\nКонфиги сохраняются только в память"
-        message = message .. "\nПосле перезапуска игры они исчезнут"
+        message = message .. "\nПричина: Эксплойт не поддерживает файлы"
+        message = message .. "\nРешение: Используйте другой эксплойт"
+        message = message .. "\n❌ Конфиги исчезнут после перезапуска"
     end
     
     game.StarterGui:SetCore("SendNotification", {
         Title = "Файловая система",
         Text = message,
-        Duration = 8
+        Duration = 10
     })
 end)
 
@@ -3171,6 +3246,29 @@ end
 -- Показать GUI при загрузке
 ShowGUI()
 
+-- Запускаем автозагрузку конфигов
+autoLoadConfigs()
+
+-- Автосохранение каждые 5 минут
+spawn(function()
+    while true do
+        wait(300) -- 5 минут
+        if fileSystemSupported then
+            saveConfig("AutoSave_Periodic_" .. os.date("%H-%M"))
+            print("SSLKin: Автосохранение выполнено")
+        end
+    end
+end)
+
+-- Обработка выхода из игры
+game:BindToClose(function()
+    if fileSystemSupported then
+        saveConfig("AutoSave_Exit_" .. os.date("%H-%M-%S"))
+        print("SSLKin: Конфиг сохранен при выходе")
+        wait(1)
+    end
+end)
+
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
     Title = "SSLKin Uni Script",
@@ -3180,3 +3278,7 @@ game.StarterGui:SetCore("SendNotification", {
 
 print(string.format("SSLKin Uni Script v3.1 загружен в режиме %s!", currentGame))
 print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
+print("Файловая система:", fileSystemSupported and "✅ Поддерживается" or "❌ Не поддерживается")
+if fileSystemSupported then
+    print("Папка конфигов:", configFolder)
+end
