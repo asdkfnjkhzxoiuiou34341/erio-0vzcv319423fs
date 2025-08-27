@@ -384,168 +384,152 @@ local fovCircle = nil
 local configs = {}
 local currentConfig = "Default"
 
--- HTTP сервис для сохранения конфигов
+-- Простое сохранение конфигов через эксплойт
 local HttpService = game:GetService("HttpService")
-local httpEnabled = false
 
--- JSONBin настройки
-local JSONBIN_URL = "https://api.jsonbin.io/v3/b"
-local USER_BIN_ID = nil -- Будет создан автоматически
-local MASTER_KEY = "$2a$10$YourMasterKeyHere" -- Замени на свой ключ от jsonbin.io
+-- Настройки сохранения
+local CONFIGS_FOLDER = "SSLKinConfigs"
+local fileSystemWorking = false
 
--- Проверяем доступность HTTP
-pcall(function()
-    HttpService:GetAsync("https://httpbin.org/get", true)
-    httpEnabled = true
-end)
-
-print("SSLKin: HTTP сервис", httpEnabled and "✅ Доступен" or "❌ Недоступен")
-
--- Функции для работы с JSONBin
-local function createUserBin()
-    if not httpEnabled then return false end
-    
-    local success, result = pcall(function()
-        local userData = {
-            user = LocalPlayer.Name,
-            userId = LocalPlayer.UserId,
-            configs = {
-                Default = {}
-            },
-            created = os.date("%Y-%m-%d %H:%M:%S")
-        }
+-- Проверяем файловую систему эксплойта
+local function testFileSystem()
+    local success = pcall(function()
+        if not isfolder then return false end
+        if not writefile then return false end
+        if not readfile then return false end
+        if not delfile then return false end
         
-        local headers = {
-            ["Content-Type"] = "application/json",
-            ["X-Master-Key"] = MASTER_KEY
-        }
-        
-        local jsonData = HttpService:JSONEncode(userData)
-        local response = HttpService:PostAsync(JSONBIN_URL, jsonData, Enum.HttpContentType.ApplicationJson, false, headers)
-        local responseData = HttpService:JSONDecode(response)
-        
-        if responseData and responseData.metadata and responseData.metadata.id then
-            USER_BIN_ID = responseData.metadata.id
-            print("SSLKin: Создан новый бин:", USER_BIN_ID)
-            return true
+        -- Создаем папку если её нет
+        if not isfolder(CONFIGS_FOLDER) then
+            makefolder(CONFIGS_FOLDER)
         end
-        return false
+        
+        -- Тестируем запись/чтение
+        local testFile = CONFIGS_FOLDER .. "/test.txt"
+        writefile(testFile, "test")
+        local content = readfile(testFile)
+        delfile(testFile)
+        
+        return content == "test"
     end)
     
-    return success and result
+    fileSystemWorking = success
+    return success
 end
 
-local function saveConfigToCloud(configName, configData)
-    if not httpEnabled or not USER_BIN_ID then return false end
+-- Проверяем при запуске
+testFileSystem()
+
+print("SSLKin: Файловая система", fileSystemWorking and "✅ Работает" or "❌ Недоступна")
+
+-- Простые функции для работы с файлами
+local function saveConfigToFile(configName, configData)
+    if not fileSystemWorking then return false end
     
-    local success, result = pcall(function()
-        -- Сначала получаем текущие данные
-        local headers = {
-            ["X-Master-Key"] = MASTER_KEY
-        }
-        
-        local getCurrentUrl = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
-        local currentResponse = HttpService:GetAsync(getCurrentUrl, false, headers)
-        local currentData = HttpService:JSONDecode(currentResponse)
-        
-        -- Обновляем конфиги
-        if not currentData.record then currentData.record = {} end
-        if not currentData.record.configs then currentData.record.configs = {} end
-        
-        currentData.record.configs[configName] = configData
-        currentData.record.lastUpdated = os.date("%Y-%m-%d %H:%M:%S")
-        
-        -- Отправляем обновленные данные
-        local updateHeaders = {
-            ["Content-Type"] = "application/json",
-            ["X-Master-Key"] = MASTER_KEY
-        }
-        
-        local updateUrl = JSONBIN_URL .. "/" .. USER_BIN_ID
-        local jsonData = HttpService:JSONEncode(currentData.record)
-        HttpService:RequestAsync({
-            Url = updateUrl,
-            Method = "PUT",
-            Headers = updateHeaders,
-            Body = jsonData
-        })
-        
-        return true
+    local success = pcall(function()
+        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+        local jsonData = HttpService:JSONEncode(configData)
+        writefile(filePath, jsonData)
     end)
     
-    return success and result
+    return success
 end
 
-local function loadConfigFromCloud(configName)
-    if not httpEnabled or not USER_BIN_ID then return nil end
+local function loadConfigFromFile(configName)
+    if not fileSystemWorking then return nil end
     
     local success, result = pcall(function()
-        local headers = {
-            ["X-Master-Key"] = MASTER_KEY
-        }
+        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+        if not isfile(filePath) then return nil end
         
-        local url = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
-        local response = HttpService:GetAsync(url, false, headers)
-        local data = HttpService:JSONDecode(response)
-        
-        if data and data.record and data.record.configs and data.record.configs[configName] then
-            return data.record.configs[configName]
+        local content = readfile(filePath)
+        return HttpService:JSONDecode(content)
+    end)
+    
+    return success and result or nil
+end
+
+local function deleteConfigFile(configName)
+    if not fileSystemWorking then return false end
+    
+    local success = pcall(function()
+        local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+        if isfile(filePath) then
+            delfile(filePath)
         end
-        return nil
     end)
     
-    if success then
-        return result
-    else
-        return nil
-    end
+    return success
 end
 
-local function getCloudConfigNames()
-    if not httpEnabled or not USER_BIN_ID then return {} end
+local function getFileConfigNames()
+    if not fileSystemWorking then return {} end
     
     local success, result = pcall(function()
-        local headers = {
-            ["X-Master-Key"] = MASTER_KEY
-        }
+        if not isfolder(CONFIGS_FOLDER) then return {} end
         
-        local url = JSONBIN_URL .. "/" .. USER_BIN_ID .. "/latest"
-        local response = HttpService:GetAsync(url, false, headers)
-        local data = HttpService:JSONDecode(response)
+        local files = listfiles(CONFIGS_FOLDER)
+        local configNames = {}
         
-        local names = {}
-        if data and data.record and data.record.configs then
-            for configName, _ in pairs(data.record.configs) do
-                table.insert(names, configName)
+        for _, filePath in pairs(files) do
+            local fileName = filePath:match("([^/\\]+)$")
+            if fileName and fileName:match("%.json$") then
+                local configName = fileName:gsub("%.json$", "")
+                table.insert(configNames, configName)
             end
         end
-        return names
+        
+        return configNames
     end)
     
     return success and result or {}
 end
 
--- Попытка найти существующий бин для пользователя
-local function findUserBin()
-    -- В бесплатной версии это сложно, поэтому создаем новый или используем сохраненный ID
-    -- В реальном использовании можно сохранить ID в локальных настройках
-    return false
+-- Функция для копирования конфига в буфер обмена (запасной вариант)
+local function copyConfigToClipboard(configName, configData)
+    local success = pcall(function()
+        if setclipboard then
+            local jsonData = HttpService:JSONEncode(configData)
+            local clipboardText = "-- SSLKin Config: " .. configName .. "\n" .. jsonData
+            setclipboard(clipboardText)
+            return true
+        end
+        return false
+    end)
+    
+    return success
 end
 
--- Инициализация облачных конфигов
-spawn(function()
-    if httpEnabled then
-        wait(3) -- Ждем загрузки GUI
+-- Загрузка всех сохраненных конфигов при запуске
+local function loadAllSavedConfigs()
+    if not fileSystemWorking then return end
+    
+    spawn(function()
+        wait(2) -- Ждем инициализацию GUI
         
-        if not findUserBin() then
-            if createUserBin() then
-                print("SSLKin: Облачные конфиги готовы!")
-            else
-                print("SSLKin: Ошибка создания облачного хранилища")
+        local savedConfigs = getFileConfigNames()
+        if #savedConfigs > 0 then
+            print("SSLKin: Найдено", #savedConfigs, "сохраненных конфигов:", table.concat(savedConfigs, ", "))
+            
+            -- Загружаем конфиги в память
+            for _, configName in pairs(savedConfigs) do
+                local configData = loadConfigFromFile(configName)
+                if configData then
+                    configs[configName] = configData
+                end
             end
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Загружено " .. #savedConfigs .. " сохраненных конфигов!",
+                Duration = 3
+            })
         end
-    end
-end)
+    end)
+end
+
+-- Запускаем загрузку сохраненных конфигов
+loadAllSavedConfigs()
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -2549,7 +2533,7 @@ end
 
 
 -- Система конфигов
-local function saveConfig(configName, saveToCloud)
+local function saveConfig(configName, saveToFile)
     local configData = {
         -- Движение
         speedEnabled = speedEnabled,
@@ -2597,31 +2581,29 @@ local function saveConfig(configName, saveToCloud)
     
     local message = "Конфиг '" .. configName .. "' сохранен в память!"
     
-    -- Сохраняем в облако если требуется
-    if saveToCloud and httpEnabled and USER_BIN_ID then
-        spawn(function()
-            local cloudSaved = saveConfigToCloud(configName, configData)
-            if cloudSaved then
-                game.StarterGui:SetCore("SendNotification", {
-                    Title = "SSLKin Uni Script",
-                    Text = "Конфиг '" .. configName .. "' сохранен в облако! ☁️",
-                    Duration = 3
-                })
-            else
-                game.StarterGui:SetCore("SendNotification", {
-                    Title = "SSLKin Uni Script",
-                    Text = "Ошибка сохранения в облако! Сохранен только в память.",
-                    Duration = 3
-                })
-            end
-        end)
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = message,
-            Duration = 3
-        })
+    -- Сохраняем в файл если требуется
+    if saveToFile and fileSystemWorking then
+        local fileSaved = saveConfigToFile(configName, configData)
+        if fileSaved then
+            message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
+        else
+            message = "Ошибка сохранения в файл! Сохранен только в память."
+        end
+    elseif saveToFile and not fileSystemWorking then
+        -- Если файлы не работают, копируем в буфер обмена
+        local clipboardSaved = copyConfigToClipboard(configName, configData)
+        if clipboardSaved then
+            message = "Конфиг '" .. configName .. "' скопирован в буфер обмена! 📋\nВставь в блокнот и сохрани."
+        else
+            message = "Файлы недоступны! Конфиг сохранен только в память."
+        end
     end
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = message,
+        Duration = 4
+    })
 end
 
 local function loadConfig(configName, loadFromCloud)
