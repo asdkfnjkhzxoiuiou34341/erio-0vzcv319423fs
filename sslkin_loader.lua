@@ -1,6 +1,6 @@
 --[[
     SSLKin Uni Script Loader
-    Beautiful animated loader
+    Simple animated loader
     Created by: SSLKin
 --]]
 
@@ -40,8 +40,8 @@ LoadingContainer.Name = "LoadingContainer"
 LoadingContainer.Parent = LoadingBackground
 LoadingContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 LoadingContainer.BorderSizePixel = 0
-LoadingContainer.Position = UDim2.new(0.5, -250, 0.5, -150)
-LoadingContainer.Size = UDim2.new(0, 500, 0, 300)
+LoadingContainer.Position = UDim2.new(0.5, -250, 0.5, -100)
+LoadingContainer.Size = UDim2.new(0, 500, 0, 200)
 
 -- Обводка контейнера
 local ContainerStroke = Instance.new("UIStroke")
@@ -70,7 +70,7 @@ local LogoFrame = Instance.new("Frame")
 LogoFrame.Parent = LoadingContainer
 LogoFrame.BackgroundTransparency = 1
 LogoFrame.Position = UDim2.new(0, 30, 0, 30)
-LogoFrame.Size = UDim2.new(0, 80, 0, 80)
+LogoFrame.Size = UDim2.new(0, 60, 0, 60)
 
 local LogoIcon = Instance.new("TextLabel")
 LogoIcon.Parent = LogoFrame
@@ -86,8 +86,8 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "TitleLabel"
 TitleLabel.Parent = LoadingContainer
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Position = UDim2.new(0, 130, 0, 40)
-TitleLabel.Size = UDim2.new(1, -160, 0, 35)
+TitleLabel.Position = UDim2.new(0, 110, 0, 40)
+TitleLabel.Size = UDim2.new(1, -140, 0, 35)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.Text = "SSLKin Uni Script"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -99,33 +99,20 @@ local SubtitleLabel = Instance.new("TextLabel")
 SubtitleLabel.Name = "SubtitleLabel"
 SubtitleLabel.Parent = LoadingContainer
 SubtitleLabel.BackgroundTransparency = 1
-SubtitleLabel.Position = UDim2.new(0, 130, 0, 75)
-SubtitleLabel.Size = UDim2.new(1, -160, 0, 20)
+SubtitleLabel.Position = UDim2.new(0, 110, 0, 75)
+SubtitleLabel.Size = UDim2.new(1, -140, 0, 20)
 SubtitleLabel.Font = Enum.Font.Gotham
 SubtitleLabel.Text = "Universal Roblox Script Hub"
 SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 SubtitleLabel.TextSize = 14
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Статус загрузки
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Name = "StatusLabel"
-StatusLabel.Parent = LoadingContainer
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Position = UDim2.new(0, 30, 0, 140)
-StatusLabel.Size = UDim2.new(1, -60, 0, 25)
-StatusLabel.Font = Enum.Font.GothamSemibold
-StatusLabel.Text = "Инициализация скрипта..."
-StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-StatusLabel.TextSize = 14
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-
 -- Прогресс бар контейнер
 local ProgressContainer = Instance.new("Frame")
 ProgressContainer.Parent = LoadingContainer
 ProgressContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
 ProgressContainer.BorderSizePixel = 0
-ProgressContainer.Position = UDim2.new(0, 30, 0, 180)
+ProgressContainer.Position = UDim2.new(0, 30, 0, 130)
 ProgressContainer.Size = UDim2.new(1, -60, 0, 12)
 
 local ProgressContainerCorner = Instance.new("UICorner")
@@ -153,27 +140,15 @@ ProgressGradient.Color = ColorSequence.new{
     ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 120, 255))
 }
 
--- Процентный индикатор
-local PercentLabel = Instance.new("TextLabel")
-PercentLabel.Parent = LoadingContainer
-PercentLabel.BackgroundTransparency = 1
-PercentLabel.Position = UDim2.new(0, 30, 0, 200)
-PercentLabel.Size = UDim2.new(1, -60, 0, 20)
-PercentLabel.Font = Enum.Font.Gotham
-PercentLabel.Text = "0%"
-PercentLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-PercentLabel.TextSize = 12
-PercentLabel.TextXAlignment = Enum.TextXAlignment.Right
-
 -- Информация о версии
 local VersionLabel = Instance.new("TextLabel")
 VersionLabel.Name = "VersionLabel"
 VersionLabel.Parent = LoadingContainer
 VersionLabel.BackgroundTransparency = 1
-VersionLabel.Position = UDim2.new(0, 30, 1, -40)
+VersionLabel.Position = UDim2.new(0, 30, 1, -30)
 VersionLabel.Size = UDim2.new(1, -60, 0, 20)
 VersionLabel.Font = Enum.Font.Gotham
-VersionLabel.Text = "v2.0 • Created by SSLKin • Universal Script Hub"
+VersionLabel.Text = "v2.1 • Created by SSLKin • Universal Script Hub"
 VersionLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
 VersionLabel.TextSize = 10
 VersionLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -209,10 +184,7 @@ spawn(function()
 end)
 
 -- Функция обновления прогресса
-local function updateProgress(progress, status)
-    StatusLabel.Text = status
-    PercentLabel.Text = math.floor(progress) .. "%"
-    
+local function updateProgress(progress)
     local progressTween = TweenService:Create(
         ProgressBar,
         TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -246,8 +218,8 @@ local showTween = TweenService:Create(
     LoadingContainer,
     TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
     {
-        Size = UDim2.new(0, 500, 0, 300),
-        Position = UDim2.new(0.5, -250, 0.5, -150)
+        Size = UDim2.new(0, 500, 0, 200),
+        Position = UDim2.new(0.5, -250, 0.5, -100)
     }
 )
 
@@ -255,36 +227,17 @@ backgroundTween:Play()
 wait(0.2)
 showTween:Play()
 
--- Симуляция загрузки с реалистичными этапами
-local loadingSteps = {
-    {5, "Проверка системы безопасности..."},
-    {15, "Загрузка основных модулей..."},
-    {25, "Инициализация пользовательского интерфейса..."},
-    {40, "Настройка системы функций..."},
-    {55, "Подключение к игровым сервисам..."},
-    {70, "Загрузка визуальных компонентов..."},
-    {85, "Финальная настройка скрипта..."},
-    {95, "Применение конфигурации..."},
-    {100, "Загрузка завершена успешно!"}
-}
-
+-- Простая загрузка с плавным прогрессом
 spawn(function()
     wait(1.5) -- Ждём завершения анимации появления
     
-    for i, step in ipairs(loadingSteps) do
-        updateProgress(step[1], step[2])
-        
-        -- Варьируем время загрузки для реалистичности
-        if i <= 3 then
-            wait(0.8)
-        elseif i <= 6 then
-            wait(0.6)
-        else
-            wait(0.4)
-        end
+    -- Плавная загрузка от 0 до 100
+    for i = 0, 100, 2 do
+        updateProgress(i)
+        wait(0.05) -- Быстрая и плавная загрузка
     end
     
-    wait(1.5)
+    wait(0.5)
     
     -- Анимация исчезновения
     local hideTween = TweenService:Create(

@@ -1,8 +1,8 @@
 --[[
     SSLKin Uni Script - Universal Roblox Script Hub
     Created by: SSLKin
-    Version: 2.0
-    Modern & Beautiful Design
+    Version: 2.1
+    Modern & Beautiful Design with Sliders and Better ESP
 --]]
 
 -- Защита от повторного запуска
@@ -32,6 +32,26 @@ local flySpeed = 50
 local isNoclipActive = false
 local espEnabled = false
 local infiniteJumpEnabled = false
+local speedEnabled = false
+local jumpEnabled = false
+local walkSpeed = 16
+local jumpPower = 50
+
+-- ESP настройки
+local espSettings = {
+    enabled = false,
+    boxes = true,
+    names = false,
+    distance = false,
+    health = false,
+    tracers = false,
+    boxColor = Color3.fromRGB(255, 0, 0),
+    nameColor = Color3.fromRGB(255, 255, 255),
+    tracerColor = Color3.fromRGB(0, 255, 0)
+}
+
+-- ESP объекты
+local espObjects = {}
 
 -- Создание ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
@@ -64,22 +84,6 @@ MainStroke.Transparency = 0.3
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
-
--- Тень
-local ShadowFrame = Instance.new("Frame")
-ShadowFrame.Name = "ShadowFrame"
-ShadowFrame.Parent = ScreenGui
-ShadowFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ShadowFrame.BackgroundTransparency = 0.5
-ShadowFrame.BorderSizePixel = 0
-ShadowFrame.Position = UDim2.new(0.5, -405, 0.5, -270)
-ShadowFrame.Size = UDim2.new(0, 810, 0, 560)
-ShadowFrame.ZIndex = MainFrame.ZIndex - 1
-ShadowFrame.Visible = false
-
-local ShadowCorner = Instance.new("UICorner")
-ShadowCorner.CornerRadius = UDim.new(0, 12)
-ShadowCorner.Parent = ShadowFrame
 
 -- Заголовок
 local HeaderFrame = Instance.new("Frame")
@@ -142,7 +146,7 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 80, 0, 35)
 SubtitleLabel.Size = UDim2.new(1, -200, 0, 20)
 SubtitleLabel.Font = Enum.Font.Gotham
-SubtitleLabel.Text = "Universal Roblox Script Hub v2.0"
+SubtitleLabel.Text = "Universal Roblox Script Hub v2.1"
 SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 SubtitleLabel.TextSize = 12
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -261,25 +265,16 @@ end
 -- Функции показа/скрытия GUI
 local function ShowGUI()
     MainFrame.Visible = true
-    ShadowFrame.Visible = true
     
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    ShadowFrame.Size = UDim2.new(0, 0, 0, 0)
-    ShadowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     
     local showTween = CreateTween(MainFrame, {
         Size = UDim2.new(0, 800, 0, 550),
         Position = UDim2.new(0.5, -400, 0.5, -275)
     }, 0.6, Enum.EasingStyle.Back)
     
-    local shadowTween = CreateTween(ShadowFrame, {
-        Size = UDim2.new(0, 810, 0, 560),
-        Position = UDim2.new(0.5, -405, 0.5, -270)
-    }, 0.6, Enum.EasingStyle.Back)
-    
     showTween:Play()
-    shadowTween:Play()
 end
 
 local function HideGUI()
@@ -288,17 +283,10 @@ local function HideGUI()
         Position = UDim2.new(0.5, 0, 0.5, 0)
     }, 0.4, Enum.EasingStyle.Quad)
     
-    local shadowHideTween = CreateTween(ShadowFrame, {
-        Size = UDim2.new(0, 0, 0, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0)
-    }, 0.4, Enum.EasingStyle.Quad)
-    
     hideTween:Play()
-    shadowHideTween:Play()
     
     hideTween.Completed:Connect(function()
         MainFrame.Visible = false
-        ShadowFrame.Visible = false
     end)
 end
 
@@ -640,6 +628,278 @@ local function CreateToggle(parent, text, description, defaultState, callback)
     return ToggleFrame, isToggled
 end
 
+-- Функция создания ползунка
+local function CreateSlider(parent, text, description, minValue, maxValue, defaultValue, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Parent = parent
+    SliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    SliderFrame.BorderSizePixel = 0
+    SliderFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(0, 8)
+    SliderCorner.Parent = SliderFrame
+    
+    local SliderText = Instance.new("TextLabel")
+    SliderText.Parent = SliderFrame
+    SliderText.BackgroundTransparency = 1
+    SliderText.Position = UDim2.new(0, 15, 0, 8)
+    SliderText.Size = UDim2.new(1, -100, 0, 20)
+    SliderText.Font = Enum.Font.GothamBold
+    SliderText.Text = text
+    SliderText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SliderText.TextSize = 14
+    SliderText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local SliderValue = Instance.new("TextLabel")
+    SliderValue.Parent = SliderFrame
+    SliderValue.BackgroundTransparency = 1
+    SliderValue.Position = UDim2.new(1, -85, 0, 8)
+    SliderValue.Size = UDim2.new(0, 70, 0, 20)
+    SliderValue.Font = Enum.Font.GothamBold
+    SliderValue.Text = tostring(defaultValue)
+    SliderValue.TextColor3 = Color3.fromRGB(100, 150, 255)
+    SliderValue.TextSize = 14
+    SliderValue.TextXAlignment = Enum.TextXAlignment.Right
+    
+    local SliderDesc = Instance.new("TextLabel")
+    SliderDesc.Parent = SliderFrame
+    SliderDesc.BackgroundTransparency = 1
+    SliderDesc.Position = UDim2.new(0, 15, 0, 28)
+    SliderDesc.Size = UDim2.new(1, -30, 0, 16)
+    SliderDesc.Font = Enum.Font.Gotham
+    SliderDesc.Text = description or ""
+    SliderDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    SliderDesc.TextSize = 11
+    SliderDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Ползунок
+    local SliderTrack = Instance.new("Frame")
+    SliderTrack.Parent = SliderFrame
+    SliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    SliderTrack.BorderSizePixel = 0
+    SliderTrack.Position = UDim2.new(0, 15, 0, 55)
+    SliderTrack.Size = UDim2.new(1, -30, 0, 8)
+    
+    local SliderTrackCorner = Instance.new("UICorner")
+    SliderTrackCorner.CornerRadius = UDim.new(0, 4)
+    SliderTrackCorner.Parent = SliderTrack
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Parent = SliderTrack
+    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Position = UDim2.new(0, 0, 0, 0)
+    SliderFill.Size = UDim2.new((defaultValue - minValue) / (maxValue - minValue), 0, 1, 0)
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(0, 4)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderButton = Instance.new("TextButton")
+    SliderButton.Parent = SliderFrame
+    SliderButton.BackgroundTransparency = 1
+    SliderButton.Position = UDim2.new(0, 10, 0, 50)
+    SliderButton.Size = UDim2.new(1, -20, 0, 18)
+    SliderButton.Text = ""
+    
+    local currentValue = defaultValue
+    local dragging = false
+    
+    local function updateSlider(value)
+        currentValue = math.clamp(value, minValue, maxValue)
+        currentValue = math.floor(currentValue + 0.5) -- Округление
+        
+        local percentage = (currentValue - minValue) / (maxValue - minValue)
+        CreateTween(SliderFill, {Size = UDim2.new(percentage, 0, 1, 0)}, 0.1):Play()
+        SliderValue.Text = tostring(currentValue)
+        
+        if callback then
+            callback(currentValue)
+        end
+    end
+    
+    SliderButton.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    SliderButton.MouseMoved:Connect(function()
+        if dragging then
+            local mousePos = UserInputService:GetMouseLocation()
+            local framePos = SliderTrack.AbsolutePosition
+            local frameSize = SliderTrack.AbsoluteSize
+            
+            local relativePos = (mousePos.X - framePos.X) / frameSize.X
+            relativePos = math.clamp(relativePos, 0, 1)
+            
+            local newValue = minValue + (relativePos * (maxValue - minValue))
+            updateSlider(newValue)
+        end
+    end)
+    
+    return SliderFrame, updateSlider
+end
+
+-- ESP Функции
+local function clearESP()
+    for _, espObj in pairs(espObjects) do
+        if espObj then
+            espObj:Destroy()
+        end
+    end
+    espObjects = {}
+end
+
+local function createESPBox(player)
+    if player == LocalPlayer then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    -- Создание обводки
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "SSLKinESP"
+    highlight.Adornee = character
+    highlight.FillColor = espSettings.boxColor
+    highlight.FillTransparency = 0.7
+    highlight.OutlineColor = espSettings.boxColor
+    highlight.OutlineTransparency = 0
+    highlight.Parent = character
+    
+    -- Создание BillboardGui для дополнительной информации
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "ESPInfo"
+    billboardGui.Adornee = humanoidRootPart
+    billboardGui.Size = UDim2.new(0, 200, 0, 100)
+    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+    billboardGui.Parent = Workspace
+    
+    -- Имя игрока
+    if espSettings.names then
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Parent = billboardGui
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Size = UDim2.new(1, 0, 0, 20)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = espSettings.nameColor
+        nameLabel.TextSize = 16
+        nameLabel.TextStrokeTransparency = 0
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    end
+    
+    -- Дистанция
+    if espSettings.distance then
+        local distanceLabel = Instance.new("TextLabel")
+        distanceLabel.Parent = billboardGui
+        distanceLabel.BackgroundTransparency = 1
+        distanceLabel.Size = UDim2.new(1, 0, 0, 16)
+        distanceLabel.Position = UDim2.new(0, 0, 0, 25)
+        distanceLabel.Font = Enum.Font.Gotham
+        distanceLabel.Text = "0m"
+        distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        distanceLabel.TextSize = 14
+        distanceLabel.TextStrokeTransparency = 0
+        distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        
+        -- Обновление дистанции
+        spawn(function()
+            while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
+                distanceLabel.Text = math.floor(distance) .. "m"
+                wait(0.1)
+            end
+        end)
+    end
+    
+    -- Здоровье
+    if espSettings.health then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            local healthLabel = Instance.new("TextLabel")
+            healthLabel.Parent = billboardGui
+            healthLabel.BackgroundTransparency = 1
+            healthLabel.Size = UDim2.new(1, 0, 0, 16)
+            healthLabel.Position = UDim2.new(0, 0, 0, 45)
+            healthLabel.Font = Enum.Font.Gotham
+            healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+            healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            healthLabel.TextSize = 14
+            healthLabel.TextStrokeTransparency = 0
+            healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            
+            -- Обновление здоровья
+            humanoid.HealthChanged:Connect(function()
+                if healthLabel.Parent then
+                    healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                    local healthPercent = humanoid.Health / humanoid.MaxHealth
+                    if healthPercent > 0.6 then
+                        healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    elseif healthPercent > 0.3 then
+                        healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                    else
+                        healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    end
+                end
+            end)
+        end
+    end
+    
+    -- Трейсеры
+    if espSettings.tracers then
+        local line = Drawing.new("Line")
+        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+        line.Color = espSettings.tracerColor
+        line.Thickness = 2
+        line.Transparency = 1
+        line.Visible = true
+        
+        -- Обновление трейсера
+        spawn(function()
+            while line and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    line.To = Vector2.new(vector.X, vector.Y)
+                    line.Visible = true
+                else
+                    line.Visible = false
+                end
+                wait()
+            end
+            if line then
+                line:Remove()
+            end
+        end)
+        
+        table.insert(espObjects, line)
+    end
+    
+    table.insert(espObjects, highlight)
+    table.insert(espObjects, billboardGui)
+end
+
+local function updateESP()
+    clearESP()
+    
+    if espSettings.enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                createESPBox(player)
+            end
+        end
+    end
+end
+
 -- Создание вкладок
 local PlayerTab = CreateTab("Игрок", "👤", Color3.fromRGB(100, 150, 255))
 local GameTab = CreateTab("Игра", "🎮", Color3.fromRGB(255, 100, 150))
@@ -649,28 +909,71 @@ local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
 -- ВКЛАДКА ИГРОКА
 local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
 
-CreateButton(MovementSection, "Увеличить скорость", "Увеличивает скорость ходьбы в 2 раза", function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = 32
+-- Скорость ходьбы
+CreateToggle(MovementSection, "Скорость ходьбы", "Включить/выключить изменение скорости", false, function(state)
+    speedEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+        end
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Скорость увеличена до 32!",
+            Text = "Скорость включена!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Скорость выключена!",
             Duration = 3
         })
     end
 end)
 
-CreateButton(MovementSection, "Увеличить прыжок", "Увеличивает высоту прыжка в 2 раза", function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.JumpHeight = 14.5
+CreateSlider(MovementSection, "Значение скорости", "От 16 до 100", 16, 100, 32, function(value)
+    walkSpeed = value
+    if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end)
+
+-- Высота прыжка
+CreateToggle(MovementSection, "Высота прыжка", "Включить/выключить изменение прыжка", false, function(state)
+    jumpEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+        end
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = "Высота прыжка увеличена!",
+            Text = "Прыжок включен!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = 7.2
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Прыжок выключен!",
             Duration = 3
         })
     end
 end)
 
+CreateSlider(MovementSection, "Значение прыжка", "От 7 до 100", 7, 100, 25, function(value)
+    jumpPower = value
+    if jumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+    end
+end)
+
+-- Полёт
 CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
     if state then
         -- Включить полёт
@@ -746,6 +1049,10 @@ CreateToggle(MovementSection, "Полёт", "WASD для управления, S
     end
 end)
 
+CreateSlider(MovementSection, "Скорость полёта", "От 10 до 200", 10, 200, 50, function(value)
+    flySpeed = value
+end)
+
 -- ВКЛАДКА ИГРЫ
 local GameplaySection = CreateSection(GameTab, "🎯 Игровые функции")
 
@@ -802,120 +1109,50 @@ CreateButton(LightingSection, "Полный яркий свет", "Убирае�
     })
 end)
 
-local ESPSection = CreateSection(VisualTab, "👁 ESP")
+local ESPSection = CreateSection(VisualTab, "👁 ESP Настройки")
 
-CreateToggle(ESPSection, "ESP Игроки", "Показывает всех игроков через стены", false, function(state)
-    espEnabled = state
+CreateToggle(ESPSection, "Включить ESP", "Основной переключатель ESP", false, function(state)
+    espSettings.enabled = state
+    updateESP()
     
     if state then
-        -- Включить ESP
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local function addESP(character)
-                    if not character then return end
-                    
-                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-                    if not humanoidRootPart then return end
-                    
-                    local billboardGui = Instance.new("BillboardGui")
-                    billboardGui.Name = "PlayerESP"
-                    billboardGui.Adornee = humanoidRootPart
-                    billboardGui.Size = UDim2.new(0, 200, 0, 50)
-                    billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-                    billboardGui.Parent = Workspace
-                    
-                    local frame = Instance.new("Frame")
-                    frame.Size = UDim2.new(1, 0, 1, 0)
-                    frame.BackgroundTransparency = 0.3
-                    frame.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-                    frame.BorderSizePixel = 0
-                    frame.Parent = billboardGui
-                    
-                    local corner = Instance.new("UICorner")
-                    corner.CornerRadius = UDim.new(0, 8)
-                    corner.Parent = frame
-                    
-                    local textLabel = Instance.new("TextLabel")
-                    textLabel.Size = UDim2.new(1, 0, 1, 0)
-                    textLabel.BackgroundTransparency = 1
-                    textLabel.Text = player.Name
-                    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    textLabel.TextScaled = true
-                    textLabel.Font = Enum.Font.GothamBold
-                    textLabel.Parent = frame
-                end
-                
-                if player.Character then
-                    addESP(player.Character)
-                end
-                
-                player.CharacterAdded:Connect(addESP)
-            end
-        end
-        
-        Players.PlayerAdded:Connect(function(player)
-            if espEnabled and player ~= LocalPlayer then
-                local function addESP(character)
-                    if not character then return end
-                    
-                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-                    if not humanoidRootPart then return end
-                    
-                    local billboardGui = Instance.new("BillboardGui")
-                    billboardGui.Name = "PlayerESP"
-                    billboardGui.Adornee = humanoidRootPart
-                    billboardGui.Size = UDim2.new(0, 200, 0, 50)
-                    billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-                    billboardGui.Parent = Workspace
-                    
-                    local frame = Instance.new("Frame")
-                    frame.Size = UDim2.new(1, 0, 1, 0)
-                    frame.BackgroundTransparency = 0.3
-                    frame.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-                    frame.BorderSizePixel = 0
-                    frame.Parent = billboardGui
-                    
-                    local corner = Instance.new("UICorner")
-                    corner.CornerRadius = UDim.new(0, 8)
-                    corner.Parent = frame
-                    
-                    local textLabel = Instance.new("TextLabel")
-                    textLabel.Size = UDim2.new(1, 0, 1, 0)
-                    textLabel.BackgroundTransparency = 1
-                    textLabel.Text = player.Name
-                    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    textLabel.TextScaled = true
-                    textLabel.Font = Enum.Font.GothamBold
-                    textLabel.Parent = frame
-                end
-                
-                if player.Character then
-                    addESP(player.Character)
-                end
-                
-                player.CharacterAdded:Connect(addESP)
-            end
-        end)
-        
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
             Text = "ESP активирован!",
             Duration = 3
         })
     else
-        -- Выключить ESP
-        for _, esp in pairs(Workspace:GetChildren()) do
-            if esp.Name == "PlayerESP" then
-                esp:Destroy()
-            end
-        end
-        
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
             Text = "ESP деактивирован!",
             Duration = 3
         })
     end
+end)
+
+CreateToggle(ESPSection, "Обводка игроков", "Показывает обводку вокруг игроков", true, function(state)
+    espSettings.boxes = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Имена игроков", "Показывает имена игроков", false, function(state)
+    espSettings.names = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Дистанция", "Показывает расстояние до игроков", false, function(state)
+    espSettings.distance = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Здоровье", "Показывает здоровье игроков", false, function(state)
+    espSettings.health = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
+    espSettings.tracers = state
+    updateESP()
 end)
 
 -- ВКЛАДКА РАЗНОЕ
@@ -987,52 +1224,25 @@ local function setupNoclip()
     end)
 end
 
--- Кнопка переключения GUI
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Parent = ScreenGui
-ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 120, 255)
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Position = UDim2.new(0, 20, 0.5, -30)
-ToggleButton.Size = UDim2.new(0, 120, 0, 60)
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.Text = "SSLKin Uni"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 14
-ToggleButton.AutoButtonColor = false
+-- Обновление ESP при подключении новых игроков
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        wait(1)
+        if espSettings.enabled then
+            updateESP()
+        end
+    end)
+end)
 
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 12)
-ToggleCorner.Parent = ToggleButton
-
-local ToggleGradient = Instance.new("UIGradient")
-ToggleGradient.Parent = ToggleButton
-ToggleGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 140, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 100, 255))
-}
-ToggleGradient.Rotation = 45
-
--- События кнопок
-CloseButton.MouseButton1Click:Connect(HideGUI)
-MinimizeButton.MouseButton1Click:Connect(HideGUI)
-
-ToggleButton.MouseButton1Click:Connect(function()
-    if MainFrame.Visible then
-        HideGUI()
-    else
-        ShowGUI()
+Players.PlayerRemoving:Connect(function()
+    if espSettings.enabled then
+        updateESP()
     end
 end)
 
--- Эффекты для кнопки переключения
-ToggleButton.MouseEnter:Connect(function()
-    CreateTween(ToggleButton, {Size = UDim2.new(0, 125, 0, 65)}, 0.2):Play()
-end)
-
-ToggleButton.MouseLeave:Connect(function()
-    CreateTween(ToggleButton, {Size = UDim2.new(0, 120, 0, 60)}, 0.2):Play()
-end)
+-- Обработчики кнопок
+CloseButton.MouseButton1Click:Connect(HideGUI)
+MinimizeButton.MouseButton1Click:Connect(HideGUI)
 
 -- Горячие клавиши
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1062,9 +1272,9 @@ ShowGUI()
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
     Title = "SSLKin Uni Script",
-    Text = "Успешно загружен! Нажмите Insert для открытия/закрытия",
+    Text = "v2.1 загружен! Нажмите Insert для открытия/закрытия",
     Duration = 5
 })
 
-print("SSLKin Uni Script v2.0 загружен успешно!")
-print("Создано by SSLKin | Нажмите Insert или кнопку для открытия/закрытия")
+print("SSLKin Uni Script v2.1 загружен успешно!")
+print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
