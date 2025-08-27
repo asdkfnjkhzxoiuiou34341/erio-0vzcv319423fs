@@ -510,22 +510,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseButton
 
--- Кнопка минимизации
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Parent = HeaderFrame
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 180, 60)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Position = UDim2.new(1, -80, 0, 15)
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = "─"
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 16
-
-local MinimizeCorner = Instance.new("UICorner")
-MinimizeCorner.CornerRadius = UDim.new(0, 6)
-MinimizeCorner.Parent = MinimizeButton
+-- Кнопка минимизации удалена
 
 -- Контейнер для контента
 local ContentContainer = Instance.new("Frame")
@@ -595,7 +580,6 @@ MainContentFix2.Position = UDim2.new(0, 0, 0, 0)
 MainContentFix2.Size = UDim2.new(1, 0, 0, 8)
 
 -- Состояние GUI
-local isMinimized = false
 local originalSize = UDim2.new(0, 800, 0, 550)
 local originalPosition = UDim2.new(0.5, -400, 0.5, -275)
 
@@ -612,7 +596,6 @@ end
 -- Функции показа/скрытия GUI
 local function ShowGUI()
     MainFrame.Visible = true
-    isMinimized = false
     
     if MainFrame.Size == originalSize then
         return -- Уже открыто
@@ -639,39 +622,10 @@ local function HideGUI()
     
     hideTween.Completed:Connect(function()
         MainFrame.Visible = false
-        isMinimized = false
     end)
 end
 
-local function MinimizeGUI()
-    if isMinimized then
-        -- Развернуть
-        isMinimized = false
-        ContentContainer.Visible = true
-        
-        local expandTween = CreateTween(MainFrame, {
-            Size = originalSize,
-            Position = originalPosition
-        }, 0.4, Enum.EasingStyle.Quad)
-        
-        expandTween:Play()
-    else
-        -- Свернуть
-        isMinimized = true
-        
-        local minimizeTween = CreateTween(MainFrame, {
-            Size = UDim2.new(0, 400, 0, 60),
-            Position = UDim2.new(0.5, -200, 0.5, -30)
-        }, 0.4, Enum.EasingStyle.Quad)
-        
-        minimizeTween:Play()
-        minimizeTween.Completed:Connect(function()
-            if isMinimized then
-                ContentContainer.Visible = false
-            end
-        end)
-    end
-end
+-- Функция MinimizeGUI удалена
 
 -- Система вкладок
 local tabs = {}
@@ -1295,6 +1249,7 @@ local function CreateDropdown(parent, text, description, options, defaultOption,
             DropdownButton.Text = option
             OptionsList.Visible = false
             isOpen = false
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80) -- Возвращаем нормальный размер
             
             if callback then
                 callback(option)
@@ -2569,9 +2524,10 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
 end)
 
 local selectedConfigName = ""
-local _, configDropdown = CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
+CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
     getConfigNames(true), "", function(option)
     selectedConfigName = option or ""
+    print("Выбран конфиг:", selectedConfigName) -- Для отладки
 end)
 
 CreateButton(ConfigManagementSection, "Загрузить выбранный конфиг", "Загрузить конфиг выбранный выше", function()
@@ -2758,14 +2714,31 @@ if currentGame == "Centaura" then
             local targetPart = currentTarget.Character[aimbotTargetPart]
             if targetPart then
                 local targetPosition = targetPart.Position
-                
                 local camera = Camera
                 local currentCFrame = camera.CFrame
-                local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                 
-                -- Более плавное прицеливание
-                local lerpFactor = math.min(1 / aimbotSmoothness, 0.3) -- Ограничиваем максимальную скорость
-                camera.CFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
+                -- Проверяем что цель в разумных пределах (не слишком далеко/близко)
+                local distance = (currentCFrame.Position - targetPosition).Magnitude
+                if distance > 5 and distance < 1000 then
+                    local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+                    
+                    -- Проверяем угол поворота чтобы избежать резких движений
+                    local angle = math.acos(math.clamp(currentCFrame.LookVector:Dot(targetCFrame.LookVector), -1, 1))
+                    
+                    if angle < math.rad(90) then -- Не поворачиваем больше чем на 90 градусов
+                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.2) -- Ограничиваем скорость еще больше
+                        local newCFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
+                        
+                        -- Дополнительная проверка что новая позиция камеры валидна
+                        if newCFrame.Position.Y > currentCFrame.Position.Y - 50 then
+                            camera.CFrame = newCFrame
+                        end
+                    else
+                        currentTarget = nil -- Цель слишком далеко по углу
+                    end
+                else
+                    currentTarget = nil -- Цель слишком далеко или близко
+                end
             else
                 currentTarget = nil -- Цель потеряна
             end
@@ -2826,6 +2799,14 @@ local function connectPlayerDeath(player)
     local humanoid = player.Character:FindFirstChild("Humanoid")
     if humanoid then
         local connection = humanoid.Died:Connect(function()
+            -- Удаляем чамс сразу при смерти
+            if playerChams[player] then
+                pcall(function()
+                    playerChams[player]:Destroy()
+                end)
+                playerChams[player] = nil
+            end
+            
             wait(0.5)
             if espSettings.enabled then
                 updateESP()
@@ -2874,7 +2855,6 @@ end)
 
 -- Обработчики кнопок
 CloseButton.MouseButton1Click:Connect(HideGUI)
-MinimizeButton.MouseButton1Click:Connect(MinimizeGUI)
 
 -- Горячие клавиши
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
