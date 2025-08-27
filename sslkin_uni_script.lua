@@ -1,8 +1,8 @@
 --[[
     SSLKin Uni Script - Universal Roblox Script Hub
     Created by: SSLKin
-    Version: 3.0
-    Game-Specific Versions with Enhanced Features
+    Version: 3.1
+    Fixed ESP, Aimbot, and UI Issues
 --]]
 
 -- Защита от повторного запуска
@@ -54,15 +54,17 @@ local noFogEnabled = false
 -- Centaura специфические переменные
 local aimbotEnabled = false
 local aimbotFOV = 90
-local aimbotSmoothness = 0.2
+local aimbotSmoothness = 5
 local aimbotTargetPart = "Head"
 local aimbotVisibleOnly = true
 local aimbotTeamCheck = true
+local showFOVCircle = false
 
 -- ESP настройки
 local espSettings = {
     enabled = false,
     boxes = true,
+    chams = false,
     names = false,
     distance = false,
     health = false,
@@ -74,8 +76,12 @@ local espSettings = {
     tracerColor = Color3.fromRGB(0, 255, 0)
 }
 
--- ESP объекты
+-- ESP объекты и Drawing объекты
 local espObjects = {}
+local drawingObjects = {}
+
+-- FOV Circle
+local fovCircle = nil
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -180,7 +186,7 @@ SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Position = UDim2.new(0, 80, 0, 35)
 SubtitleLabel.Size = UDim2.new(1, -200, 0, 20)
 SubtitleLabel.Font = Enum.Font.Gotham
-SubtitleLabel.Text = currentGame == "Centaura" and "Centaura Mode v3.0" or "Universal Mode v3.0"
+SubtitleLabel.Text = currentGame == "Centaura" and "Centaura Mode v3.1" or "Universal Mode v3.1"
 SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 SubtitleLabel.TextSize = 12
 SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -286,6 +292,11 @@ MainContentFix2.BorderSizePixel = 0
 MainContentFix2.Position = UDim2.new(0, 0, 0, 0)
 MainContentFix2.Size = UDim2.new(1, 0, 0, 8)
 
+-- Состояние GUI
+local isMinimized = false
+local originalSize = UDim2.new(0, 800, 0, 550)
+local originalPosition = UDim2.new(0.5, -400, 0.5, -275)
+
 -- Анимации
 local function CreateTween(object, properties, duration, easingStyle, easingDirection)
     local tweenInfo = TweenInfo.new(
@@ -299,13 +310,18 @@ end
 -- Функции показа/скрытия GUI
 local function ShowGUI()
     MainFrame.Visible = true
+    isMinimized = false
+    
+    if MainFrame.Size == originalSize then
+        return -- Уже открыто
+    end
     
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     
     local showTween = CreateTween(MainFrame, {
-        Size = UDim2.new(0, 800, 0, 550),
-        Position = UDim2.new(0.5, -400, 0.5, -275)
+        Size = originalSize,
+        Position = originalPosition
     }, 0.6, Enum.EasingStyle.Back)
     
     showTween:Play()
@@ -321,7 +337,38 @@ local function HideGUI()
     
     hideTween.Completed:Connect(function()
         MainFrame.Visible = false
+        isMinimized = false
     end)
+end
+
+local function MinimizeGUI()
+    if isMinimized then
+        -- Развернуть
+        isMinimized = false
+        ContentContainer.Visible = true
+        
+        local expandTween = CreateTween(MainFrame, {
+            Size = originalSize,
+            Position = originalPosition
+        }, 0.4, Enum.EasingStyle.Quad)
+        
+        expandTween:Play()
+    else
+        -- Свернуть
+        isMinimized = true
+        
+        local minimizeTween = CreateTween(MainFrame, {
+            Size = UDim2.new(0, 400, 0, 60),
+            Position = UDim2.new(0.5, -200, 0.5, -30)
+        }, 0.4, Enum.EasingStyle.Quad)
+        
+        minimizeTween:Play()
+        minimizeTween.Completed:Connect(function()
+            if isMinimized then
+                ContentContainer.Visible = false
+            end
+        end)
+    end
 end
 
 -- Система вкладок
@@ -742,7 +789,13 @@ local function CreateSlider(parent, text, description, minValue, maxValue, defau
     
     local function updateSlider(value)
         currentValue = math.clamp(value, minValue, maxValue)
-        currentValue = math.floor(currentValue + 0.5) -- Округление
+        
+        -- Округление до десятых для плавности
+        if maxValue - minValue > 10 then
+            currentValue = math.floor(currentValue + 0.5)
+        else
+            currentValue = math.floor(currentValue * 10 + 0.5) / 10
+        end
         
         local percentage = (currentValue - minValue) / (maxValue - minValue)
         CreateTween(SliderFill, {Size = UDim2.new(percentage, 0, 1, 0)}, 0.1):Play()
@@ -901,34 +954,43 @@ end
 
 -- Функции ESP
 local function clearESP()
+    -- Очистка Instance объектов
     for _, espObj in pairs(espObjects) do
         if espObj and espObj.Parent then
             espObj:Destroy()
         end
     end
     espObjects = {}
+    
+    -- Очистка Drawing объектов
+    for _, drawObj in pairs(drawingObjects) do
+        if drawObj then
+            pcall(function()
+                drawObj:Remove()
+            end)
+        end
+    end
+    drawingObjects = {}
 end
 
 local function getPlayerTeam(player)
     if currentGame == "Centaura" then
-        -- В Centaura команды определяются через Team
         return player.Team
     else
-        -- Универсальная проверка команды
         return player.Team
     end
 end
 
 local function isPlayerEnemy(player)
     if not espSettings.teamCheck then
-        return true -- Показывать всех если проверка команды отключена
+        return true
     end
     
     local localTeam = getPlayerTeam(LocalPlayer)
     local playerTeam = getPlayerTeam(player)
     
     if not localTeam or not playerTeam then
-        return true -- Если команда не определена, считаем врагом
+        return true
     end
     
     return localTeam ~= playerTeam
@@ -946,8 +1008,8 @@ local function createESPBox(player)
     local isEnemy = isPlayerEnemy(player)
     local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
     
-    -- Создание обводки
-    if espSettings.boxes then
+    -- Создание чамсов (обводка)
+    if espSettings.chams then
         local highlight = Instance.new("Highlight")
         highlight.Name = "SSLKinESP"
         highlight.Adornee = character
@@ -959,6 +1021,48 @@ local function createESPBox(player)
         table.insert(espObjects, highlight)
     end
     
+    -- Создание квадратов (Drawing)
+    if espSettings.boxes then
+        local box = Drawing.new("Square")
+        box.Visible = false
+        box.Color = espColor
+        box.Thickness = 2
+        box.Transparency = 1
+        box.Filled = false
+        
+        table.insert(drawingObjects, box)
+        
+        -- Обновление квадрата
+        spawn(function()
+            while box and character.Parent and humanoidRootPart.Parent do
+                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid then
+                        local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                        local scaleFactor = 1000 / distance
+                        local width = math.clamp(scaleFactor, 3, 15)
+                        local height = width * 1.5
+                        
+                        box.Size = Vector2.new(width, height)
+                        box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
+                        box.Visible = true
+                    else
+                        box.Visible = false
+                    end
+                else
+                    box.Visible = false
+                end
+                wait()
+            end
+            if box then
+                pcall(function()
+                    box:Remove()
+                end)
+            end
+        end)
+    end
+    
     -- Создание BillboardGui для дополнительной информации
     if espSettings.names or espSettings.distance or espSettings.health then
         local billboardGui = Instance.new("BillboardGui")
@@ -966,7 +1070,7 @@ local function createESPBox(player)
         billboardGui.Adornee = humanoidRootPart
         billboardGui.Size = UDim2.new(0, 200, 0, 100)
         billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-        billboardGui.AlwaysOnTop = true -- Видно через стены
+        billboardGui.AlwaysOnTop = true
         billboardGui.Parent = Workspace
         table.insert(espObjects, billboardGui)
         
@@ -1056,9 +1160,11 @@ local function createESPBox(player)
         line.Transparency = 1
         line.Visible = true
         
+        table.insert(drawingObjects, line)
+        
         -- Обновление трейсера
         spawn(function()
-            while line and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+            while line and character.Parent and humanoidRootPart.Parent do
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
                     line.To = Vector2.new(vector.X, vector.Y)
@@ -1069,11 +1175,11 @@ local function createESPBox(player)
                 wait()
             end
             if line then
-                line:Remove()
+                pcall(function()
+                    line:Remove()
+                end)
             end
         end)
-        
-        table.insert(espObjects, line)
     end
 end
 
@@ -1086,6 +1192,35 @@ local function updateESP()
                 createESPBox(player)
             end
         end
+    end
+end
+
+-- FOV Circle для аимбота
+local function createFOVCircle()
+    if fovCircle then
+        pcall(function()
+            fovCircle:Remove()
+        end)
+    end
+    
+    if currentGame == "Centaura" and showFOVCircle then
+        fovCircle = Drawing.new("Circle")
+        fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        fovCircle.Radius = aimbotFOV
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Thickness = 2
+        fovCircle.Transparency = 0.7
+        fovCircle.Filled = false
+        fovCircle.Visible = true
+        
+        -- Обновление позиции и размера круга
+        spawn(function()
+            while fovCircle and showFOVCircle do
+                fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                fovCircle.Radius = aimbotFOV
+                wait()
+            end
+        end)
     end
 end
 
@@ -1136,7 +1271,6 @@ if currentGame == "Centaura" then
         if LocalPlayer.Character then
             local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
             if tool then
-                -- Если оружие в руках, отключаем полёт и noclip
                 if isFlying then
                     isFlying = false
                     if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -1154,7 +1288,6 @@ if currentGame == "Centaura" then
         end
     end
     
-    -- Проверяем каждую секунду
     spawn(function()
         while true do
             checkWeaponEquipped()
@@ -1231,7 +1364,6 @@ end)
 if currentGame ~= "Centaura" then
     CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
         if state then
-            -- Включить полёт
             local character = LocalPlayer.Character
             if not character then return end
             
@@ -1286,7 +1418,6 @@ if currentGame ~= "Centaura" then
                 Duration = 3
             })
         else
-            -- Выключить полёт
             isFlying = false
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
@@ -1373,19 +1504,41 @@ if currentGame == "Centaura" and AimbotTab then
         end
     end)
     
-    CreateSlider(AimbotMainSection, "FOV (поле зрения)", "Радиус захвата цели в градусах", 30, 180, 90, function(value)
+    CreateSlider(AimbotMainSection, "FOV (поле зрения)", "Радиус захвата цели в пикселях", 30, 300, 90, function(value)
         aimbotFOV = value
+        if fovCircle then
+            fovCircle.Radius = value
+        end
     end)
     
-    CreateSlider(AimbotMainSection, "Плавность", "Скорость наведения (чем меньше, тем плавнее)", 0.1, 1, 0.2, function(value)
+    CreateSlider(AimbotMainSection, "Плавность", "Скорость наведения (чем больше, тем плавнее)", 1, 20, 5, function(value)
         aimbotSmoothness = value
+    end)
+    
+    CreateToggle(AimbotMainSection, "Показать FOV круг", "Отображение круга прицеливания", false, function(state)
+        showFOVCircle = state
+        createFOVCircle()
     end)
     
     local AimbotTargetSection = CreateSection(AimbotTab, "🎯 Настройки прицеливания")
     
     CreateDropdown(AimbotTargetSection, "Часть тела", "Выберите часть тела для прицеливания", 
-        {"Head", "Torso", "HumanoidRootPart"}, "Head", function(option)
-        aimbotTargetPart = option
+        {"Head", "Neck", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}, "Head", function(option)
+        if option == "Neck" then
+            aimbotTargetPart = "Head" -- Шея это часть головы в Roblox
+        elseif option == "Torso" then
+            aimbotTargetPart = "Torso"
+        elseif option == "Left Arm" then
+            aimbotTargetPart = "Left Arm"
+        elseif option == "Right Arm" then
+            aimbotTargetPart = "Right Arm"
+        elseif option == "Left Leg" then
+            aimbotTargetPart = "Left Leg"
+        elseif option == "Right Leg" then
+            aimbotTargetPart = "Right Leg"
+        else
+            aimbotTargetPart = "Head"
+        end
     end)
     
     CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
@@ -1459,8 +1612,13 @@ CreateToggle(ESPSection, "Включить ESP", "Основной перекл�
     end
 end)
 
-CreateToggle(ESPSection, "Обводка игроков", "Показывает обводку вокруг игроков", true, function(state)
+CreateToggle(ESPSection, "Квадраты", "Показывает квадраты вокруг игроков", true, function(state)
     espSettings.boxes = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Чамсы (обводка)", "Показывает обводку через стены", false, function(state)
+    espSettings.chams = state
     updateESP()
 end)
 
@@ -1603,13 +1761,13 @@ if currentGame == "Centaura" then
                 local currentCFrame = camera.CFrame
                 local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                 
-                camera.CFrame = currentCFrame:Lerp(targetCFrame, aimbotSmoothness)
+                camera.CFrame = currentCFrame:Lerp(targetCFrame, 1 / aimbotSmoothness)
             end
         end
     end)
 end
 
--- Обновление ESP при подключении новых игроков
+-- Мониторинг игроков для ESP
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
         wait(1)
@@ -1625,9 +1783,29 @@ Players.PlayerRemoving:Connect(function()
     end
 end)
 
+-- Мониторинг смерти игроков
+spawn(function()
+    while true do
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Character then
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.Died:Connect(function()
+                        wait(0.5)
+                        if espSettings.enabled then
+                            updateESP()
+                        end
+                    end)
+                end
+            end
+        end
+        wait(5)
+    end
+end)
+
 -- Обработчики кнопок
 CloseButton.MouseButton1Click:Connect(HideGUI)
-MinimizeButton.MouseButton1Click:Connect(HideGUI)
+MinimizeButton.MouseButton1Click:Connect(MinimizeGUI)
 
 -- Горячие клавиши
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1657,9 +1835,9 @@ ShowGUI()
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
     Title = "SSLKin Uni Script",
-    Text = string.format("%s Mode v3.0 загружен! Insert для открытия/закрытия", currentGame),
+    Text = string.format("%s Mode v3.1 загружен! Insert для открытия/закрытия", currentGame),
     Duration = 5
 })
 
-print(string.format("SSLKin Uni Script v3.0 загружен в режиме %s!", currentGame))
+print(string.format("SSLKin Uni Script v3.1 загружен в режиме %s!", currentGame))
 print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")

@@ -1,6 +1,6 @@
 --[[
     SSLKin Uni Script Loader
-    Simple animated loader
+    Fixed minimize animations
     Created by: SSLKin
 --]]
 
@@ -148,7 +148,7 @@ VersionLabel.BackgroundTransparency = 1
 VersionLabel.Position = UDim2.new(0, 30, 1, -30)
 VersionLabel.Size = UDim2.new(1, -60, 0, 20)
 VersionLabel.Font = Enum.Font.Gotham
-VersionLabel.Text = "v2.1 • Created by SSLKin • Universal Script Hub"
+VersionLabel.Text = "v3.1 • Created by SSLKin • Universal Script Hub"
 VersionLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
 VersionLabel.TextSize = 10
 VersionLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -239,7 +239,7 @@ spawn(function()
     
     wait(0.5)
     
-    -- Анимация исчезновения
+    -- Анимация исчезновения (правильная)
     local hideTween = TweenService:Create(
         LoadingContainer,
         TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
