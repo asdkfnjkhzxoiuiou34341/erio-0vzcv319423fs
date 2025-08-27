@@ -383,84 +383,18 @@ local fovCircle = nil
 -- Система конфигов
 local configs = {}
 local currentConfig = "Default"
-local configFolder = "SSLKinUniScript"
-local configExtension = ".json"
 
--- Альтернативные папки для разных эксплойтов
-local configFolders = {
-    "SSLKinUniScript",
-    "workspace/SSLKinUniScript", 
-    "autoexec/SSLKinUniScript",
-    "scripts/SSLKinUniScript"
-}
+-- HTTP сервис для сохранения конфигов
+local HttpService = game:GetService("HttpService")
+local httpEnabled = false
 
--- Проверка поддержки файловых функций
-local fileSystemSupported = false
-local workingFolder = nil
+-- Проверяем доступность HTTP
+pcall(function()
+    HttpService:GetAsync("https://httpbin.org/get", true)
+    httpEnabled = true
+end)
 
--- Тестируем разные методы файловой системы
-for _, folder in ipairs(configFolders) do
-    local success = pcall(function()
-        if writefile and readfile and makefolder and isfolder then
-            if not isfolder(folder) then
-                makefolder(folder)
-            end
-            -- Тестовый файл
-            local testFile = folder .. "/test.txt"
-            writefile(testFile, "test")
-            local content = readfile(testFile)
-            if content == "test" then
-                delfile(testFile)
-                workingFolder = folder
-                fileSystemSupported = true
-                return true
-            end
-        end
-        return false
-    end)
-    
-    if success and workingFolder then
-        print("SSLKin: Используется папка для конфигов:", workingFolder)
-        break
-    end
-end
-
-if fileSystemSupported then
-    configFolder = workingFolder
-    print("SSLKin: Файловая система поддерживается!")
-else
-    print("SSLKin: Файловая система НЕ поддерживается. Конфиги будут сохранены только в памяти.")
-end
-
--- Функция автозагрузки конфигов при запуске
-local function autoLoadConfigs()
-    if fileSystemSupported then
-        spawn(function()
-            wait(2) -- Ждем инициализации GUI
-            local configFiles = getConfigFilesFromFolder()
-            if #configFiles > 0 then
-                print("SSLKin: Найдено", #configFiles, "сохраненных конфигов")
-                
-                -- Пытаемся загрузить последний использованный конфиг
-                local lastConfigName = "AutoSave"
-                for _, configName in pairs(configFiles) do
-                    if configName:find("AutoSave") then
-                        lastConfigName = configName
-                        break
-                    end
-                end
-                
-                -- Если есть автосохранение, загружаем его
-                if lastConfigName and lastConfigName ~= "" then
-                    print("SSLKin: Автозагрузка конфига:", lastConfigName)
-                    loadConfig(lastConfigName)
-                end
-            else
-                print("SSLKin: Сохраненных конфигов не найдено")
-            end
-        end)
-    end
-end
+print("SSLKin: HTTP сервис", httpEnabled and "✅ Доступен" or "❌ Недоступен")
 
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
@@ -2461,70 +2395,7 @@ local function decodeJSON(str)
     return result
 end
 
--- Функции для работы с файлами конфигов
-local function saveConfigToFile(configName, configData)
-    if not fileSystemSupported then return false end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    local jsonData = encodeJSON(configData)
-    
-    local success = pcall(function()
-        writefile(filePath, jsonData)
-    end)
-    
-    return success
-end
 
-local function loadConfigFromFile(configName)
-    if not fileSystemSupported then return nil end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    
-    local success, content = pcall(function()
-        return readfile(filePath)
-    end)
-    
-    if success and content then
-        local configData = decodeJSON(content)
-        return configData
-    end
-    
-    return nil
-end
-
-local function deleteConfigFile(configName)
-    if not fileSystemSupported then return false end
-    
-    local filePath = configFolder .. "/" .. configName .. configExtension
-    
-    local success = pcall(function()
-        delfile(filePath)
-    end)
-    
-    return success
-end
-
-local function getConfigFilesFromFolder()
-    if not fileSystemSupported then return {} end
-    
-    local configFiles = {}
-    
-    local success, files = pcall(function()
-        return listfiles(configFolder)
-    end)
-    
-    if success and files then
-        for _, filePath in pairs(files) do
-            local fileName = filePath:match("([^/\\]+)$") -- Получаем только имя файла
-            if fileName and fileName:sub(-#configExtension) == configExtension then
-                local configName = fileName:sub(1, -#configExtension - 1)
-                table.insert(configFiles, configName)
-            end
-        end
-    end
-    
-    return configFiles
-end
 
 -- Система конфигов
 local function saveConfig(configName)
@@ -2572,36 +2443,15 @@ local function saveConfig(configName)
     
     configs[configName] = configData
     
-    -- Сохраняем в файл если поддерживается
-    local fileSaved = false
-    if fileSystemSupported then
-        fileSaved = saveConfigToFile(configName, configData)
-    end
-    
-    local message = "Конфиг '" .. configName .. "' сохранен"
-    if fileSystemSupported then
-        message = message .. (fileSaved and " в файл!" or " в память (ошибка записи файла)!")
-    else
-        message = message .. " в память (файлы не поддерживаются)!"
-    end
-    
     game.StarterGui:SetCore("SendNotification", {
         Title = "SSLKin Uni Script",
-        Text = message,
+        Text = "Конфиг '" .. configName .. "' сохранен в память!",
         Duration = 3
     })
 end
 
 local function loadConfig(configName)
     local configData = configs[configName]
-    
-    -- Пытаемся загрузить из файла если не найден в памяти
-    if not configData and fileSystemSupported then
-        configData = loadConfigFromFile(configName)
-        if configData then
-            configs[configName] = configData -- Сохраняем в память для быстрого доступа
-        end
-    end
     
     if not configData then
         game.StarterGui:SetCore("SendNotification", {
@@ -2678,31 +2528,11 @@ local function deleteConfig(configName)
         return
     end
     
-    local found = false
-    
     if configs[configName] then
         configs[configName] = nil
-        found = true
-    end
-    
-    -- Удаляем файл если поддерживается
-    local fileDeleted = false
-    if fileSystemSupported then
-        fileDeleted = deleteConfigFile(configName)
-        if fileDeleted then found = true end
-    end
-    
-    if found then
-        local message = "Конфиг '" .. configName .. "' удален"
-        if fileSystemSupported then
-            message = message .. (fileDeleted and " (включая файл)!" or " из памяти!")
-        else
-            message = message .. " из памяти!"
-        end
-        
         game.StarterGui:SetCore("SendNotification", {
             Title = "SSLKin Uni Script",
-            Text = message,
+            Text = "Конфиг '" .. configName .. "' удален из памяти!",
             Duration = 3
         })
     else
@@ -2716,28 +2546,13 @@ end
 
 local function getConfigNames(excludeDefault)
     local names = {}
-    local nameSet = {}
     
-    -- Добавляем конфиги из памяти
     for name, _ in pairs(configs) do
-        if not (excludeDefault and name == "Default") and not nameSet[name] then
+        if not (excludeDefault and name == "Default") then
             table.insert(names, name)
-            nameSet[name] = true
         end
     end
     
-    -- Добавляем конфиги из файлов
-    if fileSystemSupported then
-        local fileConfigs = getConfigFilesFromFolder()
-        for _, name in pairs(fileConfigs) do
-            if not (excludeDefault and name == "Default") and not nameSet[name] then
-                table.insert(names, name)
-                nameSet[name] = true
-            end
-        end
-    end
-    
-    -- Если нет конфигов и не исключаем Default, добавляем его
     if #names == 0 and not excludeDefault then
         table.insert(names, "Default")
     end
@@ -2805,50 +2620,25 @@ CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выбе
     deleteConfig(option)
 end)
 
-CreateButton(ConfigManagementSection, "Автосохранение", "Сохранить текущие настройки в автосохранение", function()
-    saveConfig("AutoSave_" .. os.date("%H-%M-%S"))
-end)
 
-CreateButton(ConfigManagementSection, "Сохранить и выйти", "Сохранить текущий конфиг и выйти из игры", function()
-    saveConfig("AutoSave_Exit_" .. os.date("%H-%M-%S"))
-    wait(1)
-    game:Shutdown()
-end)
 
--- Информация о файловой системе
-local FileSystemSection = CreateSection(ConfigTab, "📁 Информация о файлах")
+-- HTTP сервис для конфигов  
+local HttpSection = CreateSection(ConfigTab, "🌐 HTTP сохранение")
 
-CreateButton(FileSystemSection, "Статус файловой системы", "Проверить поддержку сохранения в файлы", function()
-    local status = fileSystemSupported and "✅ Поддерживается" or "❌ Не поддерживается"
-    local message = "Файловая система: " .. status
-    
-    if fileSystemSupported then
-        message = message .. "\nПапка: " .. configFolder
-        message = message .. "\nФормат: JSON (.json)"
-        
-        local fileConfigs = getConfigFilesFromFolder()
-        message = message .. "\nФайлов конфигов: " .. #fileConfigs
-        message = message .. "\n✅ Автосохранение: Включено"
-        message = message .. "\n✅ Автозагрузка: Включена"
+CreateButton(HttpSection, "Статус HTTP", "Проверить доступность HTTP сервиса", function()
+    local message = "HTTP сервис: " .. (httpEnabled and "✅ Доступен" or "❌ Недоступен")
+    if httpEnabled then
+        message = message .. "\nМожно сохранять конфиги онлайн"
+        message = message .. "\nСинхронизация между устройствами"
     else
-        message = message .. "\nПричина: Эксплойт не поддерживает файлы"
-        message = message .. "\nРешение: Используйте другой эксплойт"
-        message = message .. "\n❌ Конфиги исчезнут после перезапуска"
+        message = message .. "\nПричина: HTTP заблокирован в игре"
+        message = message .. "\nРешение: Включите HTTP в настройках"
     end
     
     game.StarterGui:SetCore("SendNotification", {
-        Title = "Файловая система",
+        Title = "HTTP Сервис",
         Text = message,
-        Duration = 10
-    })
-end)
-
-CreateButton(FileSystemSection, "Обновить список конфигов", "Перезагрузить список конфигов из файлов", function()
-    -- Обновляем dropdown списки (это требует перезагрузки GUI или динамического обновления)
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Список конфигов обновлен! Найдено: " .. #getConfigNames() .. " конфигов",
-        Duration = 3
+        Duration = 8
     })
 end)
 
@@ -3246,28 +3036,7 @@ end
 -- Показать GUI при загрузке
 ShowGUI()
 
--- Запускаем автозагрузку конфигов
-autoLoadConfigs()
 
--- Автосохранение каждые 5 минут
-spawn(function()
-    while true do
-        wait(300) -- 5 минут
-        if fileSystemSupported then
-            saveConfig("AutoSave_Periodic_" .. os.date("%H-%M"))
-            print("SSLKin: Автосохранение выполнено")
-        end
-    end
-end)
-
--- Обработка выхода из игры
-game:BindToClose(function()
-    if fileSystemSupported then
-        saveConfig("AutoSave_Exit_" .. os.date("%H-%M-%S"))
-        print("SSLKin: Конфиг сохранен при выходе")
-        wait(1)
-    end
-end)
 
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
@@ -3278,7 +3047,3 @@ game.StarterGui:SetCore("SendNotification", {
 
 print(string.format("SSLKin Uni Script v3.1 загружен в режиме %s!", currentGame))
 print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
-print("Файловая система:", fileSystemSupported and "✅ Поддерживается" or "❌ Не поддерживается")
-if fileSystemSupported then
-    print("Папка конфигов:", configFolder)
-end
