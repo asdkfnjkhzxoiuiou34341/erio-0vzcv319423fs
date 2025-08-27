@@ -344,6 +344,8 @@ local aimbotTargetPart = "Head"
 local aimbotVisibleOnly = true
 local aimbotTeamCheck = true
 local showFOVCircle = false
+local aimbotPrediction = false
+local aimbotPredictionStrength = 1.0
 
 -- ESP настройки
 local espSettings = {
@@ -353,12 +355,21 @@ local espSettings = {
     names = false,
     distance = false,
     health = false,
+    healthBar = false,
     tracers = false,
     teamCheck = true,
     enemyColor = Color3.fromRGB(255, 0, 0),
     allyColor = Color3.fromRGB(0, 255, 0),
     nameColor = Color3.fromRGB(255, 255, 255),
-    tracerColor = Color3.fromRGB(0, 255, 0)
+    tracerColor = Color3.fromRGB(0, 255, 0),
+    -- Настройки HP бара
+    healthBarPosition = "Top", -- Top, Bottom, Left, Right
+    healthBarSize = 80, -- Длина/ширина в процентах от размера игрока
+    healthBarThickness = 4, -- Толщина полоски
+    healthBarBackground = Color3.fromRGB(60, 60, 60),
+    healthBarForeground = Color3.fromRGB(0, 255, 0),
+    healthBarLowHealth = Color3.fromRGB(255, 255, 0),
+    healthBarCriticalHealth = Color3.fromRGB(255, 0, 0)
 }
 
 -- ESP объекты и Drawing объекты
@@ -1431,7 +1442,7 @@ local function createESPBox(player)
     
     -- Чамсы обрабатываются отдельно через updatePlayerChams
     
-    -- Создание квадратов (Drawing)
+    -- Создание квадратов (Drawing) - оптимизированная версия
     if espSettings.boxes then
         local box = Drawing.new("Square")
         box.Visible = false
@@ -1442,8 +1453,9 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, box)
         
-        -- Обновление квадрата
+        -- Оптимизированное обновление квадрата (60 FPS вместо каждого кадра)
         spawn(function()
+            local updateRate = 1/60 -- 60 FPS для плавности
             while box and character.Parent and humanoidRootPart.Parent do
                 if espSettings.enabled and espSettings.boxes then
                     local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
@@ -1467,11 +1479,122 @@ local function createESPBox(player)
                 else
                     box.Visible = false
                 end
-                wait()
+                wait(updateRate) -- Фиксированная частота обновления
             end
             if box then
                 pcall(function()
                     box:Remove()
+                end)
+            end
+        end)
+    end
+    
+    -- Создание HP бара (Drawing)
+    if espSettings.healthBar then
+        local healthBarBg = Drawing.new("Square")
+        local healthBarFill = Drawing.new("Square")
+        
+        -- Настройка фонового бара
+        healthBarBg.Visible = false
+        healthBarBg.Color = espSettings.healthBarBackground
+        healthBarBg.Thickness = 1
+        healthBarBg.Transparency = 1
+        healthBarBg.Filled = true
+        
+        -- Настройка заполнения бара
+        healthBarFill.Visible = false
+        healthBarFill.Color = espSettings.healthBarForeground
+        healthBarFill.Thickness = 0
+        healthBarFill.Transparency = 1
+        healthBarFill.Filled = true
+        
+        table.insert(drawingObjects, healthBarBg)
+        table.insert(drawingObjects, healthBarFill)
+        
+        -- Обновление HP бара
+        spawn(function()
+            local updateRate = 1/30 -- 30 FPS для HP бара достаточно
+            while healthBarBg and healthBarFill and character.Parent and humanoidRootPart.Parent do
+                if espSettings.enabled and espSettings.healthBar then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                            local scaleFactor = 1000 / distance
+                            local playerWidth = math.clamp(scaleFactor, 8, 25)
+                            local playerHeight = playerWidth * 1.5
+                            
+                            local healthPercent = humanoid.Health / humanoid.MaxHealth
+                            
+                            -- Определяем цвет основываясь на здоровье
+                            local healthColor = espSettings.healthBarForeground
+                            if healthPercent <= 0.3 then
+                                healthColor = espSettings.healthBarCriticalHealth
+                            elseif healthPercent <= 0.6 then
+                                healthColor = espSettings.healthBarLowHealth
+                            end
+                            
+                            -- Позиционирование HP бара
+                            local barSize = (playerWidth * espSettings.healthBarSize) / 100
+                            local barThickness = espSettings.healthBarThickness
+                            local barX, barY
+                            
+                            if espSettings.healthBarPosition == "Top" then
+                                barX = vector.X - barSize/2
+                                barY = vector.Y - playerHeight/2 - barThickness - 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
+                            elseif espSettings.healthBarPosition == "Bottom" then
+                                barX = vector.X - barSize/2
+                                barY = vector.Y + playerHeight/2 + 5
+                                healthBarBg.Size = Vector2.new(barSize, barThickness)
+                                healthBarFill.Size = Vector2.new(barSize * healthPercent, barThickness)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY)
+                            elseif espSettings.healthBarPosition == "Left" then
+                                barX = vector.X - playerWidth/2 - barThickness - 5
+                                barY = vector.Y - barSize/2
+                                healthBarBg.Size = Vector2.new(barThickness, barSize)
+                                healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
+                            else -- Right
+                                barX = vector.X + playerWidth/2 + 5
+                                barY = vector.Y - barSize/2
+                                healthBarBg.Size = Vector2.new(barThickness, barSize)
+                                healthBarFill.Size = Vector2.new(barThickness, barSize * healthPercent)
+                                healthBarBg.Position = Vector2.new(barX, barY)
+                                healthBarFill.Position = Vector2.new(barX, barY + barSize * (1 - healthPercent))
+                            end
+                            
+                            healthBarFill.Color = healthColor
+                            healthBarBg.Visible = true
+                            healthBarFill.Visible = true
+                        else
+                            healthBarBg.Visible = false
+                            healthBarFill.Visible = false
+                        end
+                    else
+                        healthBarBg.Visible = false
+                        healthBarFill.Visible = false
+                    end
+                else
+                    healthBarBg.Visible = false
+                    healthBarFill.Visible = false
+                end
+                wait(updateRate)
+            end
+            if healthBarBg then
+                pcall(function()
+                    healthBarBg:Remove()
+                end)
+            end
+            if healthBarFill then
+                pcall(function()
+                    healthBarFill:Remove()
                 end)
             end
         end)
@@ -1576,23 +1699,28 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, line)
         
-        -- Обновление трейсера
+        -- Оптимизированное обновление трейсера
         spawn(function()
-            while line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers do
-                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-                if onScreen then
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid and humanoid.Health > 0 then
-                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        line.To = Vector2.new(vector.X, vector.Y)
-                        line.Visible = true
+            local updateRate = 1/60 -- 60 FPS для плавности трейсеров
+            while line and character.Parent and humanoidRootPart.Parent do
+                if espSettings.enabled and espSettings.tracers then
+                    local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                    if onScreen then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                            line.To = Vector2.new(vector.X, vector.Y)
+                            line.Visible = true
+                        else
+                            line.Visible = false
+                        end
                     else
                         line.Visible = false
                     end
                 else
                     line.Visible = false
                 end
-                wait()
+                wait(updateRate)
             end
             if line then
                 pcall(function()
@@ -2010,6 +2138,7 @@ if currentGame == "Centaura" and AimbotTab then
         else
             aimbotTargetPart = "Head"
         end
+        print("Выбрана часть тела для аимбота:", aimbotTargetPart) -- Для отладки
     end)
     
     CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
@@ -2018,6 +2147,16 @@ if currentGame == "Centaura" and AimbotTab then
     
     CreateToggle(AimbotTargetSection, "Проверка команды", "Не прицеливаться на союзников", true, function(state)
         aimbotTeamCheck = state
+    end)
+    
+    local AimbotPredictionSection = CreateSection(AimbotTab, "🚀 Предикт движения")
+    
+    CreateToggle(AimbotPredictionSection, "Предикт движения", "Прицеливание с упреждением по движущимся целям", false, function(state)
+        aimbotPrediction = state
+    end)
+    
+    CreateSlider(AimbotPredictionSection, "Сила предикта", "Насколько сильно упреждать движение (0.1-3.0)", 0.1, 3.0, 1.0, function(value)
+        aimbotPredictionStrength = value
     end)
 end
 
@@ -2108,6 +2247,11 @@ CreateToggle(ESPSection, "Здоровье", "Показывает здоров�
     updateESP()
 end)
 
+CreateToggle(ESPSection, "HP полоска", "Показывает здоровье в виде полоски", false, function(state)
+    espSettings.healthBar = state
+    updateESP()
+end)
+
 CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
     espSettings.tracers = state
     updateESP()
@@ -2115,6 +2259,24 @@ end)
 
 CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
     espSettings.teamCheck = state
+    updateESP()
+end)
+
+local HealthBarSection = CreateSection(VisualTab, "💖 Настройки HP полоски")
+
+CreateDropdown(HealthBarSection, "Позиция HP бара", "Где отображать полоску здоровья", 
+    {"Top", "Bottom", "Left", "Right"}, "Top", function(option)
+    espSettings.healthBarPosition = option
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 120, 80, function(value)
+    espSettings.healthBarSize = value
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 2, 8, 4, function(value)
+    espSettings.healthBarThickness = value
     updateESP()
 end)
 
@@ -2311,8 +2473,12 @@ local function saveConfig(configName)
             names = espSettings.names,
             distance = espSettings.distance,
             health = espSettings.health,
+            healthBar = espSettings.healthBar,
             tracers = espSettings.tracers,
-            teamCheck = espSettings.teamCheck
+            teamCheck = espSettings.teamCheck,
+            healthBarPosition = espSettings.healthBarPosition,
+            healthBarSize = espSettings.healthBarSize,
+            healthBarThickness = espSettings.healthBarThickness
         }
     }
     
@@ -2325,6 +2491,8 @@ local function saveConfig(configName)
         configData.aimbotVisibleOnly = aimbotVisibleOnly
         configData.aimbotTeamCheck = aimbotTeamCheck
         configData.showFOVCircle = showFOVCircle
+        configData.aimbotPrediction = aimbotPrediction
+        configData.aimbotPredictionStrength = aimbotPredictionStrength
     end
     
     configs[configName] = configData
@@ -2390,8 +2558,12 @@ local function loadConfig(configName)
         espSettings.names = configData.espSettings.names or false
         espSettings.distance = configData.espSettings.distance or false
         espSettings.health = configData.espSettings.health or false
+        espSettings.healthBar = configData.espSettings.healthBar or false
         espSettings.tracers = configData.espSettings.tracers or false
         espSettings.teamCheck = configData.espSettings.teamCheck or true
+        espSettings.healthBarPosition = configData.espSettings.healthBarPosition or "Top"
+        espSettings.healthBarSize = configData.espSettings.healthBarSize or 80
+        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 4
         updateESP()
     end
     
@@ -2404,6 +2576,8 @@ local function loadConfig(configName)
         aimbotVisibleOnly = configData.aimbotVisibleOnly or true
         aimbotTeamCheck = configData.aimbotTeamCheck or true
         showFOVCircle = configData.showFOVCircle or false
+        aimbotPrediction = configData.aimbotPrediction or false
+        aimbotPredictionStrength = configData.aimbotPredictionStrength or 1.0
         createFOVCircle()
     end
     
@@ -2524,8 +2698,16 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
 end)
 
 local selectedConfigName = ""
+local function refreshConfigDropdown()
+    local configNames = getConfigNames(true)
+    if #configNames > 0 then
+        selectedConfigName = configNames[1] -- Устанавливаем первый конфиг по умолчанию
+    end
+    return configNames
+end
+
 CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
-    getConfigNames(true), "", function(option)
+    refreshConfigDropdown(), selectedConfigName, function(option)
     selectedConfigName = option or ""
     print("Выбран конфиг:", selectedConfigName) -- Для отладки
 end)
@@ -2647,23 +2829,43 @@ local function setupNoclip()
     end
 end
 
--- Aimbot для Centaura (оптимизированный)
+-- Aimbot для Centaura (улучшенный с предиктом)
 if currentGame == "Centaura" then
     local lastTargetCheck = 0
     local currentTarget = nil
-    local targetCheckInterval = 0.1 -- Проверяем цели каждые 100мс вместо каждого кадра
+    local targetCheckInterval = 0.08 -- Проверяем цели каждые 80мс для лучшей отзывчивости
+    local playerVelocities = {} -- Отслеживание скорости игроков для предикта
     
     local function getClosestEnemy()
         local closestPlayer = nil
         local shortestDistance = math.huge
         
         for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(aimbotTargetPart) then
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                -- Проверяем что у игрока есть нужная часть тела
+                local targetPart = nil
+                if aimbotTargetPart == "Head" then
+                    targetPart = player.Character:FindFirstChild("Head")
+                elseif aimbotTargetPart == "Torso" then
+                    targetPart = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+                elseif aimbotTargetPart == "Left Arm" then
+                    targetPart = player.Character:FindFirstChild("Left Arm") or player.Character:FindFirstChild("LeftUpperArm")
+                elseif aimbotTargetPart == "Right Arm" then
+                    targetPart = player.Character:FindFirstChild("Right Arm") or player.Character:FindFirstChild("RightUpperArm")
+                elseif aimbotTargetPart == "Left Leg" then
+                    targetPart = player.Character:FindFirstChild("Left Leg") or player.Character:FindFirstChild("LeftUpperLeg")
+                elseif aimbotTargetPart == "Right Leg" then
+                    targetPart = player.Character:FindFirstChild("Right Leg") or player.Character:FindFirstChild("RightUpperLeg")
+                end
+                
+                if not targetPart then
+                    continue -- Пропускаем игрока если нет нужной части тела
+                end
+                
                 if aimbotTeamCheck and not isPlayerEnemy(player) then
                     continue
                 end
                 
-                local targetPart = player.Character[aimbotTargetPart]
                 local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
@@ -2671,12 +2873,13 @@ if currentGame == "Centaura" then
                     
                     if distance < aimbotFOV and distance < shortestDistance then
                         if aimbotVisibleOnly then
-                            -- Оптимизированный raycast - только для ближайшей цели
+                            -- Улучшенный raycast с большей точностью
                             local raycastParams = RaycastParams.new()
                             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
                             raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
                             
-                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 500, raycastParams)
+                            local direction = (targetPart.Position - Camera.CFrame.Position).Unit
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, direction * 1000, raycastParams)
                             
                             if not raycastResult then
                                 closestPlayer = player
@@ -2694,6 +2897,48 @@ if currentGame == "Centaura" then
         return closestPlayer
     end
     
+    -- Функция для предикта движения
+    local function predictTargetPosition(player, targetPart)
+        if not aimbotPrediction or not playerVelocities[player] then
+            return targetPart.Position
+        end
+        
+        local velocity = playerVelocities[player]
+        local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
+        local bulletTime = distance / 400 -- Примерная скорость пули в Centaura
+        
+        -- Предиктим позицию с учетом скорости и силы предикта
+        local predictedPosition = targetPart.Position + (velocity * bulletTime * aimbotPredictionStrength)
+        return predictedPosition
+    end
+    
+    -- Отслеживание скорости игроков
+    spawn(function()
+        while true do
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local currentPos = player.Character.HumanoidRootPart.Position
+                    if playerVelocities[player] and playerVelocities[player].lastPos then
+                        local deltaTime = 0.1
+                        local velocity = (currentPos - playerVelocities[player].lastPos) / deltaTime
+                        playerVelocities[player] = {
+                            velocity = velocity,
+                            lastPos = currentPos
+                        }
+                    else
+                        playerVelocities[player] = {
+                            velocity = Vector3.new(0, 0, 0),
+                            lastPos = currentPos
+                        }
+                    end
+                else
+                    playerVelocities[player] = nil
+                end
+            end
+            wait(0.1)
+        end
+    end)
+    
     -- Оптимизированная система аимбота
     RunService.Heartbeat:Connect(function()
         if not aimbotEnabled then
@@ -2710,27 +2955,41 @@ if currentGame == "Centaura" then
         end
         
         -- Применяем прицеливание к текущей цели
-        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(aimbotTargetPart) then
-            local targetPart = currentTarget.Character[aimbotTargetPart]
+        if currentTarget and currentTarget.Character then
+            local targetPart = nil
+            if aimbotTargetPart == "Head" then
+                targetPart = currentTarget.Character:FindFirstChild("Head")
+            elseif aimbotTargetPart == "Torso" then
+                targetPart = currentTarget.Character:FindFirstChild("Torso") or currentTarget.Character:FindFirstChild("UpperTorso")
+            elseif aimbotTargetPart == "Left Arm" then
+                targetPart = currentTarget.Character:FindFirstChild("Left Arm") or currentTarget.Character:FindFirstChild("LeftUpperArm")
+            elseif aimbotTargetPart == "Right Arm" then
+                targetPart = currentTarget.Character:FindFirstChild("Right Arm") or currentTarget.Character:FindFirstChild("RightUpperArm")
+            elseif aimbotTargetPart == "Left Leg" then
+                targetPart = currentTarget.Character:FindFirstChild("Left Leg") or currentTarget.Character:FindFirstChild("LeftUpperLeg")
+            elseif aimbotTargetPart == "Right Leg" then
+                targetPart = currentTarget.Character:FindFirstChild("Right Leg") or currentTarget.Character:FindFirstChild("RightUpperLeg")
+            end
+            
             if targetPart then
-                local targetPosition = targetPart.Position
+                local targetPosition = predictTargetPosition(currentTarget, targetPart)
                 local camera = Camera
                 local currentCFrame = camera.CFrame
                 
-                -- Проверяем что цель в разумных пределах (не слишком далеко/близко)
+                -- Проверяем что цель в разумных пределах
                 local distance = (currentCFrame.Position - targetPosition).Magnitude
-                if distance > 5 and distance < 1000 then
+                if distance > 5 and distance < 1500 then
                     local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
                     
                     -- Проверяем угол поворота чтобы избежать резких движений
                     local angle = math.acos(math.clamp(currentCFrame.LookVector:Dot(targetCFrame.LookVector), -1, 1))
                     
-                    if angle < math.rad(90) then -- Не поворачиваем больше чем на 90 градусов
-                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.2) -- Ограничиваем скорость еще больше
+                    if angle < math.rad(120) then -- Увеличили до 120 градусов для лучшего захвата
+                        local lerpFactor = math.min(1 / aimbotSmoothness, 0.3) -- Немного увеличили максимальную скорость
                         local newCFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
                         
-                        -- Дополнительная проверка что новая позиция камеры валидна
-                        if newCFrame.Position.Y > currentCFrame.Position.Y - 50 then
+                        -- Дополнительная проверка валидности
+                        if newCFrame.Position.Y > currentCFrame.Position.Y - 100 then
                             camera.CFrame = newCFrame
                         end
                     else
@@ -2740,21 +2999,38 @@ if currentGame == "Centaura" then
                     currentTarget = nil -- Цель слишком далеко или близко
                 end
             else
-                currentTarget = nil -- Цель потеряна
+                currentTarget = nil -- Часть тела не найдена
             end
         end
     end)
+    
+    -- Очистка скоростей при выходе игроков
+    Players.PlayerRemoving:Connect(function(player)
+        playerVelocities[player] = nil
+    end)
 end
 
--- Постоянное обновление чамсов
+-- Улучшенное постоянное обновление чамсов
 spawn(function()
     while true do
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                updatePlayerChams(player)
+        if espSettings.enabled and espSettings.chams then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    updatePlayerChams(player)
+                end
             end
+        else
+            -- Если чамсы выключены, очищаем все
+            for player, cham in pairs(playerChams) do
+                if cham and cham.Parent then
+                    pcall(function()
+                        cham:Destroy()
+                    end)
+                end
+            end
+            playerChams = {}
         end
-        wait(1) -- Обновляем чамсы каждую секунду
+        wait(0.5) -- Обновляем чамсы каждые 0.5 секунды для лучшей отзывчивости
     end
 end)
 
