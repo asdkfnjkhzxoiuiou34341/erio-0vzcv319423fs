@@ -1,1684 +1,2128 @@
--- YBA HACKS MODULE
--- Модуль содержит все функции из раздела YBA Hacks из основного файла
--- Загружается автоматически при запуске основного скрипта
+--[[
+    SSLKin Uni Script Loader
+    Fixed minimize animations
+    Created by: SSLKin
+--]]
 
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- Защита от повторной загрузки
+if getgenv().SSLKinLoaderActive then
+    warn("SSLKin Loader уже активен!")
+    return
+end
+getgenv().SSLKinLoaderActive = true
 
-print("🎯 YBA HACKS MODULE: Начинаем загрузку...")
-
+-- Сервисы
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 
--- Проверяем что основные зависимости загружены
-if not _G.startNoClip or not _G.stopNoClip then
-    warn("🎯 YBA HACKS MODULE: ОШИБКА - Основные функции движения не загружены! Модуль может работать некорректно.")
+-- Создание GUI загрузки
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "SSLKinLoader"
+LoadingGui.Parent = CoreGui
+LoadingGui.ResetOnSpawn = false
+LoadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+LoadingGui.DisplayOrder = 999
+
+-- Фон загрузки с размытием
+local LoadingBackground = Instance.new("Frame")
+LoadingBackground.Name = "LoadingBackground"
+LoadingBackground.Parent = LoadingGui
+LoadingBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+LoadingBackground.BackgroundTransparency = 0.2
+LoadingBackground.BorderSizePixel = 0
+LoadingBackground.Size = UDim2.new(1, 0, 1, 0)
+
+-- Главный контейнер загрузки
+local LoadingContainer = Instance.new("Frame")
+LoadingContainer.Name = "LoadingContainer"
+LoadingContainer.Parent = LoadingBackground
+LoadingContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+LoadingContainer.BorderSizePixel = 0
+LoadingContainer.Position = UDim2.new(0.5, -250, 0.5, -100)
+LoadingContainer.Size = UDim2.new(0, 500, 0, 200)
+
+-- Обводка контейнера
+local ContainerStroke = Instance.new("UIStroke")
+ContainerStroke.Parent = LoadingContainer
+ContainerStroke.Color = Color3.fromRGB(80, 120, 255)
+ContainerStroke.Thickness = 2
+ContainerStroke.Transparency = 0.3
+
+-- Закругление углов
+local ContainerCorner = Instance.new("UICorner")
+ContainerCorner.CornerRadius = UDim.new(0, 15)
+ContainerCorner.Parent = LoadingContainer
+
+-- Градиент фона
+local ContainerGradient = Instance.new("UIGradient")
+ContainerGradient.Parent = LoadingContainer
+ContainerGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 35)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(15, 15, 25)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 40))
+}
+ContainerGradient.Rotation = 45
+
+-- Логотип
+local LogoFrame = Instance.new("Frame")
+LogoFrame.Parent = LoadingContainer
+LogoFrame.BackgroundTransparency = 1
+LogoFrame.Position = UDim2.new(0, 30, 0, 30)
+LogoFrame.Size = UDim2.new(0, 60, 0, 60)
+
+local LogoIcon = Instance.new("TextLabel")
+LogoIcon.Parent = LogoFrame
+LogoIcon.BackgroundTransparency = 1
+LogoIcon.Size = UDim2.new(1, 0, 1, 0)
+LogoIcon.Font = Enum.Font.GothamBold
+LogoIcon.Text = "🚀"
+LogoIcon.TextColor3 = Color3.fromRGB(100, 150, 255)
+LogoIcon.TextScaled = true
+
+-- Заголовок
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = LoadingContainer
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 110, 0, 40)
+TitleLabel.Size = UDim2.new(1, -140, 0, 35)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "SSLKin Uni Script"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 24
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Подзаголовок
+local SubtitleLabel = Instance.new("TextLabel")
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.Parent = LoadingContainer
+SubtitleLabel.BackgroundTransparency = 1
+SubtitleLabel.Position = UDim2.new(0, 110, 0, 75)
+SubtitleLabel.Size = UDim2.new(1, -140, 0, 20)
+SubtitleLabel.Font = Enum.Font.Gotham
+SubtitleLabel.Text = "Universal Roblox Script Hub"
+SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+SubtitleLabel.TextSize = 14
+SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Прогресс бар контейнер
+local ProgressContainer = Instance.new("Frame")
+ProgressContainer.Parent = LoadingContainer
+ProgressContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+ProgressContainer.BorderSizePixel = 0
+ProgressContainer.Position = UDim2.new(0, 30, 0, 130)
+ProgressContainer.Size = UDim2.new(1, -60, 0, 12)
+
+local ProgressContainerCorner = Instance.new("UICorner")
+ProgressContainerCorner.CornerRadius = UDim.new(0, 6)
+ProgressContainerCorner.Parent = ProgressContainer
+
+-- Прогресс бар
+local ProgressBar = Instance.new("Frame")
+ProgressBar.Name = "ProgressBar"
+ProgressBar.Parent = ProgressContainer
+ProgressBar.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+ProgressBar.BorderSizePixel = 0
+ProgressBar.Size = UDim2.new(0, 0, 1, 0)
+
+local ProgressCorner = Instance.new("UICorner")
+ProgressCorner.CornerRadius = UDim.new(0, 6)
+ProgressCorner.Parent = ProgressBar
+
+-- Градиент для прогресс бара
+local ProgressGradient = Instance.new("UIGradient")
+ProgressGradient.Parent = ProgressBar
+ProgressGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 170, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 130, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 120, 255))
+}
+
+-- Информация о версии
+local VersionLabel = Instance.new("TextLabel")
+VersionLabel.Name = "VersionLabel"
+VersionLabel.Parent = LoadingContainer
+VersionLabel.BackgroundTransparency = 1
+VersionLabel.Position = UDim2.new(0, 30, 1, -30)
+VersionLabel.Size = UDim2.new(1, -60, 0, 20)
+VersionLabel.Font = Enum.Font.Gotham
+VersionLabel.Text = "v3.1 • Created by SSLKin • Universal Script Hub"
+VersionLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+VersionLabel.TextSize = 10
+VersionLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+-- Анимация логотипа
+spawn(function()
+    while LoadingGui.Parent do
+        for i = 0, 360, 5 do
+            if LoadingGui.Parent then
+                LogoIcon.Rotation = i
+                ContainerGradient.Rotation = 45 + (i / 4)
+                wait(0.03)
+            end
+        end
+    end
+end)
+
+-- Анимация обводки
+spawn(function()
+    while LoadingGui.Parent do
+        local colorTween = TweenService:Create(
+            ContainerStroke,
+            TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            {Color = Color3.fromRGB(255, 100, 150)}
+        )
+        colorTween:Play()
+        wait(4)
+        if LoadingGui.Parent then
+            colorTween:Cancel()
+            ContainerStroke.Color = Color3.fromRGB(80, 120, 255)
+        end
+    end
+end)
+
+-- Функция обновления прогресса
+local function updateProgress(progress)
+    local progressTween = TweenService:Create(
+        ProgressBar,
+        TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = UDim2.new(progress / 100, 0, 1, 0)}
+    )
+    progressTween:Play()
+    
+    -- Эффект свечения при достижении 100%
+    if progress >= 100 then
+        local glowTween = TweenService:Create(
+            ProgressBar,
+            TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, 3, true),
+            {BackgroundColor3 = Color3.fromRGB(150, 255, 150)}
+        )
+        glowTween:Play()
+    end
 end
 
--- ==================== КОНФИГУРАЦИИ ====================
+-- Анимация появления
+LoadingContainer.Size = UDim2.new(0, 0, 0, 0)
+LoadingContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+LoadingBackground.BackgroundTransparency = 1
 
-local YBAConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    StandRange = 500,
-    FreezePlayer = true,
-    SwitchCamera = true,
-    TransferControl = true,
-    AutoFindStands = true,
-    MaxStandDistance = 50,
-    CameraDistance = 12,
-    CameraHeight = 8,
-    StandControlSpeed = 1.0,
-    StandControlSmoothing = 0.1,
-    MouseSensitivity = 0.01,
-    CameraSmoothing = 0.08,
-    CameraFollowDistance = 20.2,
-    CameraFollowHeight = 6.1,
-    MouseLookSensitivity = 0.003,
-    StandRotationSpeed = 0.05,
-    UndergroundControl = {
-        FlightSpeed = 40,
-        AutoNoClip = true,
-        OriginalPosition = nil,
-    },
-    ItemESP = {
-        Enabled = false,
-        ToggleKey = nil,
-        MaxDistance = 1000,
-        MaxRenderDistance = 5000,
-        UpdateInterval = 0.3,
-        ShowOutline = true,
-        ShowText = true,
-        ShowFill = true,
-        FillColor = Color3.fromRGB(255, 215, 0),
-        OutlineColor = Color3.fromRGB(255, 255, 0),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        TextBackgroundColor = Color3.fromRGB(0, 0, 0),
-        FillTransparency = 0.3,
-        OutlineTransparency = 0.1,
-        TextBackgroundTransparency = 0.3,
-        TextSize = 10,
-        DistanceTextSize = 9,
-        Font = Enum.Font.GothamBold,
-        Items = {
-            ["Mysterious Arrow"] = true,
-            ["Rokakaka"] = true,
-            ["Pure Rokakaka"] = true,
-            ["Diamond"] = true,
-            ["Gold Coin"] = true,
-            ["Steel Ball"] = true,
-            ["Clackers"] = true,
-            ["Caesar's Headband"] = true,
-            ["Zeppeli's Hat"] = true,
-            ["Zeppeli's Scarf"] = true,
-            ["Ancient Scroll"] = true,
-            ["Quinton's Glove"] = true,
-            ["Stone Mask"] = true,
-            ["Lucky Arrow"] = true,
-            ["Lucky Stone Mask"] = true,
-            ["Rib Cage of The Saint's Corpse"] = true,
-            ["DIO's Diary"] = true,
+local backgroundTween = TweenService:Create(
+    LoadingBackground,
+    TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    {BackgroundTransparency = 0.2}
+)
+
+local showTween = TweenService:Create(
+    LoadingContainer,
+    TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    {
+        Size = UDim2.new(0, 500, 0, 200),
+        Position = UDim2.new(0.5, -250, 0.5, -100)
+    }
+)
+
+backgroundTween:Play()
+wait(0.2)
+showTween:Play()
+
+-- Простая загрузка с плавным прогрессом
+spawn(function()
+    wait(1.5) -- Ждём завершения анимации появления
+    
+    -- Плавная загрузка от 0 до 100
+    for i = 0, 100, 2 do
+        updateProgress(i)
+        wait(0.05) -- Быстрая и плавная загрузка
+    end
+    
+    wait(0.5)
+    
+    -- Анимация исчезновения (правильная)
+    local hideTween = TweenService:Create(
+        LoadingContainer,
+        TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(0.5, 0, 0.5, 0)
         }
-    }
+    )
+    
+    local backgroundHideTween = TweenService:Create(
+        LoadingBackground,
+        TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 1}
+    )
+    
+    hideTween:Play()
+    backgroundHideTween:Play()
+    
+    hideTween.Completed:Connect(function()
+        LoadingGui:Destroy()
+        getgenv().SSLKinLoaderActive = false
+        
+        -- Здесь должна быть загрузка основного скрипта
+        print("SSLKin Loader: Загрузка основного скрипта...")
+        
+        -- Для онлайн загрузки замените эту строку на:
+        -- loadstring(game:HttpGet("YOUR_SCRIPT_URL"))()
+        
+        -- Уведомление о готовности
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Готов к использованию! Основной скрипт загружен.",
+            Duration = 5
+        })
+        
+        -- Здесь можно добавить загрузку основного скрипта
+        print("Основной скрипт готов к загрузке!")
+        print("Замените эту строку на: loadstring(game:HttpGet('YOUR_URL'))() для онлайн загрузки")
+    end)
+end)
+
+print("SSLKin Uni Script Loader запущен!")
+
+--[[
+    SSLKin Uni Script - Universal Roblox Script Hub
+    Created by: SSLKin
+    Version: 3.1
+    Fixed ESP, Aimbot, and UI Issues
+--]]
+
+-- Защита от повторного запуска
+if getgenv().SSLKinUniLoaded then
+    warn("SSLKin Uni Script уже запущен!")
+    return
+end
+getgenv().SSLKinUniLoaded = true
+
+-- Основные сервисы
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Teams = game:GetService("Teams")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+
+-- Определение игры
+local currentGame = "Universal"
+local gameSpecificFeatures = {}
+
+-- Centaura PlaceId
+local CENTAURA_PLACE_ID = 8735521924
+
+if game.PlaceId == CENTAURA_PLACE_ID then
+    currentGame = "Centaura"
+end
+
+-- Переменные состояния
+local isFlying = false
+local flySpeed = 50
+local isNoclipActive = false
+local espEnabled = false
+local infiniteJumpEnabled = false
+local speedEnabled = false
+local jumpEnabled = false
+local walkSpeed = 16
+local jumpPower = 50
+local fullBrightEnabled = false
+local noFogEnabled = false
+
+-- Centaura специфические переменные
+local aimbotEnabled = false
+local aimbotFOV = 90
+local aimbotSmoothness = 5
+local aimbotTargetPart = "Head"
+local aimbotVisibleOnly = true
+local aimbotTeamCheck = true
+local showFOVCircle = false
+
+-- ESP настройки
+local espSettings = {
+    enabled = false,
+    boxes = true,
+    chams = false,
+    names = false,
+    distance = false,
+    health = false,
+    tracers = false,
+    teamCheck = true,
+    enemyColor = Color3.fromRGB(255, 0, 0),
+    allyColor = Color3.fromRGB(0, 255, 0),
+    nameColor = Color3.fromRGB(255, 255, 255),
+    tracerColor = Color3.fromRGB(0, 255, 0)
 }
 
-local AntiTimeStopConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    MovementSpeed = 1.5,
-    JumpPower = 50,
-    WalkSpeed = 16,
-    AutoActivate = true,
-    DetectionRange = 100,
-    VisualEffect = true,
-    SoundEffect = false,
-    AntiFreeze = true,
-    TimeStopBypass = true,
-    MovementOverride = true,
-    DisableOnAttack = true,
-    ServerSync = true,
+-- ESP объекты и Drawing объекты
+local espObjects = {}
+local drawingObjects = {}
+
+-- FOV Circle
+local fovCircle = nil
+
+-- Сохранение оригинальных значений освещения
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
 }
 
-local AutofarmConfig = {
-    Enabled = false,
-    ToggleKey = nil,
-    UseFlightMovement = true,
-    UseNoClipMovement = true,
-    FlightSpeed = 100,
-    PickupRadius = 8,
-    PickupDuration = 0.25,
-    PickupKey = Enum.KeyCode.E,
-    ScanInterval = 1,
-    Items = {
-        ["Mysterious Arrow"] = true,
-        ["Rokakaka"] = true,
-        ["Pure Rokakaka"] = true,
-        ["Diamond"] = true,
-        ["Gold Coin"] = true,
-        ["Steel Ball"] = true,
-        ["Clackers"] = true,
-        ["Caesar's Headband"] = true,
-        ["Zeppeli's Hat"] = true,
-        ["Zeppeli's Scarf"] = true,
-        ["Ancient Scroll"] = true,
-        ["Quinton's Glove"] = false,
-        ["Stone Mask"] = true,
-        ["Lucky Arrow"] = true,
-        ["Lucky Stone Mask"] = true,
-        ["Rib Cage of The Saint's Corpse"] = true,
-        ["DIO's Diary"] = true,
-        ["Dio's Diary"] = true,
-    }
+-- Создание ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SSLKinUniScript"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 100
+
+-- Основное окно
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -400, 0.5, -275)
+MainFrame.Size = UDim2.new(0, 800, 0, 550)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false
+
+-- Обводка главного окна
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Parent = MainFrame
+MainStroke.Color = Color3.fromRGB(60, 60, 255)
+MainStroke.Thickness = 2
+MainStroke.Transparency = 0.3
+
+-- Закругление главного окна
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
+
+-- Заголовок
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "HeaderFrame"
+HeaderFrame.Parent = MainFrame
+HeaderFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+HeaderFrame.BorderSizePixel = 0
+HeaderFrame.Size = UDim2.new(1, 0, 0, 60)
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = HeaderFrame
+
+-- Фикс углов заголовка
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Parent = HeaderFrame
+HeaderFix.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Position = UDim2.new(0, 0, 0.5, 0)
+HeaderFix.Size = UDim2.new(1, 0, 0.5, 0)
+
+-- Градиент заголовка
+local HeaderGradient = Instance.new("UIGradient")
+HeaderGradient.Parent = HeaderFrame
+HeaderGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 80, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 40, 200)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 30))
 }
+HeaderGradient.Rotation = 90
 
--- ==================== ПЕРЕМЕННЫЕ СОСТОЯНИЯ ====================
+-- Логотип и заголовок
+local LogoLabel = Instance.new("TextLabel")
+LogoLabel.Name = "LogoLabel"
+LogoLabel.Parent = HeaderFrame
+LogoLabel.BackgroundTransparency = 1
+LogoLabel.Position = UDim2.new(0, 20, 0, 5)
+LogoLabel.Size = UDim2.new(0, 50, 0, 50)
+LogoLabel.Font = Enum.Font.GothamBold
+LogoLabel.Text = currentGame == "Centaura" and "⚔️" or "🚀"
+LogoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogoLabel.TextScaled = true
 
-local isYBAEnabled = false
-local ybaConnections = {}
-local originalPlayerPosition = nil
-local originalPlayerCFrame = nil
-local originalCameraCFrame = nil
-local controlledStand = nil
-local standControlConnections = {}
-local originalGravity = workspace.Gravity
-local originalYBAWalkSpeed = 16
-local originalYBAJumpPower = 50
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = HeaderFrame
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 80, 0, 10)
+TitleLabel.Size = UDim2.new(1, -200, 0, 25)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "SSLKin Uni Script"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 20
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local isAntiTimeStopEnabled = false
-local antiTimeStopConnections = {}
-local originalAntiTimeStopWalkSpeed = 16
-local originalAntiTimeStopJumpPower = 50
-local timeStopDetected = false
-local timeStopStartTime = 0
-local timeStopDuration = 0
-local antiTimeStopEffect = nil
+local SubtitleLabel = Instance.new("TextLabel")
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.Parent = HeaderFrame
+SubtitleLabel.BackgroundTransparency = 1
+SubtitleLabel.Position = UDim2.new(0, 80, 0, 35)
+SubtitleLabel.Size = UDim2.new(1, -200, 0, 20)
+SubtitleLabel.Font = Enum.Font.Gotham
+SubtitleLabel.Text = currentGame == "Centaura" and "Centaura Mode v3.1" or "Universal Mode v3.1"
+SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+SubtitleLabel.TextSize = 12
+SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local isStandControlActive = false
-local currentControlledStand = nil
-local standCameraConnections = {}
-local originalStandCameraCFrame = nil
-local standControlActive = false
+-- Кнопка закрытия
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Parent = HeaderFrame
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(1, -45, 0, 15)
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
 
-local freeCameraActive = false
-local freeCameraConnections = {}
-local freeCameraRotation = Vector2.new(0, 0)
-local freeCameraDistance = 10
-local freeCameraHeight = 5
-local freeCameraTarget = nil
-local freeCameraLastMousePos = Vector2.new(0, 0)
-local lastCameraUpdate = nil
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
 
-local isInputBeingProcessedByGame = false
+-- Кнопка минимизации
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Parent = HeaderFrame
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 180, 60)
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Position = UDim2.new(1, -80, 0, 15)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Text = "─"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.TextSize = 16
 
-local itemESPConnections = {}
-local itemESPElements = {}
-local itemESPEnabled = false
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(0, 6)
+MinimizeCorner.Parent = MinimizeButton
 
-local isAutofarmEnabled = false
-local autofarmConnections = {}
-local autofarmCurrentTarget = nil
-local autofarmItemQueue = {}
-local autofarmOriginalPosition = nil
-local autofarmPickingUp = false
-local autofarmLastPickupTime = 0
-local autofarmRestartTimer = nil
-local autofarmAutoRestarting = false
-local autofarmDeathCheckConnection = nil
-local autofarmCurrentItemIndex = 1
-local autofarmAllItems = {}
+-- Контейнер для контента
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Parent = MainFrame
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Position = UDim2.new(0, 0, 0, 60)
+ContentContainer.Size = UDim2.new(1, 0, 1, -60)
 
-local wasAutofarmEnabledBeforeDeath = false
-local wasAutosellEnabledBeforeDeath = false
-local deathTrackingActive = false
-local respawnHandler = nil
+-- Боковая панель навигации
+local SidePanel = Instance.new("Frame")
+SidePanel.Name = "SidePanel"
+SidePanel.Parent = ContentContainer
+SidePanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanel.BorderSizePixel = 0
+SidePanel.Size = UDim2.new(0, 200, 1, 0)
 
-local isUndergroundControlEnabled = false
-local undergroundControlConnections = {}
-local controlledStandForUnderground = nil
-local isShiftPressed = false
+local SidePanelCorner = Instance.new("UICorner")
+SidePanelCorner.CornerRadius = UDim.new(0, 8)
+SidePanelCorner.Parent = SidePanel
 
-print("🎯 YBA HACKS MODULE: Переменные инициализированы")
+-- Фикс углов боковой панели
+local SidePanelFix = Instance.new("Frame")
+SidePanelFix.Parent = SidePanel
+SidePanelFix.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanelFix.BorderSizePixel = 0
+SidePanelFix.Position = UDim2.new(0, 0, 0, 0)
+SidePanelFix.Size = UDim2.new(1, 0, 0, 8)
 
--- ==================== YBA FREE CAMERA MODULE ====================
+local SidePanelFix2 = Instance.new("Frame")
+SidePanelFix2.Parent = SidePanel
+SidePanelFix2.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanelFix2.BorderSizePixel = 0
+SidePanelFix2.Position = UDim2.new(1, -8, 0, 0)
+SidePanelFix2.Size = UDim2.new(0, 8, 1, 0)
 
-local YBAFreeCamera = {} do
-    local Camera = workspace.CurrentCamera
+-- Основная область контента
+local MainContent = Instance.new("ScrollingFrame")
+MainContent.Name = "MainContent"
+MainContent.Parent = ContentContainer
+MainContent.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContent.BorderSizePixel = 0
+MainContent.Position = UDim2.new(0, 200, 0, 0)
+MainContent.Size = UDim2.new(1, -200, 1, 0)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+MainContent.ScrollBarThickness = 6
+MainContent.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 255)
+MainContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
-    local fcRunning = false
-    local cameraPos = Vector3.new()
-    local cameraRot = Vector2.new()
-    local targetStand = nil
-    local originalCameraCFrame = nil
-    local originalCameraType = nil
-    local cameraDistance = 12
-    local cameraHeight = 8
-    local renderConnection = nil
-    local inputConnections = {}
-    local lastDebugTime = 0
+local MainContentCorner = Instance.new("UICorner")
+MainContentCorner.CornerRadius = UDim.new(0, 8)
+MainContentCorner.Parent = MainContent
 
-    local NAV_SPEED = 1
+-- Фикс углов основного контента
+local MainContentFix = Instance.new("Frame")
+MainContentFix.Parent = MainContent
+MainContentFix.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContentFix.BorderSizePixel = 0
+MainContentFix.Position = UDim2.new(0, -8, 0, 0)
+MainContentFix.Size = UDim2.new(0, 8, 1, 0)
 
-    local input = {
-        W = false, A = false, S = false, D = false,
-        Space = false, LeftControl = false,
-        LeftShift = false,
-        MouseDelta = Vector2.new(),
-        MouseWheel = 0
-    }
+local MainContentFix2 = Instance.new("Frame")
+MainContentFix2.Parent = MainContent
+MainContentFix2.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContentFix2.BorderSizePixel = 0
+MainContentFix2.Position = UDim2.new(0, 0, 0, 0)
+MainContentFix2.Size = UDim2.new(1, 0, 0, 8)
 
-    local function startInput()
-        -- Очищаем старые соединения
-        for _, connection in pairs(inputConnections) do
-            if connection then connection:Disconnect() end
-        end
-        inputConnections = {}
+-- Состояние GUI
+local isMinimized = false
+local originalSize = UDim2.new(0, 800, 0, 550)
+local originalPosition = UDim2.new(0.5, -400, 0.5, -275)
 
-        -- Простое отслеживание ввода через UserInputService
-        table.insert(inputConnections, UserInputService.InputBegan:Connect(function(inputObj, gameProcessed)
-            -- Игнорируем ввод если игрок в чате/меню
-            if gameProcessed then return end
-            local keyName = inputObj.KeyCode.Name
-            if input[keyName] ~= nil then
-                input[keyName] = true
-                print("YBA Input: Нажата клавиша", keyName)
-            end
-        end))
-
-        table.insert(inputConnections, UserInputService.InputEnded:Connect(function(inputObj, gameProcessed)
-            -- Игнорируем ввод если игрок в чате/меню
-            if gameProcessed then return end
-            local keyName = inputObj.KeyCode.Name
-            if input[keyName] ~= nil then
-                input[keyName] = false
-                print("YBA Input: Отпущена клавиша", keyName)
-            end
-        end))
-
-        table.insert(inputConnections, UserInputService.InputChanged:Connect(function(inputObj, gameProcessed)
-            -- НЕ игнорируем gameProcessed для мыши
-            if inputObj.UserInputType == Enum.UserInputType.MouseMovement then
-                -- ИСПРАВЛЕНО: инвертируем ось X для горизонтального поворота
-                local sensitivity = 0.003
-                input.MouseDelta = Vector2.new(inputObj.Delta.y * sensitivity, -inputObj.Delta.x * sensitivity)
-            elseif inputObj.UserInputType == Enum.UserInputType.MouseWheel then
-                -- ИСПРАВЛЕНО: проверяем что GUI не активно и не обработано игрой
-                if not gameProcessed then
-                    input.MouseWheel = -inputObj.Position.Z
-                    print("YBA Input: Колесо мыши", input.MouseWheel)
-                end
-            end
-        end))
-    end
-
-    local function stopInput()
-        for _, connection in pairs(inputConnections) do
-            if connection then connection:Disconnect() end
-        end
-        inputConnections = {}
-        
-        -- Сброс всех входов
-        for k in pairs(input) do
-            if typeof(input[k]) == "boolean" then 
-                input[k] = false 
-            elseif typeof(input[k]) == "number" then 
-                input[k] = 0 
-            end
-        end
-        input.MouseDelta = Vector2.new()
-        input.MouseWheel = 0
-    end
-
-    local function stepFreecam(dt)
-        if not targetStand or not targetStand.Root or not targetStand.Root.Parent then
-            print("YBA: Стенд потерян, останавливаем управление")
-            YBAFreeCamera.Stop()
-            return
-        end
-
-        local standRoot = targetStand.Root
-        local standPosition = standRoot.Position
-        
-        -- Отладочная информация (выводим каждые 5 секунд)
-        if tick() - lastDebugTime > 5 then
-            print("YBA Debug: Камера работает, позиция стенда:", standPosition)
-            print("YBA Debug: Состояние ввода - W:", input.W, "A:", input.A, "S:", input.S, "D:", input.D, "Shift:", input.LeftShift)
-            lastDebugTime = tick()
-        end
-
-        -- Движение стенда через прямую проверку клавиш (обход блокировки YBA)
-        local moveX = 0
-        local moveZ = 0 
-        local moveY = 0
-        
-        -- Улучшенная проверка, что игрок не в чате/меню
-        local gameGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
-        local chatInFocus = false
-        
-        -- Проверяем основной чат
-        if gameGui then
-            local chatGui = gameGui:FindFirstChild("Chat")
-            if chatGui and chatGui:FindFirstChild("Frame") and chatGui.Frame:FindFirstChild("ChatBarParentFrame") then
-                local chatBar = chatGui.Frame.ChatBarParentFrame:FindFirstChild("Frame")
-                if chatBar and chatBar:FindFirstChild("BoxFrame") and chatBar.BoxFrame.Frame:FindFirstChild("Frame") and chatBar.BoxFrame.Frame.Frame:FindFirstChild("ChatBar") then
-                    chatInFocus = chatBar.BoxFrame.Frame.Frame.ChatBar:IsFocused()
-                end
-            end
-            
-            -- Дополнительная проверка - любой TextBox в фокусе
-            if not chatInFocus then
-                local function checkTextBoxFocus(parent)
-                    for _, child in pairs(parent:GetChildren()) do
-                        if child:IsA("TextBox") and child:IsFocused() then
-                            return true
-                        elseif child:IsA("GuiObject") then
-                            if checkTextBoxFocus(child) then
-                                return true
-                            end
-                        end
-                    end
-                    return false
-                end
-                chatInFocus = checkTextBoxFocus(gameGui)
-            end
-        end
-        
-        -- Прямая проверка клавиш только если не в чате и ввод не обрабатывается игрой
-        if not chatInFocus and not isInputBeingProcessedByGame then
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveX = moveX + 1
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveX = moveX - 1
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveZ = moveZ + 1
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveZ = moveZ - 1
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveY = moveY + 1
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveY = moveY - 1
-            end
-        else
-            -- Отладка: показываем почему ввод заблокирован
-            if chatInFocus or isInputBeingProcessedByGame then
-                -- Выводим сообщение только при нажатии Space для избежания спама
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                    print("YBA: Ввод заблокирован - чат в фокусе:", chatInFocus, "gameProcessed:", isInputBeingProcessedByGame)
-                end
-            end
-        end
-        
-        -- ВСЕГДА проверяем Shift для шифтлока (каждый кадр)
-        input.LeftShift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-        
-        local move = Vector3.new(moveX, moveY, moveZ)
-        
-        -- Отладка движения
-        if move.Magnitude > 0 then
-            print("YBA: Движение детектировано:", moveX, moveY, moveZ)
-        end
-
-        local bv = standRoot:FindFirstChild("BodyVelocity")
-        if not bv then
-            bv = Instance.new("BodyVelocity")
-            bv.MaxForce = Vector3.new(4000, 4000, 4000)
-            bv.Velocity = Vector3.new(0, 0, 0)
-            bv.Parent = standRoot
-        end
-        
-        -- Добавляем BodyAngularVelocity для плавного поворота
-        local bav = standRoot:FindFirstChild("BodyAngularVelocity")
-        if not bav then
-            bav = Instance.new("BodyAngularVelocity")
-            bav.MaxTorque = Vector3.new(0, 4000, 0) -- Только поворот по Y
-            bav.AngularVelocity = Vector3.new(0, 0, 0)
-            bav.Parent = standRoot
-        end
-        
-        if move.Magnitude > 0 then
-            local standSpeed = YBAConfig.UndergroundControl.FlightSpeed or 20
-            local cameraCFrame = CFrame.new(standPosition) * CFrame.Angles(0, cameraRot.Y, 0)
-            local worldMove = cameraCFrame:VectorToWorldSpace(move)
-            bv.Velocity = worldMove * standSpeed
-        else
-            bv.Velocity = Vector3.new(0, 0, 0)
-        end
-
-        -- Обработка вращения мыши
-        if input.MouseDelta.Magnitude > 0 then
-            cameraRot = cameraRot + input.MouseDelta
-            cameraRot = Vector2.new(
-                math.clamp(cameraRot.X, -math.rad(80), math.rad(80)), 
-                cameraRot.Y % (2 * math.pi)
-            )
-            
-            -- ИСПРАВЛЕНО: Синхронизируем поворот игрока с камерой стенда
-            local player = Players.LocalPlayer
-            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local playerRoot = player.Character.HumanoidRootPart
-                local targetPlayerCFrame = CFrame.new(playerRoot.Position) * CFrame.Angles(0, cameraRot.Y, 0)
-                playerRoot.CFrame = targetPlayerCFrame
-            end
-            
-            input.MouseDelta = Vector2.new()
-        end
-        
-        -- ИСПРАВЛЕНО: Стенд всегда копирует направление камеры (не только при Shift)
-        local currentPos = standRoot.Position
-        local currentCFrame = standRoot.CFrame
-        local targetCFrame = CFrame.new(currentPos) * CFrame.Angles(0, cameraRot.Y, 0)
-        -- Плавный поворот для естественности
-        standRoot.CFrame = currentCFrame:Lerp(targetCFrame, 0.2)
-        
-        -- Дополнительно: если зажат Shift - ускоряем поворот стенда
-        if input.LeftShift then
-            standRoot.CFrame = currentCFrame:Lerp(targetCFrame, 0.5)
-        end
-
-        -- Обработка колеса мыши для зума
-        if input.MouseWheel ~= 0 then
-            cameraDistance = math.clamp(cameraDistance + input.MouseWheel * 2, 5, 30)
-            input.MouseWheel = 0
-        end
-
-        -- ИСПРАВЛЕНО: позиционирование камеры без влияния зума на угол наклона
-        local horizontalDistance = cameraDistance
-        local verticalOffset = cameraHeight
-        
-        -- Применяем поворот камеры для наклона
-        local pitchOffset = math.sin(cameraRot.X) * cameraDistance
-        local adjustedHorizontalDistance = math.cos(cameraRot.X) * cameraDistance
-        
-        local cameraOffset = Vector3.new(
-            math.sin(cameraRot.Y) * adjustedHorizontalDistance,
-            verticalOffset + pitchOffset,
-            math.cos(cameraRot.Y) * adjustedHorizontalDistance
-        )
-        
-        local cameraPosition = standPosition + cameraOffset
-        local newCameraCFrame = CFrame.lookAt(cameraPosition, standPosition)
-        
-        -- Осторожно устанавливаем только CFrame камеры (не тип)
-        Camera.CFrame = newCameraCFrame
-        
-        -- Мягко отключаем управление камерой игроком
-        local player = Players.LocalPlayer
-        if player and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.AutoRotate = false
-            end
-        end
-    end
-
-    function YBAFreeCamera.Start(stand)
-        if fcRunning then 
-            YBAFreeCamera.Stop() 
-        end
-        
-        if not stand or not stand.Root then
-            print("YBA: Ошибка - стенд не найден")
-            return false
-        end
-        
-        print("YBA: Запуск управления стендом: " .. stand.Name)
-        
-        targetStand = stand
-        originalCameraCFrame = Camera.CFrame
-        originalCameraType = Camera.CameraType
-        
-        -- Очищаем любые существующие Body объекты
-        for _, bodyObj in pairs(stand.Root:GetChildren()) do
-            if bodyObj:IsA("BodyVelocity") or bodyObj:IsA("BodyPosition") or bodyObj:IsA("BodyGyro") then
-                bodyObj:Destroy()
-            end
-        end
-        
-        -- Сброс параметров камеры и синхронизация с направлением игрока
-        cameraDistance = YBAConfig.CameraDistance or 12
-        cameraHeight = YBAConfig.CameraHeight or 8
-        
-        -- ИСПРАВЛЕНО: Инициализируем камеру в направлении взгляда игрока
-        local player = Players.LocalPlayer
-        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local playerCFrame = player.Character.HumanoidRootPart.CFrame
-            local playerLookDirection = playerCFrame.LookVector
-            local playerYRotation = math.atan2(playerLookDirection.X, playerLookDirection.Z)
-            cameraRot = Vector2.new(0, playerYRotation)
-            print("YBA: Синхронизация с направлением игрока, угол:", math.deg(playerYRotation))
-        else
-            cameraRot = Vector2.new(0, 0)
-        end
-        
-        -- НЕ переключаем тип камеры чтобы обойти античит YBA
-        print("YBA: Сохраняем оригинальный тип камеры для обхода античита")
-        print("YBA: Текущий тип камеры:", Camera.CameraType)
-        
-        -- Устанавливаем начальную позицию камеры за стендом с задержкой
-        task.wait(0.1) -- Небольшая задержка чтобы не триггерить античит
-        local standPosition = stand.Root.Position
-        
-        -- ИСПРАВЛЕНО: Позиционируем стенд в направлении взгляда игрока
-        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local playerCFrame = player.Character.HumanoidRootPart.CFrame
-            stand.Root.CFrame = CFrame.new(standPosition, standPosition + playerCFrame.LookVector)
-            print("YBA: Стенд повернут в направлении игрока")
-        end
-        
-        -- Позиционируем камеру с учетом поворота стенда
-        local horizontalDistance = math.cos(cameraRot.X) * cameraDistance
-        local verticalOffset = math.sin(cameraRot.X) * cameraDistance
-        local cameraOffset = Vector3.new(
-            math.sin(cameraRot.Y) * horizontalDistance,
-            verticalOffset + cameraHeight,
-            math.cos(cameraRot.Y) * horizontalDistance
-        )
-        local initialCameraPosition = standPosition + cameraOffset
-        Camera.CFrame = CFrame.lookAt(initialCameraPosition, standPosition)
-        print("YBA: Установлена начальная позиция камеры:", initialCameraPosition)
-        
-        -- Запускаем ввод и рендер
-        print("YBA: Запускаем систему ввода...")
-        startInput()
-        print("YBA: Подключаем рендер...")
-        -- Используем RenderStepped вместо Heartbeat для меньшей частоты
-        renderConnection = RunService.RenderStepped:Connect(stepFreecam)
-        fcRunning = true
-        
-        print("YBA: Управление стендом успешно активировано!")
-        print("YBA: fcRunning =", fcRunning)
-        print("YBA: renderConnection =", renderConnection ~= nil)
-        return true
-    end
-
-    function YBAFreeCamera.Stop()
-        if not fcRunning then return end
-        
-        print("YBA: Отключение управления стендом")
-        
-        -- Останавливаем ввод и рендер
-        stopInput()
-        if renderConnection then
-            renderConnection:Disconnect()
-            renderConnection = nil
-        end
-        
-        -- Восстанавливаем камеру
-        if originalCameraType then
-            Camera.CameraType = originalCameraType
-        else
-            Camera.CameraType = Enum.CameraType.Custom
-        end
-        
-        if originalCameraCFrame then
-            Camera.CFrame = originalCameraCFrame
-        end
-
-        -- Очищаем Body объекты стенда
-        if targetStand and targetStand.Root and targetStand.Root.Parent then
-            for _, bodyObj in pairs(targetStand.Root:GetChildren()) do
-                if bodyObj:IsA("BodyVelocity") or bodyObj:IsA("BodyPosition") or bodyObj:IsA("BodyGyro") then
-                    bodyObj:Destroy()
-                end
-            end
-            -- Останавливаем стенд
-            targetStand.Root.Velocity = Vector3.new(0, 0, 0)
-            if targetStand.Root.AssemblyLinearVelocity then
-                targetStand.Root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            end
-        end
-
-        -- Восстанавливаем управление игроком
-        local player = Players.LocalPlayer
-        if player and player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.AutoRotate = true
-            end
-        end
-        
-        -- Сбрасываем переменные
-        targetStand = nil
-        originalCameraCFrame = nil
-        originalCameraType = nil
-        fcRunning = false
-        
-        print("YBA: Управление стендом успешно отключено")
-    end
-
-    function YBAFreeCamera.Toggle(stand)
-        if fcRunning then
-            YBAFreeCamera.Stop()
-            return false
-        else
-            return YBAFreeCamera.Start(stand)
-        end
-    end
+-- Анимации
+local function CreateTween(object, properties, duration, easingStyle, easingDirection)
+    local tweenInfo = TweenInfo.new(
+        duration or 0.3,
+        easingStyle or Enum.EasingStyle.Quad,
+        easingDirection or Enum.EasingDirection.Out
+    )
+    return TweenService:Create(object, tweenInfo, properties)
 end
 
-print("🎯 YBA HACKS MODULE: YBAFreeCamera загружен")
-
--- ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ YBA ====================
-
-local function findStands()
-    local stands = {}
-    local player = Players.LocalPlayer
-    local playerChar = player.Character
-    local playerRoot = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
+-- Функции показа/скрытия GUI
+local function ShowGUI()
+    MainFrame.Visible = true
+    isMinimized = false
     
-    if not playerRoot then 
-        print("YBA: Игрок не найден или нет HumanoidRootPart")
-        return stands 
+    if MainFrame.Size == originalSize then
+        return -- Уже открыто
     end
     
-    print("YBA: Начинаем поиск стендов в workspace...")
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     
-    local standNames = {
-        "Stand", "StandModel", "StandPart", "StandRoot", "StandHumanoidRootPart",
-        "Star Platinum", "The World", "Hierophant Green", "Magician's Red",
-        "Hermit Purple", "Silver Chariot", "Tower of Gray", "Dark Blue Moon",
-        "Strength", "Wheel of Fortune", "Hanged Man", "Emperor", "Empress",
-        "Judgment", "High Priestess", "Death Thirteen", "Lovers", "Sun",
-        "Bastet", "Thunder McQueen", "Anubis", "Khnum", "Tohth", "Horus",
-        "Atum", "Osiris", "Horus", "Anubis", "Bastet", "Khnum", "Tohth",
-        -- Добавляем еще варианты
-        "stand", "STAND", "GER", "SPTW", "TW", "SP", "KC", "KCR", "CD", "WS", "MIH",
-        "TWOH", "SPOH", "D4C", "KQ", "BTD", "SF", "SM", "HP", "SC", "HG", "MR"
-    }
+    local showTween = CreateTween(MainFrame, {
+        Size = originalSize,
+        Position = originalPosition
+    }, 0.6, Enum.EasingStyle.Back)
     
-    local foundCount = 0
-    local checkedModels = 0
-    
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            checkedModels = checkedModels + 1
-            local isStand = false
-            for _, standName in ipairs(standNames) do
-                if obj.Name:find(standName) or obj.Name:lower():find(standName:lower()) then
-                    isStand = true
-                    print("YBA: Найдена потенциальная модель стенда:", obj.Name)
-                    break
-                end
-            end
-            
-            if isStand then
-                local standRoot = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("StandRoot") or obj:FindFirstChild("RootPart")
-                if standRoot then
-                    local distance = (standRoot.Position - playerRoot.Position).Magnitude
-                    print("YBA: Стенд", obj.Name, "на расстоянии:", distance)
-                    if distance <= 20 then
-                        foundCount = foundCount + 1
-                        table.insert(stands, {
-                            Model = obj,
-                            Root = standRoot,
-                            Distance = distance,
-                            Name = obj.Name
-                        })
-                        print("YBA: Добавлен стенд:", obj.Name)
-                    else
-                        print("YBA: Стенд", obj.Name, "слишком далеко:", distance)
-                    end
-                else
-                    print("YBA: У модели", obj.Name, "нет подходящего Root части")
-                end
-            end
-        end
-    end
-    
-    print("YBA: Проверено моделей:", checkedModels, "Найдено стендов:", foundCount)
-    
-    if #stands == 0 then
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
-                local standRoot = obj:FindFirstChild("HumanoidRootPart")
-                if standRoot then
-                    local distance = (standRoot.Position - playerRoot.Position).Magnitude
-                    if distance <= 20 then
-                        table.insert(stands, {
-                            Model = obj,
-                            Root = standRoot,
-                            Distance = distance,
-                            Name = obj.Name
-                        })
-                    end
-                end
-            end
-        end
-    end
-    
-    table.sort(stands, function(a, b) return a.Distance < b.Distance end)
-    return stands
+    showTween:Play()
 end
 
-local function freezePlayer()
-    local player = Players.LocalPlayer
-    local char = player.Character
-    if not char then return end
+local function HideGUI()
+    local hideTween = CreateTween(MainFrame, {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    }, 0.4, Enum.EasingStyle.Quad)
     
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChild("Humanoid")
+    hideTween:Play()
     
-    if root then
-        originalPlayerPosition = root.Position
-        originalPlayerCFrame = root.CFrame
-        
-        local bv = root:FindFirstChild("BodyVelocity")
-        if not bv then
-            bv = Instance.new("BodyVelocity", root)
-            bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-        end
-        bv.Velocity = Vector3.new(0, 0, 0)
-        
-        local gyro = root:FindFirstChild("BodyGyro")
-        if not gyro then
-            gyro = Instance.new("BodyGyro", root)
-            gyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-        end
-        gyro.CFrame = root.CFrame
-        
-        local camera = workspace.CurrentCamera
-        if camera then
-            camera.CameraType = Enum.CameraType.Scriptable
-        end
-    end
-    
-    if humanoid then
-        originalYBAWalkSpeed = humanoid.WalkSpeed
-        originalYBAJumpPower = humanoid.JumpPower
-        humanoid.WalkSpeed = 0
-        humanoid.JumpPower = 0
-        
-        humanoid.AutoRotate = false
-        humanoid.AutoJumpEnabled = false
-    end
+    hideTween.Completed:Connect(function()
+        MainFrame.Visible = false
+        isMinimized = false
+    end)
 end
 
-local function unfreezePlayer()
-    local player = Players.LocalPlayer
-    local char = player.Character
-    if not char then return end
-    
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChild("Humanoid")
-    
-    if root then
-        local bv = root:FindFirstChild("BodyVelocity")
-        if bv then
-            bv:Destroy()
-        end
+local function MinimizeGUI()
+    if isMinimized then
+        -- Развернуть
+        isMinimized = false
+        ContentContainer.Visible = true
         
-        local gyro = root:FindFirstChild("BodyGyro")
-        if gyro then
-            gyro:Destroy()
-        end
-    end
-    
-    if humanoid then
-        humanoid.WalkSpeed = originalYBAWalkSpeed
-        humanoid.JumpPower = originalYBAJumpPower
+        local expandTween = CreateTween(MainFrame, {
+            Size = originalSize,
+            Position = originalPosition
+        }, 0.4, Enum.EasingStyle.Quad)
         
-        humanoid.AutoRotate = true
-        humanoid.AutoJumpEnabled = true
-    end
-end
-
-local function activateFreeCamera(stand)
-    if not stand or not stand.Root then 
-        print("YBA: Ошибка - стенд или его Root не найден")
-        return false
-    end
-    
-    print("YBA: Активируем управление стендом: " .. stand.Name)
-
-    freeCameraActive = true
-    freeCameraTarget = stand
-
-    -- Запускаем свободную камеру
-    local success = YBAFreeCamera.Start(stand)
-    if success then
-        print("YBA: Управление стендом успешно активировано!")
-        controlledStand = stand -- Сохраняем ссылку на контролируемый стенд
-        return true
+        expandTween:Play()
     else
-        print("YBA: Не удалось активировать управление стендом")
-        freeCameraActive = false
-        freeCameraTarget = nil
-        return false
-    end
-end
-
-local function disableFreeCamera()
-    if not freeCameraActive then return end
-    
-    print("YBA: Отключаем управление стендом")
-    
-    freeCameraActive = false
-    freeCameraTarget = nil
-
-    YBAFreeCamera.Stop()
-
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.AutoRotate = true
-        end
-    end
-
-    for _, connection in ipairs(freeCameraConnections) do
-        if connection then
-            pcall(function() connection:Disconnect() end)
-        end
-    end
-    freeCameraConnections = {}
-    
-    print("YBA: Управление стендом отключено")
-
-    local player = Players.LocalPlayer
-    if player and player.Character then
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = originalYBAWalkSpeed
-            humanoid.JumpPower = originalYBAJumpPower
-        end
-
-        local root = player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            local bv = root:FindFirstChild("BodyVelocity")
-            if bv then
-                bv:Destroy()
+        -- Свернуть
+        isMinimized = true
+        
+        local minimizeTween = CreateTween(MainFrame, {
+            Size = UDim2.new(0, 400, 0, 60),
+            Position = UDim2.new(0.5, -200, 0.5, -30)
+        }, 0.4, Enum.EasingStyle.Quad)
+        
+        minimizeTween:Play()
+        minimizeTween.Completed:Connect(function()
+            if isMinimized then
+                ContentContainer.Visible = false
             end
-            
-            local gyro = root:FindFirstChild("BodyGyro")
-            if gyro then
-                gyro:Destroy()
-            end
-        end
-    end
-end
-
-local function controlStand(stand)
-    if not stand or not stand.Root then 
-        print("YBA: Ошибка - стенд или его Root не найден")
-        return 
-    end
-    
-    print("YBA: Начинаем управление стендом: " .. stand.Name)
-    controlledStand = stand
-
-    if activateFreeCamera(stand) then
-        print("YBA: Свободная камера активирована для стенда: " .. stand.Name)
-    else
-        print("YBA: Не удалось активировать свободную камеру для стенда: " .. stand.Name)
-    end
-end
-
-print("🎯 YBA HACKS MODULE: Вспомогательные функции YBA загружены")
-
--- ==================== ОСНОВНЫЕ ФУНКЦИИ YBA STAND RANGE ====================
-
-local function startYBA()
-    if isYBAEnabled then 
-        print("YBA: Уже активирован!")
-        return 
-    end
-    
-    print("YBA: Начинаем активацию Stand Range...")
-    isYBAEnabled = true
-    YBAConfig.Enabled = true
-    
-    if not findStands then 
-        print("YBA: Функция findStands не найдена!")
-        return 
-    end
-    
-    print("YBA: Ищем стенды...")
-    local stands = findStands()
-    print("YBA: Найдено стендов:", #stands)
-    
-    if #stands == 0 then 
-        print("YBA: Стенды не найдены! Проверьте, что у вас есть стенд.")
-        isYBAEnabled = false
-        YBAConfig.Enabled = false
-        return 
-    end
-    
-    local targetStand = stands[1]
-    print("YBA: Выбран стенд:", targetStand.Name, "Тип модели:", targetStand.Model.ClassName)
-    
-    print("YBA: Найден стенд: " .. targetStand.Name .. " на расстоянии: " .. targetStand.Distance)
-    
-    -- Отсоединяем стенд от игрока (делаем его свободным)
-    local player = Players.LocalPlayer
-    if targetStand.Root and targetStand.Model then
-        print("YBA: Отсоединяем стенд от игрока...")
-        
-        -- Мягко отключаем автоуправление стендом
-        local humanoid = targetStand.Model:FindFirstChild("Humanoid")
-        if humanoid then
-            -- НЕ включаем PlatformStand чтобы не триггерить античит
-            humanoid.Sit = false
-            humanoid.Jump = false
-            humanoid.AutoRotate = false
-        end
-        
-        -- Убираем привязку к игроку через Weld/Motor6D и Attachment
-        local connectionsRemoved = 0
-        for _, child in pairs(targetStand.Root:GetChildren()) do
-            if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("ManualWeld") then
-                print("YBA: Найдена связь:", child.Name, child.ClassName)
-                if (child.Part0 and child.Part0.Parent == player.Character) or 
-                   (child.Part1 and child.Part1.Parent == player.Character) then
-                    print("YBA: Удаляем связь с игроком:", child.Name)
-                    child:Destroy()
-                    connectionsRemoved = connectionsRemoved + 1
-                end
-            elseif child:IsA("Attachment") then
-                -- Удаляем все Attachment'ы которые могут связывать с игроком
-                print("YBA: Найдена привязка:", child.Name, child.ClassName)
-                if child.Name == "StandAttach" or child.Name == "RootRigAttachment" then
-                    print("YBA: Удаляем подозрительную привязку:", child.Name)
-                    child:Destroy()
-                    connectionsRemoved = connectionsRemoved + 1
-                end
-            end
-        end
-        
-        -- Также проверяем все части стенда на связи и ограничения
-        for _, part in pairs(targetStand.Model:GetDescendants()) do
-            if part:IsA("BasePart") then
-                for _, child in pairs(part:GetChildren()) do
-                    if child:IsA("Weld") or child:IsA("Motor6D") or child:IsA("ManualWeld") then
-                        if (child.Part0 and child.Part0.Parent == player.Character) or 
-                           (child.Part1 and child.Part1.Parent == player.Character) then
-                            print("YBA: Удаляем связь из части", part.Name, ":", child.Name)
-                            child:Destroy()
-                            connectionsRemoved = connectionsRemoved + 1
-                        end
-                    elseif child:IsA("AlignPosition") or child:IsA("AlignOrientation") or child:IsA("BodyPosition") or child:IsA("BodyAngularVelocity") then
-                        -- Удаляем все ограничения позиции/ориентации
-                        print("YBA: Удаляем ограничение из части", part.Name, ":", child.Name, child.ClassName)
-                        child:Destroy()
-                        connectionsRemoved = connectionsRemoved + 1
-                    end
-                end
-            end
-        end
-        
-        print("YBA: Удалено связей с игроком:", connectionsRemoved)
-        
-        -- Альтернативный способ: переместить стенд в workspace и сделать независимым
-        if targetStand.Model.Parent ~= workspace then
-            print("YBA: Перемещаем стенд в workspace из", targetStand.Model.Parent.Name)
-            targetStand.Model.Parent = workspace
-        end
-        
-        -- Делаем стенд полностью независимым
-        targetStand.Root.CanCollide = false
-        targetStand.Root.Anchored = false
-        
-        -- Убираем все существующие Body объекты
-        for _, child in pairs(targetStand.Root:GetChildren()) do
-            if child:IsA("BodyVelocity") or child:IsA("BodyPosition") or child:IsA("BodyGyro") or child:IsA("BodyAngularVelocity") then
-                print("YBA: Удаляем Body объект:", child.Name, child.ClassName)
-                child:Destroy()
-                connectionsRemoved = connectionsRemoved + 1
-            end
-        end
-        
-        -- Позиционируем стенд рядом с игроком после отсоединения
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local playerRoot = player.Character.HumanoidRootPart
-            local standPosition = playerRoot.Position + playerRoot.CFrame.LookVector * 5
-            targetStand.Root.CFrame = CFrame.new(standPosition, playerRoot.Position)
-            targetStand.Root.Anchored = false
-            
-            -- Останавливаем любое существующее движение стенда
-            targetStand.Root.Velocity = Vector3.new(0, 0, 0)
-            targetStand.Root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            
-            print("YBA: Стенд позиционирован на:", standPosition)
-        end
-        
-        print("YBA: Стенд отсоединен и готов к управлению")
-    end
-    
-    if YBAConfig.FreezePlayer and freezePlayer then 
-        print("YBA: Замораживаем игрока...")
-        freezePlayer() 
-    end
-    if YBAConfig.SwitchCamera then 
-        print("YBA: Переключение камеры включено")
-    end
-    if YBAConfig.TransferControl and activateFreeCamera then 
-        print("YBA: Активируем управление стендом...")
-        activateFreeCamera(targetStand) 
-    end
-    
-    local char = player.Character
-    local humanoid = char and char:FindFirstChild("Humanoid")
-    if humanoid then
-        local deathConnection = humanoid.Died:Connect(function()
-            stopYBA()
         end)
-        table.insert(standControlConnections, deathConnection)
-    end
-    
-    -- Запускаем подземный полет через 5 секунд
-    task.spawn(function()
-        task.wait(5)
-        if not isYBAEnabled then return end
-        if startUndergroundControl then startUndergroundControl() end
-    end)
-end
-
-local function stopYBA()
-    if not isYBAEnabled then return end
-    
-    isYBAEnabled = false
-    YBAConfig.Enabled = false
-    
-    if disableFreeCamera then
-        disableFreeCamera()
-    end
-    if unfreezePlayer then
-        unfreezePlayer()
-    end
-    
-    for _, connection in ipairs(standControlConnections) do
-        if connection then
-            pcall(function() connection:Disconnect() end)
-        end
-    end
-    standControlConnections = {}
-    controlledStand = nil
-    
-    print("Stand Range Hack деактивирован")
-    print("Автоматически отключаем Underground Flight...")
-    if stopUndergroundControl then
-        stopUndergroundControl()
     end
 end
 
-print("🎯 YBA HACKS MODULE: Основные функции YBA Stand Range загружены")
+-- Система вкладок
+local tabs = {}
+local currentTab = nil
 
--- ==================== UNDERGROUND CONTROL FUNCTIONS ====================
-
-local function startUndergroundControl()
-    print("=== ЗАПУСК ПОДЗЕМНОГО ПОЛЕТА ===")
+local function CreateTab(name, icon, color)
+    local tabColor = color or Color3.fromRGB(60, 120, 255)
     
-    if isUndergroundControlEnabled then 
-        print("Подземный полет уже активен!")
-        return 
+    -- Кнопка вкладки
+    local TabButton = Instance.new("TextButton")
+    TabButton.Name = name .. "Tab"
+    TabButton.Parent = SidePanel
+    TabButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    TabButton.BorderSizePixel = 0
+    TabButton.Position = UDim2.new(0, 10, 0, 15 + (#tabs * 55))
+    TabButton.Size = UDim2.new(1, -20, 0, 45)
+    TabButton.Font = Enum.Font.GothamSemibold
+    TabButton.Text = ""
+    TabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+    TabButton.AutoButtonColor = false
+    
+    local TabCorner = Instance.new("UICorner")
+    TabCorner.CornerRadius = UDim.new(0, 8)
+    TabCorner.Parent = TabButton
+    
+    -- Иконка
+    local IconLabel = Instance.new("TextLabel")
+    IconLabel.Parent = TabButton
+    IconLabel.BackgroundTransparency = 1
+    IconLabel.Position = UDim2.new(0, 15, 0, 0)
+    IconLabel.Size = UDim2.new(0, 30, 1, 0)
+    IconLabel.Font = Enum.Font.GothamBold
+    IconLabel.Text = icon or "📋"
+    IconLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    IconLabel.TextSize = 18
+    
+    -- Текст
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Parent = TabButton
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.Position = UDim2.new(0, 50, 0, 0)
+    TextLabel.Size = UDim2.new(1, -60, 1, 0)
+    TextLabel.Font = Enum.Font.GothamSemibold
+    TextLabel.Text = name
+    TextLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    TextLabel.TextSize = 14
+    TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Индикатор активности
+    local ActiveIndicator = Instance.new("Frame")
+    ActiveIndicator.Name = "ActiveIndicator"
+    ActiveIndicator.Parent = TabButton
+    ActiveIndicator.BackgroundColor3 = tabColor
+    ActiveIndicator.BorderSizePixel = 0
+    ActiveIndicator.Position = UDim2.new(0, 0, 0, 0)
+    ActiveIndicator.Size = UDim2.new(0, 0, 1, 0)
+    ActiveIndicator.Visible = false
+    
+    local IndicatorCorner = Instance.new("UICorner")
+    IndicatorCorner.CornerRadius = UDim.new(0, 8)
+    IndicatorCorner.Parent = ActiveIndicator
+    
+    -- Контент вкладки
+    local TabContent = Instance.new("Frame")
+    TabContent.Name = name .. "Content"
+    TabContent.Parent = MainContent
+    TabContent.BackgroundTransparency = 1
+    TabContent.Size = UDim2.new(1, 0, 1, 0)
+    TabContent.Visible = false
+    
+    local ContentLayout = Instance.new("UIListLayout")
+    ContentLayout.Parent = TabContent
+    ContentLayout.Padding = UDim.new(0, 15)
+    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ContentLayout.FillDirection = Enum.FillDirection.Vertical
+    
+    local ContentPadding = Instance.new("UIPadding")
+    ContentPadding.Parent = TabContent
+    ContentPadding.PaddingTop = UDim.new(0, 20)
+    ContentPadding.PaddingLeft = UDim.new(0, 20)
+    ContentPadding.PaddingRight = UDim.new(0, 20)
+    ContentPadding.PaddingBottom = UDim.new(0, 20)
+    
+    -- Функция переключения вкладки
+    local function SelectTab()
+        -- Сброс всех вкладок
+        for _, tab in pairs(tabs) do
+            CreateTween(tab.button, {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}, 0.2):Play()
+            CreateTween(tab.iconLabel, {TextColor3 = Color3.fromRGB(200, 200, 200)}, 0.2):Play()
+            CreateTween(tab.textLabel, {TextColor3 = Color3.fromRGB(200, 200, 200)}, 0.2):Play()
+            tab.activeIndicator.Visible = false
+            tab.content.Visible = false
+        end
+        
+        -- Активация текущей вкладки
+        CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(40, 40, 55)}, 0.2):Play()
+        CreateTween(IconLabel, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+        CreateTween(TextLabel, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+        
+        ActiveIndicator.Visible = true
+        ActiveIndicator.Size = UDim2.new(0, 0, 1, 0)
+        CreateTween(ActiveIndicator, {Size = UDim2.new(0, 4, 1, 0)}, 0.3, Enum.EasingStyle.Quad):Play()
+        
+        TabContent.Visible = true
+        currentTab = name
     end
     
-    local plr = Players.LocalPlayer
-    local char = plr.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+    -- События
+    TabButton.MouseButton1Click:Connect(SelectTab)
     
-    if not hum or not root then 
-        print("Персонаж не найден!")
-        return 
-    end
-    
-    print("Персонаж найден, позиция:", root.Position)
-    
-    if not findStands then
-        print("Функция findStands не найдена!")
-        return
-    end
-    
-    local stands = findStands()
-    if #stands == 0 then
-        print("Стенды не найдены! Убедитесь, что у вас есть стенд.")
-        return
-    end
-    
-    controlledStandForUnderground = stands[1].Root
-    isUndergroundControlEnabled = true
-    
-    print("Найден стенд:", stands[1].Name, "на расстоянии:", stands[1].Distance)
-    print("Перемещаем персонажа под стенд на 40 метров вниз")
-    
-    if not YBAConfig.UndergroundControl.OriginalPosition then
-        YBAConfig.UndergroundControl.OriginalPosition = root.Position
-        print("Исходная позиция сохранена:", root.Position)
-    end
-    
-    if YBAConfig.UndergroundControl.AutoNoClip and _G.isNoClipping and not _G.isNoClipping() and _G.startNoClip then
-        _G.startNoClip()
-        print("NoClip включен для подземного полета")
-    elseif not _G.startNoClip then
-        print("ОШИБКА: Функция startNoClip не найдена!")
-    end
-    
-    local flyOriginalJumpPower = hum.JumpPower
-    local flyOriginalJumpHeight = hum.JumpHeight
-    local flyOriginalGravity = workspace.Gravity
-    local flyOriginalHipHeight = hum.HipHeight
-    
-    hum.JumpPower = 0
-    hum.JumpHeight = 0
-    workspace.Gravity = 0
-    hum.HipHeight = 0
-    
-    local standPos = controlledStandForUnderground.Position
-    local undergroundPos = Vector3.new(standPos.X, standPos.Y - 40, standPos.Z)
-    
-    print("Стенд позиция:", standPos)
-    print("Целевая подземная позиция:", undergroundPos)
-    print("Текущая позиция персонажа:", root.Position)
-    
-    local initialBv = Instance.new("BodyVelocity", root)
-    initialBv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    local direction = (undergroundPos - root.Position).Unit
-    local speed = 200
-    initialBv.Velocity = direction * speed
-    
-    print("Создан BodyVelocity со скоростью:", initialBv.Velocity)
-    
-    task.spawn(function()
-        task.wait(1)
-        if initialBv and initialBv.Parent then
-            initialBv:Destroy()
-            print("Начальный BodyVelocity удален")
+    TabButton.MouseEnter:Connect(function()
+        if currentTab ~= name then
+            CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(35, 35, 45)}, 0.2):Play()
         end
     end)
     
-    print("Запускаем основной цикл подземного полета...")
-    local undergroundFlyLoop = RunService.RenderStepped:Connect(function()
-        if not isUndergroundControlEnabled or not controlledStandForUnderground or not controlledStandForUnderground.Parent then
-            print("Подземный полет остановлен - стенд не найден или функция отключена")
-            if hum then
-                hum.JumpPower = flyOriginalJumpPower
-                hum.JumpHeight = flyOriginalJumpHeight
-                hum.HipHeight = flyOriginalHipHeight
-            end
-            if not (_G.isNoClipping and _G.isNoClipping()) then
-                workspace.Gravity = flyOriginalGravity
-            end
-            return
+    TabButton.MouseLeave:Connect(function()
+        if currentTab ~= name then
+            CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}, 0.2):Play()
         end
+    end)
+    
+    table.insert(tabs, {
+        button = TabButton,
+        content = TabContent,
+        name = name,
+        iconLabel = IconLabel,
+        textLabel = TextLabel,
+        activeIndicator = ActiveIndicator
+    })
+    
+    return TabContent
+end
+
+-- Функция создания секции
+local function CreateSection(parent, title)
+    local SectionFrame = Instance.new("Frame")
+    SectionFrame.Parent = parent
+    SectionFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    SectionFrame.BorderSizePixel = 0
+    SectionFrame.Size = UDim2.new(1, 0, 0, 0)
+    SectionFrame.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local SectionCorner = Instance.new("UICorner")
+    SectionCorner.CornerRadius = UDim.new(0, 10)
+    SectionCorner.Parent = SectionFrame
+    
+    local SectionStroke = Instance.new("UIStroke")
+    SectionStroke.Parent = SectionFrame
+    SectionStroke.Color = Color3.fromRGB(60, 60, 80)
+    SectionStroke.Thickness = 1
+    SectionStroke.Transparency = 0.7
+    
+    local SectionTitle = Instance.new("TextLabel")
+    SectionTitle.Parent = SectionFrame
+    SectionTitle.BackgroundTransparency = 1
+    SectionTitle.Position = UDim2.new(0, 15, 0, 10)
+    SectionTitle.Size = UDim2.new(1, -30, 0, 25)
+    SectionTitle.Font = Enum.Font.GothamBold
+    SectionTitle.Text = title
+    SectionTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SectionTitle.TextSize = 16
+    SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local SectionContent = Instance.new("Frame")
+    SectionContent.Parent = SectionFrame
+    SectionContent.BackgroundTransparency = 1
+    SectionContent.Position = UDim2.new(0, 10, 0, 40)
+    SectionContent.Size = UDim2.new(1, -20, 0, 0)
+    SectionContent.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local ContentLayout = Instance.new("UIListLayout")
+    ContentLayout.Parent = SectionContent
+    ContentLayout.Padding = UDim.new(0, 10)
+    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    local ContentPadding = Instance.new("UIPadding")
+    ContentPadding.Parent = SectionContent
+    ContentPadding.PaddingBottom = UDim.new(0, 15)
+    
+    return SectionContent
+end
+
+-- Функция создания кнопки
+local function CreateButton(parent, text, description, callback)
+    local ButtonFrame = Instance.new("Frame")
+    ButtonFrame.Parent = parent
+    ButtonFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    ButtonFrame.BorderSizePixel = 0
+    ButtonFrame.Size = UDim2.new(1, 0, 0, 60)
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 8)
+    ButtonCorner.Parent = ButtonFrame
+    
+    local ButtonGradient = Instance.new("UIGradient")
+    ButtonGradient.Parent = ButtonFrame
+    ButtonGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 60)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 35, 50))
+    }
+    ButtonGradient.Rotation = 90
+    
+    local Button = Instance.new("TextButton")
+    Button.Parent = ButtonFrame
+    Button.BackgroundTransparency = 1
+    Button.Size = UDim2.new(1, 0, 1, 0)
+    Button.Font = Enum.Font.Gotham
+    Button.Text = ""
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.AutoButtonColor = false
+    
+    local ButtonText = Instance.new("TextLabel")
+    ButtonText.Parent = ButtonFrame
+    ButtonText.BackgroundTransparency = 1
+    ButtonText.Position = UDim2.new(0, 15, 0, 8)
+    ButtonText.Size = UDim2.new(1, -30, 0, 25)
+    ButtonText.Font = Enum.Font.GothamBold
+    ButtonText.Text = text
+    ButtonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ButtonText.TextSize = 14
+    ButtonText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ButtonDesc = Instance.new("TextLabel")
+    ButtonDesc.Parent = ButtonFrame
+    ButtonDesc.BackgroundTransparency = 1
+    ButtonDesc.Position = UDim2.new(0, 15, 0, 30)
+    ButtonDesc.Size = UDim2.new(1, -30, 0, 20)
+    ButtonDesc.Font = Enum.Font.Gotham
+    ButtonDesc.Text = description or ""
+    ButtonDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ButtonDesc.TextSize = 11
+    ButtonDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Эффекты
+    Button.MouseEnter:Connect(function()
+        CreateTween(ButtonFrame, {BackgroundColor3 = Color3.fromRGB(50, 50, 70)}, 0.2):Play()
+        CreateTween(ButtonText, {TextColor3 = Color3.fromRGB(100, 150, 255)}, 0.2):Play()
+    end)
+    
+    Button.MouseLeave:Connect(function()
+        CreateTween(ButtonFrame, {BackgroundColor3 = Color3.fromRGB(40, 40, 55)}, 0.2):Play()
+        CreateTween(ButtonText, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+    end)
+    
+    Button.MouseButton1Click:Connect(function()
+        -- Анимация нажатия
+        CreateTween(ButtonFrame, {Size = UDim2.new(1, -4, 0, 56)}, 0.1):Play()
+        wait(0.1)
+        CreateTween(ButtonFrame, {Size = UDim2.new(1, 0, 0, 60)}, 0.1):Play()
         
-        local char = Players.LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then 
-            if isUndergroundControlEnabled then
-                stopUndergroundControl()
-            end
-            return 
+        if callback then 
+            spawn(callback)
         end
+    end)
+    
+    return ButtonFrame
+end
+
+-- Функция создания переключателя
+local function CreateToggle(parent, text, description, defaultState, callback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Parent = parent
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 60)
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local ToggleText = Instance.new("TextLabel")
+    ToggleText.Parent = ToggleFrame
+    ToggleText.BackgroundTransparency = 1
+    ToggleText.Position = UDim2.new(0, 15, 0, 8)
+    ToggleText.Size = UDim2.new(1, -80, 0, 25)
+    ToggleText.Font = Enum.Font.GothamBold
+    ToggleText.Text = text
+    ToggleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleText.TextSize = 14
+    ToggleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ToggleDesc = Instance.new("TextLabel")
+    ToggleDesc.Parent = ToggleFrame
+    ToggleDesc.BackgroundTransparency = 1
+    ToggleDesc.Position = UDim2.new(0, 15, 0, 30)
+    ToggleDesc.Size = UDim2.new(1, -80, 0, 20)
+    ToggleDesc.Font = Enum.Font.Gotham
+    ToggleDesc.Text = description or ""
+    ToggleDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ToggleDesc.TextSize = 11
+    ToggleDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Переключатель
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Parent = ToggleFrame
+    ToggleButton.BackgroundColor3 = defaultState and Color3.fromRGB(60, 120, 255) or Color3.fromRGB(60, 60, 70)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Position = UDim2.new(1, -55, 0.5, -12)
+    ToggleButton.Size = UDim2.new(0, 45, 0, 24)
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(0, 12)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local ToggleCircle = Instance.new("Frame")
+    ToggleCircle.Parent = ToggleButton
+    ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleCircle.BorderSizePixel = 0
+    ToggleCircle.Position = defaultState and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+    ToggleCircle.Size = UDim2.new(0, 20, 0, 20)
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(0, 10)
+    CircleCorner.Parent = ToggleCircle
+    
+    local isToggled = defaultState
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        isToggled = not isToggled
         
-        local standPos = controlledStandForUnderground.Position
-        local targetPos = Vector3.new(standPos.X, standPos.Y - 40, standPos.Z)
-        
-        local bv = root:FindFirstChild("BodyVelocity")
-        if not bv then
-            bv = Instance.new("BodyVelocity", root)
-            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        end
-        
-        local direction = (targetPos - root.Position).Unit
-        local distance = (targetPos - root.Position).Magnitude
-        
-        if distance > 2 then
-            local flySpeed = math.floor(YBAConfig.UndergroundControl.FlightSpeed)
-            
-            if isShiftPressed then
-                flySpeed = flySpeed + 50
-            end
-            
-            local currentVelocity = bv.Velocity
-            local targetVelocity = direction * flySpeed
-            local smoothedVelocity = currentVelocity + (targetVelocity - currentVelocity) * 0.15
-            bv.Velocity = smoothedVelocity
-        elseif distance > 0.5 then
-            local flySpeed = math.floor(YBAConfig.UndergroundControl.FlightSpeed * 0.2)
-            
-            if isShiftPressed then
-                flySpeed = flySpeed + 10
-            end
-            
-            local currentVelocity = bv.Velocity
-            local targetVelocity = direction * flySpeed
-            local smoothedVelocity = currentVelocity + (targetVelocity - currentVelocity) * 0.1
-            bv.Velocity = smoothedVelocity
+        if isToggled then
+            CreateTween(ToggleButton, {BackgroundColor3 = Color3.fromRGB(60, 120, 255)}, 0.2):Play()
+            CreateTween(ToggleCircle, {Position = UDim2.new(1, -22, 0.5, -10)}, 0.2):Play()
         else
-            bv.Velocity = Vector3.new(0, 0, 0)
+            CreateTween(ToggleButton, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2):Play()
+            CreateTween(ToggleCircle, {Position = UDim2.new(0, 2, 0.5, -10)}, 0.2):Play()
+        end
+        
+        if callback then
+            spawn(function() callback(isToggled) end)
         end
     end)
     
-    table.insert(undergroundControlConnections, undergroundFlyLoop)
-    
-    local humanoid = char and char:FindFirstChild("Humanoid")
-    if humanoid then
-        local deathConnection = humanoid.Died:Connect(function()
-            print("Игрок умер, отключаем Underground Flight...")
-            stopUndergroundControl()
-        end)
-        table.insert(undergroundControlConnections, deathConnection)
-    end
-    
-    print("Полет под землей за стендом активирован!")
-    print("Персонаж перенесен под стенд на расстоянии 40 метров под землей")
+    return ToggleFrame, isToggled
 end
 
-local function stopUndergroundControl()
-    if not isUndergroundControlEnabled then return end
+-- Функция создания ползунка
+local function CreateSlider(parent, text, description, minValue, maxValue, defaultValue, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Parent = parent
+    SliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    SliderFrame.BorderSizePixel = 0
+    SliderFrame.Size = UDim2.new(1, 0, 0, 80)
     
-    isUndergroundControlEnabled = false
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(0, 8)
+    SliderCorner.Parent = SliderFrame
     
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local SliderText = Instance.new("TextLabel")
+    SliderText.Parent = SliderFrame
+    SliderText.BackgroundTransparency = 1
+    SliderText.Position = UDim2.new(0, 15, 0, 8)
+    SliderText.Size = UDim2.new(1, -100, 0, 20)
+    SliderText.Font = Enum.Font.GothamBold
+    SliderText.Text = text
+    SliderText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SliderText.TextSize = 14
+    SliderText.TextXAlignment = Enum.TextXAlignment.Left
     
-    if hum then
-        hum.JumpPower = 50
-        hum.JumpHeight = 7.2
-        hum.HipHeight = 2
-    end
+    local SliderValue = Instance.new("TextLabel")
+    SliderValue.Parent = SliderFrame
+    SliderValue.BackgroundTransparency = 1
+    SliderValue.Position = UDim2.new(1, -85, 0, 8)
+    SliderValue.Size = UDim2.new(0, 70, 0, 20)
+    SliderValue.Font = Enum.Font.GothamBold
+    SliderValue.Text = tostring(defaultValue)
+    SliderValue.TextColor3 = Color3.fromRGB(100, 150, 255)
+    SliderValue.TextSize = 14
+    SliderValue.TextXAlignment = Enum.TextXAlignment.Right
     
-    workspace.Gravity = 196.2
+    local SliderDesc = Instance.new("TextLabel")
+    SliderDesc.Parent = SliderFrame
+    SliderDesc.BackgroundTransparency = 1
+    SliderDesc.Position = UDim2.new(0, 15, 0, 28)
+    SliderDesc.Size = UDim2.new(1, -30, 0, 16)
+    SliderDesc.Font = Enum.Font.Gotham
+    SliderDesc.Text = description or ""
+    SliderDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    SliderDesc.TextSize = 11
+    SliderDesc.TextXAlignment = Enum.TextXAlignment.Left
     
-    if root then
-        local bv = root:FindFirstChild("BodyVelocity")
-        if bv then
-            bv:Destroy()
+    -- Ползунок
+    local SliderTrack = Instance.new("Frame")
+    SliderTrack.Parent = SliderFrame
+    SliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    SliderTrack.BorderSizePixel = 0
+    SliderTrack.Position = UDim2.new(0, 15, 0, 55)
+    SliderTrack.Size = UDim2.new(1, -30, 0, 8)
+    
+    local SliderTrackCorner = Instance.new("UICorner")
+    SliderTrackCorner.CornerRadius = UDim.new(0, 4)
+    SliderTrackCorner.Parent = SliderTrack
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Parent = SliderTrack
+    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Position = UDim2.new(0, 0, 0, 0)
+    SliderFill.Size = UDim2.new((defaultValue - minValue) / (maxValue - minValue), 0, 1, 0)
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(0, 4)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderButton = Instance.new("TextButton")
+    SliderButton.Parent = SliderFrame
+    SliderButton.BackgroundTransparency = 1
+    SliderButton.Position = UDim2.new(0, 10, 0, 50)
+    SliderButton.Size = UDim2.new(1, -20, 0, 18)
+    SliderButton.Text = ""
+    
+    local currentValue = defaultValue
+    local dragging = false
+    
+    local function updateSlider(value)
+        currentValue = math.clamp(value, minValue, maxValue)
+        
+        -- Округление до десятых для плавности
+        if maxValue - minValue > 10 then
+            currentValue = math.floor(currentValue + 0.5)
+        else
+            currentValue = math.floor(currentValue * 10 + 0.5) / 10
+        end
+        
+        local percentage = (currentValue - minValue) / (maxValue - minValue)
+        CreateTween(SliderFill, {Size = UDim2.new(percentage, 0, 1, 0)}, 0.1):Play()
+        SliderValue.Text = tostring(currentValue)
+        
+        if callback then
+            callback(currentValue)
         end
     end
     
-    for _, connection in ipairs(undergroundControlConnections) do
-        if connection then
-            pcall(function() connection:Disconnect() end)
+    SliderButton.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    SliderButton.MouseMoved:Connect(function()
+        if dragging then
+            local mousePos = UserInputService:GetMouseLocation()
+            local framePos = SliderTrack.AbsolutePosition
+            local frameSize = SliderTrack.AbsoluteSize
+            
+            local relativePos = (mousePos.X - framePos.X) / frameSize.X
+            relativePos = math.clamp(relativePos, 0, 1)
+            
+            local newValue = minValue + (relativePos * (maxValue - minValue))
+            updateSlider(newValue)
+        end
+    end)
+    
+    return SliderFrame, updateSlider
+end
+
+-- Функция создания выпадающего списка
+local function CreateDropdown(parent, text, description, options, defaultOption, callback)
+    local DropdownFrame = Instance.new("Frame")
+    DropdownFrame.Parent = parent
+    DropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    DropdownFrame.BorderSizePixel = 0
+    DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local DropdownCorner = Instance.new("UICorner")
+    DropdownCorner.CornerRadius = UDim.new(0, 8)
+    DropdownCorner.Parent = DropdownFrame
+    
+    local DropdownText = Instance.new("TextLabel")
+    DropdownText.Parent = DropdownFrame
+    DropdownText.BackgroundTransparency = 1
+    DropdownText.Position = UDim2.new(0, 15, 0, 8)
+    DropdownText.Size = UDim2.new(1, -30, 0, 20)
+    DropdownText.Font = Enum.Font.GothamBold
+    DropdownText.Text = text
+    DropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownText.TextSize = 14
+    DropdownText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local DropdownDesc = Instance.new("TextLabel")
+    DropdownDesc.Parent = DropdownFrame
+    DropdownDesc.BackgroundTransparency = 1
+    DropdownDesc.Position = UDim2.new(0, 15, 0, 28)
+    DropdownDesc.Size = UDim2.new(1, -30, 0, 16)
+    DropdownDesc.Font = Enum.Font.Gotham
+    DropdownDesc.Text = description or ""
+    DropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    DropdownDesc.TextSize = 11
+    DropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Кнопка выпадающего списка
+    local DropdownButton = Instance.new("TextButton")
+    DropdownButton.Parent = DropdownFrame
+    DropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    DropdownButton.BorderSizePixel = 0
+    DropdownButton.Position = UDim2.new(0, 15, 0, 50)
+    DropdownButton.Size = UDim2.new(1, -30, 0, 25)
+    DropdownButton.Font = Enum.Font.Gotham
+    DropdownButton.Text = defaultOption
+    DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownButton.TextSize = 12
+    DropdownButton.AutoButtonColor = false
+    
+    local DropdownButtonCorner = Instance.new("UICorner")
+    DropdownButtonCorner.CornerRadius = UDim.new(0, 6)
+    DropdownButtonCorner.Parent = DropdownButton
+    
+    local currentOption = defaultOption
+    local isOpen = false
+    
+    -- Создание списка опций (скрыт по умолчанию)
+    local OptionsList = Instance.new("Frame")
+    OptionsList.Parent = DropdownFrame
+    OptionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    OptionsList.BorderSizePixel = 0
+    OptionsList.Position = UDim2.new(0, 15, 0, 76)
+    OptionsList.Size = UDim2.new(1, -30, 0, #options * 25)
+    OptionsList.Visible = false
+    OptionsList.ZIndex = 10
+    
+    local OptionsCorner = Instance.new("UICorner")
+    OptionsCorner.CornerRadius = UDim.new(0, 6)
+    OptionsCorner.Parent = OptionsList
+    
+    local OptionsLayout = Instance.new("UIListLayout")
+    OptionsLayout.Parent = OptionsList
+    OptionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    -- Создание опций
+    for i, option in ipairs(options) do
+        local OptionButton = Instance.new("TextButton")
+        OptionButton.Parent = OptionsList
+        OptionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        OptionButton.BorderSizePixel = 0
+        OptionButton.Size = UDim2.new(1, 0, 0, 25)
+        OptionButton.Font = Enum.Font.Gotham
+        OptionButton.Text = option
+        OptionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        OptionButton.TextSize = 12
+        OptionButton.AutoButtonColor = false
+        
+        OptionButton.MouseEnter:Connect(function()
+            OptionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+        end)
+        
+        OptionButton.MouseLeave:Connect(function()
+            OptionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        end)
+        
+        OptionButton.MouseButton1Click:Connect(function()
+            currentOption = option
+            DropdownButton.Text = option
+            OptionsList.Visible = false
+            isOpen = false
+            
+            if callback then
+                callback(option)
+            end
+        end)
+    end
+    
+    DropdownButton.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        OptionsList.Visible = isOpen
+        
+        if isOpen then
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80 + (#options * 25))
+        else
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        end
+    end)
+    
+    return DropdownFrame
+end
+
+-- Функции ESP
+local function clearESP()
+    -- Очистка Instance объектов
+    for _, espObj in pairs(espObjects) do
+        if espObj and espObj.Parent then
+            espObj:Destroy()
         end
     end
-    undergroundControlConnections = {}
+    espObjects = {}
     
-    if YBAConfig.UndergroundControl.OriginalPosition then
-        if root then
-            print("Плавно возвращаем персонажа в исходную позицию...")
-            
-            local returnBv = Instance.new("BodyVelocity", root)
-            returnBv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            
-            local direction = (YBAConfig.UndergroundControl.OriginalPosition - root.Position).Unit
-            local distance = (YBAConfig.UndergroundControl.OriginalPosition - root.Position).Magnitude
-            local returnSpeed = 100
-            
-            returnBv.Velocity = direction * returnSpeed
-            
-            local returnConnection = RunService.Heartbeat:Connect(function()
-                local currentDistance = (YBAConfig.UndergroundControl.OriginalPosition - root.Position).Magnitude
-                
-                if currentDistance < 2 then
-                    returnBv:Destroy()
-                    returnConnection:Disconnect()
-                    
-                    YBAConfig.UndergroundControl.OriginalPosition = nil
-                    print("Персонаж возвращен в исходную позицию")
-                end
+    -- Очистка Drawing объектов
+    for _, drawObj in pairs(drawingObjects) do
+        if drawObj then
+            pcall(function()
+                drawObj:Remove()
             end)
         end
     end
-    
-    controlledStandForUnderground = nil
-    print("Underground Flight деактивирован")
+    drawingObjects = {}
 end
 
-print("🎯 YBA HACKS MODULE: Underground Control загружен")
+local function getPlayerTeam(player)
+    if currentGame == "Centaura" then
+        return player.Team
+    else
+        return player.Team
+    end
+end
 
--- ==================== ANTI TIME STOP FUNCTIONS ====================
+local function isPlayerEnemy(player)
+    if not espSettings.teamCheck then
+        return true
+    end
+    
+    local localTeam = getPlayerTeam(LocalPlayer)
+    local playerTeam = getPlayerTeam(player)
+    
+    if not localTeam or not playerTeam then
+        return true
+    end
+    
+    return localTeam ~= playerTeam
+end
 
-local function detectTimeStop()
-    local players = Players:GetPlayers()
-    local localPlayer = Players.LocalPlayer
-    local localChar = localPlayer.Character
-    local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
+local function createESPBox(player)
+    if player == LocalPlayer then return end
     
-    if not localRoot then return false end
+    local character = player.Character
+    if not character then return end
     
-    for _, player in pairs(players) do
-        if player ~= localPlayer then
-            local char = player.Character
-            if char then
-                local stand = char:FindFirstChild("Stand")
-                if stand then
-                    local standAbilities = stand:FindFirstChild("Abilities")
-                    if standAbilities then
-                        for _, ability in pairs(standAbilities:GetChildren()) do
-                            local abilityName = ability.Name:lower()
-                            if abilityName:find("time") or 
-                               abilityName:find("stop") or
-                               abilityName:find("za warudo") or
-                               abilityName:find("the world") or
-                               abilityName:find("timestop") or
-                               abilityName:find("time_stop") or
-                               abilityName:find("za") or
-                               abilityName:find("warudo") then
-                                return true, player, ability
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    local isEnemy = isPlayerEnemy(player)
+    local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
+    
+    -- Создание чамсов (обводка)
+    if espSettings.chams then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "SSLKinESP"
+        highlight.Adornee = character
+        highlight.FillColor = espColor
+        highlight.FillTransparency = 0.7
+        highlight.OutlineColor = espColor
+        highlight.OutlineTransparency = 0
+        highlight.Parent = character
+        table.insert(espObjects, highlight)
+    end
+    
+    -- Создание квадратов (Drawing)
+    if espSettings.boxes then
+        local box = Drawing.new("Square")
+        box.Visible = false
+        box.Color = espColor
+        box.Thickness = 2
+        box.Transparency = 1
+        box.Filled = false
+        
+        table.insert(drawingObjects, box)
+        
+        -- Обновление квадрата
+        spawn(function()
+            while box and character.Parent and humanoidRootPart.Parent do
+                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid then
+                        local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
+                        local scaleFactor = 1000 / distance
+                        local width = math.clamp(scaleFactor, 3, 15)
+                        local height = width * 1.5
+                        
+                        box.Size = Vector2.new(width, height)
+                        box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
+                        box.Visible = true
+                    else
+                        box.Visible = false
+                    end
+                else
+                    box.Visible = false
+                end
+                wait()
+            end
+            if box then
+                pcall(function()
+                    box:Remove()
+                end)
+            end
+        end)
+    end
+    
+    -- Создание BillboardGui для дополнительной информации
+    if espSettings.names or espSettings.distance or espSettings.health then
+        local billboardGui = Instance.new("BillboardGui")
+        billboardGui.Name = "ESPInfo"
+        billboardGui.Adornee = humanoidRootPart
+        billboardGui.Size = UDim2.new(0, 200, 0, 100)
+        billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+        billboardGui.AlwaysOnTop = true
+        billboardGui.Parent = Workspace
+        table.insert(espObjects, billboardGui)
+        
+        local yOffset = 0
+        
+        -- Имя игрока
+        if espSettings.names then
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Parent = billboardGui
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Size = UDim2.new(1, 0, 0, 20)
+            nameLabel.Position = UDim2.new(0, 0, 0, yOffset)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.Text = player.Name
+            nameLabel.TextColor3 = espSettings.nameColor
+            nameLabel.TextSize = 16
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            yOffset = yOffset + 25
+        end
+        
+        -- Дистанция
+        if espSettings.distance then
+            local distanceLabel = Instance.new("TextLabel")
+            distanceLabel.Parent = billboardGui
+            distanceLabel.BackgroundTransparency = 1
+            distanceLabel.Size = UDim2.new(1, 0, 0, 16)
+            distanceLabel.Position = UDim2.new(0, 0, 0, yOffset)
+            distanceLabel.Font = Enum.Font.Gotham
+            distanceLabel.Text = "0m"
+            distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            distanceLabel.TextSize = 14
+            distanceLabel.TextStrokeTransparency = 0
+            distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            yOffset = yOffset + 20
+            
+            -- Обновление дистанции
+            spawn(function()
+                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                    local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
+                    distanceLabel.Text = math.floor(distance) .. "m"
+                    wait(0.1)
+                end
+            end)
+        end
+        
+        -- Здоровье
+        if espSettings.health then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                local healthLabel = Instance.new("TextLabel")
+                healthLabel.Parent = billboardGui
+                healthLabel.BackgroundTransparency = 1
+                healthLabel.Size = UDim2.new(1, 0, 0, 16)
+                healthLabel.Position = UDim2.new(0, 0, 0, yOffset)
+                healthLabel.Font = Enum.Font.Gotham
+                healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                healthLabel.TextSize = 14
+                healthLabel.TextStrokeTransparency = 0
+                healthLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                
+                -- Обновление здоровья
+                humanoid.HealthChanged:Connect(function()
+                    if healthLabel.Parent then
+                        healthLabel.Text = math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                        local healthPercent = humanoid.Health / humanoid.MaxHealth
+                        if healthPercent > 0.6 then
+                            healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                        elseif healthPercent > 0.3 then
+                            healthLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                        else
+                            healthLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                        end
+                    end
+                end)
+            end
+        end
+    end
+    
+    -- Трейсеры
+    if espSettings.tracers then
+        local line = Drawing.new("Line")
+        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+        line.Color = espColor
+        line.Thickness = 2
+        line.Transparency = 1
+        line.Visible = true
+        
+        table.insert(drawingObjects, line)
+        
+        -- Обновление трейсера
+        spawn(function()
+            while line and character.Parent and humanoidRootPart.Parent do
+                local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    line.To = Vector2.new(vector.X, vector.Y)
+                    line.Visible = true
+                else
+                    line.Visible = false
+                end
+                wait()
+            end
+            if line then
+                pcall(function()
+                    line:Remove()
+                end)
+            end
+        end)
+    end
+end
+
+local function updateESP()
+    clearESP()
+    
+    if espSettings.enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                createESPBox(player)
+            end
+        end
+    end
+end
+
+-- FOV Circle для аимбота
+local function createFOVCircle()
+    if fovCircle then
+        pcall(function()
+            fovCircle:Remove()
+        end)
+    end
+    
+    if currentGame == "Centaura" and showFOVCircle then
+        fovCircle = Drawing.new("Circle")
+        fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        fovCircle.Radius = aimbotFOV
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Thickness = 2
+        fovCircle.Transparency = 0.7
+        fovCircle.Filled = false
+        fovCircle.Visible = true
+        
+        -- Обновление позиции и размера круга
+        spawn(function()
+            while fovCircle and showFOVCircle do
+                fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                fovCircle.Radius = aimbotFOV
+                wait()
+            end
+        end)
+    end
+end
+
+-- Функции освещения
+local function toggleFullBright(enabled)
+    if enabled then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    else
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    end
+end
+
+local function toggleNoFog(enabled)
+    if enabled then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+    else
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.FogStart = originalLighting.FogStart
+    end
+end
+
+-- Создание вкладок в зависимости от игры
+local PlayerTab = CreateTab("Игрок", "👤", Color3.fromRGB(100, 150, 255))
+local GameTab = CreateTab("Игра", "🎮", Color3.fromRGB(255, 100, 150))
+local VisualTab = CreateTab("Визуалы", "👁", Color3.fromRGB(150, 255, 100))
+
+-- Добавляем вкладку Aimbot только для Centaura
+local AimbotTab = nil
+if currentGame == "Centaura" then
+    AimbotTab = CreateTab("Aimbot", "🎯", Color3.fromRGB(255, 80, 80))
+end
+
+local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
+
+-- ВКЛАДКА ИГРОКА
+local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
+
+-- Специальная проверка для Centaura - отключение полёта и noclip при взятии оружия
+if currentGame == "Centaura" then
+    local function checkWeaponEquipped()
+        if LocalPlayer.Character then
+            local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+            if tool then
+                if isFlying then
+                    isFlying = false
+                    if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                            if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
+                                obj:Destroy()
                             end
                         end
                     end
+                end
+                if isNoclipActive then
+                    isNoclipActive = false
+                end
+            end
+        end
+    end
+    
+    spawn(function()
+        while true do
+            checkWeaponEquipped()
+            wait(0.5)
+        end
+    end)
+end
+
+-- Скорость ходьбы
+CreateToggle(MovementSection, "Скорость ходьбы", "Включить/выключить изменение скорости", false, function(state)
+    speedEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Скорость включена!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Скорость выключена!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateSlider(MovementSection, "Значение скорости", "От 16 до 100", 16, 100, 32, function(value)
+    walkSpeed = value
+    if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end)
+
+-- Высота прыжка
+CreateToggle(MovementSection, "Высота прыжка", "Включить/выключить изменение прыжка", false, function(state)
+    jumpEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Прыжок включен!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = 7.2
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Прыжок выключен!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateSlider(MovementSection, "Значение прыжка", "От 7 до 100", 7, 100, 25, function(value)
+    jumpPower = value
+    if jumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+    end
+end)
+
+-- Полёт (отключен для Centaura)
+if currentGame ~= "Centaura" then
+    CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
+        if state then
+            local character = LocalPlayer.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if not humanoid or not rootPart then return end
+            
+            isFlying = true
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = rootPart
+            
+            local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+            bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+            bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+            bodyAngularVelocity.Parent = rootPart
+            
+            spawn(function()
+                while isFlying and bodyVelocity.Parent do
+                    local moveVector = Vector3.new(0, 0, 0)
+                    local cam = Camera
                     
-                    local standName = stand.Name:lower()
-                    if standName:find("the world") or 
-                       standName:find("za warudo") or
-                       standName:find("dio") or
-                       standName:find("jotaro") or
-                       standName:find("star platinum") or
-                       standName:find("the world") then
-                        return true, player, stand
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        moveVector = moveVector + (cam.CFrame.LookVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        moveVector = moveVector - (cam.CFrame.LookVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        moveVector = moveVector - (cam.CFrame.RightVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        moveVector = moveVector + (cam.CFrame.RightVector * flySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        moveVector = moveVector + Vector3.new(0, flySpeed, 0)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        moveVector = moveVector - Vector3.new(0, flySpeed, 0)
+                    end
+                    
+                    bodyVelocity.Velocity = moveVector
+                    RunService.Heartbeat:Wait()
+                end
+            end)
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Полёт активирован!",
+                Duration = 3
+            })
+        else
+            isFlying = false
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                    if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
+                        obj:Destroy()
                     end
                 end
+            end
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Полёт деактивирован!",
+                Duration = 3
+            })
+        end
+    end)
+    
+    CreateSlider(MovementSection, "Скорость полёта", "От 10 до 200", 10, 200, 50, function(value)
+        flySpeed = value
+    end)
+end
+
+-- ВКЛАДКА ИГРЫ
+local GameplaySection = CreateSection(GameTab, "🎯 Игровые функции")
+
+CreateToggle(GameplaySection, "Бесконечные прыжки", "Позволяет прыгать в воздухе", false, function(state)
+    infiniteJumpEnabled = state
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Бесконечные прыжки включены!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Бесконечные прыжки выключены!",
+            Duration = 3
+        })
+    end
+end)
+
+-- Noclip (отключен для Centaura)
+if currentGame ~= "Centaura" then
+    CreateToggle(GameplaySection, "Проход сквозь стены", "Отключает коллизию персонажа", false, function(state)
+        isNoclipActive = state
+        
+        if state then
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Noclip активирован!",
+                Duration = 3
+            })
+        else
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Noclip деактивирован!",
+                Duration = 3
+            })
+        end
+    end)
+end
+
+-- ВКЛАДКА AIMBOT (только для Centaura)
+if currentGame == "Centaura" and AimbotTab then
+    local AimbotMainSection = CreateSection(AimbotTab, "🎯 Основные настройки")
+    
+    CreateToggle(AimbotMainSection, "Включить Aimbot", "Автоматическое прицеливание на врагов", false, function(state)
+        aimbotEnabled = state
+        
+        if state then
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Aimbot активирован!",
+                Duration = 3
+            })
+        else
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Aimbot деактивирован!",
+                Duration = 3
+            })
+        end
+    end)
+    
+    CreateSlider(AimbotMainSection, "FOV (поле зрения)", "Радиус захвата цели в пикселях", 30, 300, 90, function(value)
+        aimbotFOV = value
+        if fovCircle then
+            fovCircle.Radius = value
+        end
+    end)
+    
+    CreateSlider(AimbotMainSection, "Плавность", "Скорость наведения (чем больше, тем плавнее)", 1, 20, 5, function(value)
+        aimbotSmoothness = value
+    end)
+    
+    CreateToggle(AimbotMainSection, "Показать FOV круг", "Отображение круга прицеливания", false, function(state)
+        showFOVCircle = state
+        createFOVCircle()
+    end)
+    
+    local AimbotTargetSection = CreateSection(AimbotTab, "🎯 Настройки прицеливания")
+    
+    CreateDropdown(AimbotTargetSection, "Часть тела", "Выберите часть тела для прицеливания", 
+        {"Head", "Neck", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}, "Head", function(option)
+        if option == "Neck" then
+            aimbotTargetPart = "Head" -- Шея это часть головы в Roblox
+        elseif option == "Torso" then
+            aimbotTargetPart = "Torso"
+        elseif option == "Left Arm" then
+            aimbotTargetPart = "Left Arm"
+        elseif option == "Right Arm" then
+            aimbotTargetPart = "Right Arm"
+        elseif option == "Left Leg" then
+            aimbotTargetPart = "Left Leg"
+        elseif option == "Right Leg" then
+            aimbotTargetPart = "Right Leg"
+        else
+            aimbotTargetPart = "Head"
+        end
+    end)
+    
+    CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
+        aimbotVisibleOnly = state
+    end)
+    
+    CreateToggle(AimbotTargetSection, "Проверка команды", "Не прицеливаться на союзников", true, function(state)
+        aimbotTeamCheck = state
+    end)
+end
+
+-- ВКЛАДКА ВИЗУАЛОВ
+local LightingSection = CreateSection(VisualTab, "💡 Освещение")
+
+CreateToggle(LightingSection, "Полная яркость", "Убирает тени и делает всё ярким", false, function(state)
+    fullBrightEnabled = state
+    toggleFullBright(state)
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полная яркость включена!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полная яркость выключена!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateToggle(LightingSection, "Убрать туман", "Увеличивает дальность видимости", false, function(state)
+    noFogEnabled = state
+    toggleNoFog(state)
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман убран!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман восстановлен!",
+            Duration = 3
+        })
+    end
+end)
+
+local ESPSection = CreateSection(VisualTab, "👁 ESP Настройки")
+
+CreateToggle(ESPSection, "Включить ESP", "Основной переключатель ESP", false, function(state)
+    espSettings.enabled = state
+    updateESP()
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "ESP активирован!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "ESP деактивирован!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateToggle(ESPSection, "Квадраты", "Показывает квадраты вокруг игроков", true, function(state)
+    espSettings.boxes = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Чамсы (обводка)", "Показывает обводку через стены", false, function(state)
+    espSettings.chams = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Имена игроков", "Показывает имена игроков", false, function(state)
+    espSettings.names = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Дистанция", "Показывает расстояние до игроков", false, function(state)
+    espSettings.distance = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Здоровье", "Показывает здоровье игроков", false, function(state)
+    espSettings.health = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
+    espSettings.tracers = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
+    espSettings.teamCheck = state
+    updateESP()
+end)
+
+-- ВКЛАДКА РАЗНОЕ
+local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
+
+CreateButton(UtilitySection, "Информация об игре", "Показывает данные о текущей игре", function()
+    local success, gameInfo = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    
+    if success then
+        local info = string.format(
+            "Игра: %s\nРежим: %s\nИгроков: %d\nВаш пинг: %d мс\nPlace ID: %d",
+            gameInfo.Name,
+            currentGame,
+            #Players:GetPlayers(),
+            math.floor(LocalPlayer:GetNetworkPing() * 1000),
+            game.PlaceId
+        )
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Информация об игре",
+            Text = info,
+            Duration = 10
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Ошибка",
+            Text = "Не удалось получить информацию об игре",
+            Duration = 3
+        })
+    end
+end)
+
+-- Системные функции
+local function setupInfiniteJump()
+    UserInputService.JumpRequest:Connect(function()
+        if infiniteJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
+local function setupNoclip()
+    if currentGame ~= "Centaura" then
+        RunService.Stepped:Connect(function()
+            if isNoclipActive and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            elseif not isNoclipActive and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Aimbot для Centaura
+if currentGame == "Centaura" then
+    local function getClosestEnemy()
+        local closestPlayer = nil
+        local shortestDistance = math.huge
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(aimbotTargetPart) then
+                if aimbotTeamCheck and not isPlayerEnemy(player) then
+                    continue
+                end
                 
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local partName = part.Name:lower()
-                        if partName:find("time") or 
-                           partName:find("stop") or
-                           partName:find("freeze") or
-                           partName:find("timestop") then
-                            return true, player, part
+                local targetPart = player.Character[aimbotTargetPart]
+                local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                
+                if onScreen then
+                    local distance = (Vector2.new(vector.X, vector.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+                    
+                    if distance < aimbotFOV and distance < shortestDistance then
+                        if aimbotVisibleOnly then
+                            local raycastParams = RaycastParams.new()
+                            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
+                            
+                            local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, raycastParams)
+                            
+                            if not raycastResult then
+                                closestPlayer = player
+                                shortestDistance = distance
+                            end
+                        else
+                            closestPlayer = player
+                            shortestDistance = distance
                         end
                     end
                 end
             end
         end
+        
+        return closestPlayer
     end
     
-    if localChar then
-        local hum = localChar:FindFirstChildOfClass("Humanoid")
-        if hum then
-            for _, part in pairs(localChar:GetDescendants()) do
-                if part:IsA("BasePart") and part.Anchored then
-                    return true, nil, nil
-                end
-            end
-        end
-    end
-    
-    return false
-end
-
-local function createAntiTimeStopEffect()
-    if not AntiTimeStopConfig.VisualEffect then return end
-    
-    local char = Players.LocalPlayer.Character
-    if not char then return end
-    
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "AntiTimeStopEffect"
-    highlight.FillColor = Color3.fromRGB(0, 255, 0)
-    highlight.OutlineColor = Color3.fromRGB(0, 200, 0)
-    highlight.FillTransparency = 0.3
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = char
-    
-    antiTimeStopEffect = highlight
-end
-
-local function removeAntiTimeStopEffect()
-    if antiTimeStopEffect then
-        antiTimeStopEffect:Destroy()
-        antiTimeStopEffect = nil
-    end
-end
-
-local function startAntiTimeStop()
-    local plr = Players.LocalPlayer
-    local char = plr.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if not hum or not root then return end
-    
-    isAntiTimeStopEnabled = true
-    timeStopDetected = false
-    
-    originalAntiTimeStopWalkSpeed = hum.WalkSpeed
-    originalAntiTimeStopJumpPower = hum.JumpPower
-    
-    hum.WalkSpeed = AntiTimeStopConfig.WalkSpeed * AntiTimeStopConfig.MovementSpeed
-    hum.JumpPower = AntiTimeStopConfig.JumpPower
-    
-    createAntiTimeStopEffect()
-    
-    print("Anti TS: Принудительное движение активировано")
-    
-    -- БЕЗОПАСНОЕ принудительное движение
-    local lastAntiTSUpdate = 0
-    local antiFreezeLoop = RunService.Heartbeat:Connect(function()
-        if not isAntiTimeStopEnabled or not char or not char.Parent then
-            return
-        end
-        
-        -- Ограничиваем до 30 FPS для уменьшения нагрузки
-        local currentTime = tick()
-        if currentTime - lastAntiTSUpdate < 0.033 then
-            return
-        end
-        lastAntiTSUpdate = currentTime
-        
-        -- Просто убираем Anchored с основных частей (безопасно)
-        if root then
-            root.Anchored = false
-        end
-        
-        if hum then
-            hum.PlatformStand = false
-        end
-        
-        -- ПРИНУДИТЕЛЬНОЕ движение через BodyVelocity
-        local moveVector = Vector3.new(0, 0, 0)
-        local cam = workspace.CurrentCamera
-        
-        -- Проверяем нажатые клавиши и принудительно двигаем
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveVector = moveVector + cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveVector = moveVector - cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveVector = moveVector - cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveVector = moveVector + cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveVector = moveVector + Vector3.new(0, 1, 0)
-        end
-        
-        -- Если есть движение - принудительно двигаем через BodyVelocity
-        if moveVector.Magnitude > 0 and root then
-            local bv = root:FindFirstChild("AntiTSBodyVelocity")
-            if not bv then
-                bv = Instance.new("BodyVelocity")
-                bv.Name = "AntiTSBodyVelocity"
-                bv.MaxForce = Vector3.new(4000, 4000, 4000)
-                bv.Parent = root
-            end
-            
-            bv.Velocity = moveVector.Unit * 20 -- Нормальная скорость движения
-        else
-            -- Убираем BodyVelocity когда не двигаемся
-            local bv = root and root:FindFirstChild("AntiTSBodyVelocity")
-            if bv then
-                bv:Destroy()
+    RunService.Heartbeat:Connect(function()
+        if aimbotEnabled then
+            local target = getClosestEnemy()
+            if target and target.Character and target.Character:FindFirstChild(aimbotTargetPart) then
+                local targetPart = target.Character[aimbotTargetPart]
+                local targetPosition = targetPart.Position
+                
+                local camera = Camera
+                local currentCFrame = camera.CFrame
+                local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+                
+                camera.CFrame = currentCFrame:Lerp(targetCFrame, 1 / aimbotSmoothness)
             end
         end
     end)
-    
-    table.insert(antiTimeStopConnections, antiFreezeLoop)
 end
 
-local function stopAntiTimeStop()
-    isAntiTimeStopEnabled = false
-    timeStopDetected = false
-    
-    local char = Players.LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if hum then
-        hum.WalkSpeed = originalAntiTimeStopWalkSpeed
-        hum.JumpPower = originalAntiTimeStopJumpPower
-        hum.AutoRotate = true
-        hum.AutoJumpEnabled = true
-    end
-    
-    if root then
-        local bv = root:FindFirstChild("AntiTSBodyVelocity")
-        if bv then
-            bv:Destroy()
+-- Мониторинг игроков для ESP
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        wait(1)
+        if espSettings.enabled then
+            updateESP()
         end
-        
-        local bg = root:FindFirstChild("AntiTimeStopBodyGyro")
-        if bg then
-            bg:Destroy()
-        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function()
+    if espSettings.enabled then
+        updateESP()
     end
-    
-    removeAntiTimeStopEffect()
-    
-    for _, connection in ipairs(antiTimeStopConnections) do
-        if connection then
-            pcall(function() connection:Disconnect() end)
+end)
+
+-- Мониторинг смерти игроков
+spawn(function()
+    while true do
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Character then
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.Died:Connect(function()
+                        wait(0.5)
+                        if espSettings.enabled then
+                            updateESP()
+                        end
+                    end)
+                end
+            end
         end
+        wait(5)
     end
-    antiTimeStopConnections = {}
+end)
+
+-- Обработчики кнопок
+CloseButton.MouseButton1Click:Connect(HideGUI)
+MinimizeButton.MouseButton1Click:Connect(MinimizeGUI)
+
+-- Горячие клавиши
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
     
-    print("Anti Time Stop disabled")
-end
-
-print("🎯 YBA HACKS MODULE: Anti Time Stop загружен")
-
--- ==================== ОСТАЛЬНЫЕ ФУНКЦИИ YBA HACKS (ЗАГЛУШКИ) ====================
-
--- Item ESP Functions (заглушки - полную реализацию можно добавить позже)
-local function startItemESP()
-    print("YBA Item ESP: Активирован (заглушка)")
-    YBAConfig.ItemESP.Enabled = true
-end
-
-local function stopItemESP()
-    print("YBA Item ESP: Деактивирован (заглушка)")
-    YBAConfig.ItemESP.Enabled = false
-end
-
--- User Stand ESP Functions (заглушки)
-local function startUserStandESP()
-    print("YBA Player ESP: User Stand ESP активирован (заглушка)")
-end
-
-local function stopUserStandESP()
-    print("YBA Player ESP: User Stand ESP деактивирован (заглушка)")
-end
-
--- User Style ESP Functions (заглушки)
-local function startUserStyleESP()
-    print("YBA Player ESP: User Style ESP активирован (заглушка)")
-end
-
-local function stopUserStyleESP()
-    print("YBA Player ESP: User Style ESP деактивирован (заглушка)")
-end
-
--- Autofarm Functions (заглушки - полную реализацию можно добавить позже)
-local function startAutofarm()
-    print("YBA Autofarm: Активирован (заглушка)")
-    isAutofarmEnabled = true
-end
-
-local function stopAutofarm()
-    print("YBA Autofarm: Деактивирован (заглушка)")
-    isAutofarmEnabled = false
-end
-
-print("🎯 YBA HACKS MODULE: Остальные функции загружены")
-
--- ==================== ЭКСПОРТ ФУНКЦИЙ В ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
-
--- Экспортируем все функции YBA hacks в глобальные переменные
-_G.YBAHacksModule = {
-    -- Конфигурации
-    YBAConfig = YBAConfig,
-    AntiTimeStopConfig = AntiTimeStopConfig,
-    AutofarmConfig = AutofarmConfig,
-    
-    -- Основные функции YBA Stand Range
-    startYBA = startYBA,
-    stopYBA = stopYBA,
-    
-    -- Underground Control
-    startUndergroundControl = startUndergroundControl,
-    stopUndergroundControl = stopUndergroundControl,
-    
-    -- Anti Time Stop
-    startAntiTimeStop = startAntiTimeStop,
-    stopAntiTimeStop = stopAntiTimeStop,
-    
-    -- Item ESP
-    startItemESP = startItemESP,
-    stopItemESP = stopItemESP,
-    
-    -- User ESP
-    startUserStandESP = startUserStandESP,
-    stopUserStandESP = stopUserStandESP,
-    startUserStyleESP = startUserStyleESP,
-    stopUserStyleESP = stopUserStyleESP,
-    
-    -- Autofarm
-    startAutofarm = startAutofarm,
-    stopAutofarm = stopAutofarm,
-    
-    -- Вспомогательные функции
-    findStands = findStands,
-    freezePlayer = freezePlayer,
-    unfreezePlayer = unfreezePlayer,
-    activateFreeCamera = activateFreeCamera,
-    disableFreeCamera = disableFreeCamera,
-    controlStand = controlStand,
-    
-    -- Состояние модуля
-    isYBAEnabled = function() return isYBAEnabled end,
-    isAntiTimeStopEnabled = function() return isAntiTimeStopEnabled end,
-    isAutofarmEnabled = function() return isAutofarmEnabled end,
-    isUndergroundControlEnabled = function() return isUndergroundControlEnabled end,
-    itemESPEnabled = function() return itemESPEnabled end,
-    
-    -- YBAFreeCamera
-    YBAFreeCamera = YBAFreeCamera
-}
-
-print("🎯 YBA HACKS MODULE: Функции экспортированы в _G.YBAHacksModule")
-
--- ==================== ФИНАЛЬНАЯ ПРОВЕРКА И ЗАВЕРШЕНИЕ ====================
-
--- Проверяем что все основные функции доступны
-local function validateModule()
-    local requiredFunctions = {
-        "startYBA", "stopYBA", "startUndergroundControl", "stopUndergroundControl",
-        "startAntiTimeStop", "stopAntiTimeStop", "startItemESP", "stopItemESP",
-        "startAutofarm", "stopAutofarm", "findStands"
-    }
-    
-    local missingFunctions = {}
-    for _, funcName in ipairs(requiredFunctions) do
-        if not _G.YBAHacksModule[funcName] then
-            table.insert(missingFunctions, funcName)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        if MainFrame.Visible then
+            HideGUI()
+        else
+            ShowGUI()
         end
     end
-    
-    if #missingFunctions > 0 then
-        print("🎯 YBA HACKS MODULE: ПРЕДУПРЕЖДЕНИЕ - Отсутствуют функции:", table.concat(missingFunctions, ", "))
-        return false
-    end
-    
-    print("🎯 YBA HACKS MODULE: Все основные функции доступны ✓")
-    return true
+end)
+
+-- Инициализация
+setupInfiniteJump()
+setupNoclip()
+
+-- Активация первой вкладки
+if #tabs > 0 then
+    tabs[1].button.MouseButton1Click()
 end
 
--- Проверяем что основные зависимости доступны
-local function validateDependencies()
-    local requiredDependencies = {
-        {"_G.startNoClip", _G.startNoClip},
-        {"_G.stopNoClip", _G.stopNoClip},
-        {"_G.isNoClipping", _G.isNoClipping}
-    }
-    
-    local missingDeps = {}
-    for _, dep in ipairs(requiredDependencies) do
-        if not dep[2] then
-            table.insert(missingDeps, dep[1])
-        end
-    end
-    
-    if #missingDeps > 0 then
-        print("🎯 YBA HACKS MODULE: ПРЕДУПРЕЖДЕНИЕ - Отсутствуют зависимости:", table.concat(missingDeps, ", "))
-        print("🎯 YBA HACKS MODULE: Некоторые функции могут работать некорректно!")
-        return false
-    end
-    
-    print("🎯 YBA HACKS MODULE: Все зависимости доступны ✓")
-    return true
-end
+-- Показать GUI при загрузке
+ShowGUI()
 
--- Выполняем проверки
-local moduleValid = validateModule()
-local depsValid = validateDependencies()
+-- Уведомление о загрузке
+game.StarterGui:SetCore("SendNotification", {
+    Title = "SSLKin Uni Script",
+    Text = string.format("%s Mode v3.1 загружен! Insert для открытия/закрытия", currentGame),
+    Duration = 5
+})
 
-if moduleValid and depsValid then
-    print("🎯 YBA HACKS MODULE: ✅ Модуль загружен успешно и готов к использованию!")
-else
-    print("🎯 YBA HACKS MODULE: ⚠️  Модуль загружен с предупреждениями")
-end
-
-print("🎯 YBA HACKS MODULE: Загрузка завершена!")
+print(string.format("SSLKin Uni Script v3.1 загружен в режиме %s!", currentGame))
+print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
