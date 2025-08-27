@@ -1371,7 +1371,9 @@ local function updatePlayerChams(player)
     if not espSettings.enabled or not espSettings.chams then
         -- Удаляем чамс если он выключен
         if playerChams[player] then
-            playerChams[player]:Destroy()
+            pcall(function()
+                playerChams[player]:Destroy()
+            end)
             playerChams[player] = nil
         end
         return
@@ -1381,7 +1383,9 @@ local function updatePlayerChams(player)
     if not character then 
         -- Удаляем чамс если персонажа нет
         if playerChams[player] then
-            playerChams[player]:Destroy()
+            pcall(function()
+                playerChams[player]:Destroy()
+            end)
             playerChams[player] = nil
         end
         return 
@@ -1389,34 +1393,48 @@ local function updatePlayerChams(player)
     
     -- Проверяем что чамс все еще существует и прикреплен к правильному персонажу
     if playerChams[player] and (not playerChams[player].Parent or playerChams[player].Adornee ~= character) then
-        playerChams[player]:Destroy()
+        pcall(function()
+            playerChams[player]:Destroy()
+        end)
         playerChams[player] = nil
     end
     
     -- Создаем чамс только если его нет
     if not playerChams[player] then
-        local isEnemy = isPlayerEnemy(player)
-        local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
+        -- Упрощенная логика команд
+        local espColor = espSettings.enemyColor
+        if espSettings.teamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+            espColor = espSettings.allyColor
+        end
         
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "SSLKinESP_Chams"
-        highlight.Adornee = character
-        highlight.FillColor = espColor
-        highlight.FillTransparency = 0.7
-        highlight.OutlineColor = espColor
-        highlight.OutlineTransparency = 0
-        highlight.Parent = CoreGui -- Помещаем в CoreGui вместо character
+        local success, highlight = pcall(function()
+            local h = Instance.new("Highlight")
+            h.Name = "SSLKinESP_Chams"
+            h.Adornee = character
+            h.FillColor = espColor
+            h.FillTransparency = 0.7
+            h.OutlineColor = espColor
+            h.OutlineTransparency = 0
+            h.Parent = character -- Возвращаем обратно в character
+            return h
+        end)
         
-        playerChams[player] = highlight
+        if success then
+            playerChams[player] = highlight
+        end
     else
         -- Обновляем цвет существующего чамса
-        local isEnemy = isPlayerEnemy(player)
-        local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
-        
         if playerChams[player] and playerChams[player].Parent then
-            playerChams[player].FillColor = espColor
-            playerChams[player].OutlineColor = espColor
-            playerChams[player].Adornee = character -- Убеждаемся что привязан к правильному персонажу
+            pcall(function()
+                local espColor = espSettings.enemyColor
+                if espSettings.teamCheck and LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then
+                    espColor = espSettings.allyColor
+                end
+                
+                playerChams[player].FillColor = espColor
+                playerChams[player].OutlineColor = espColor
+                playerChams[player].Adornee = character
+            end)
         end
     end
 end
@@ -1479,8 +1497,8 @@ local function createESPBox(player)
                         if humanoid and humanoid.Health > 0 then
                             local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
                             local scaleFactor = 1000 / distance
-                            local width = math.clamp(scaleFactor, 20, 60)
-                            local height = width * 1.8
+                            local width = math.clamp(scaleFactor, 8, 25)
+                            local height = width * 1.5
                             
                             box.Size = Vector2.new(width, height)
                             box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
@@ -2550,11 +2568,23 @@ CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сох
     configTextBox.Text = ""
 end)
 
-CreateDropdown(ConfigManagementSection, "Загрузить конфиг", "Выберите конфиг для загрузки", 
+local selectedConfigName = ""
+local _, configDropdown = CreateDropdown(ConfigManagementSection, "Выбрать конфиг", "Выберите конфиг для загрузки", 
     getConfigNames(true), "", function(option)
-    if option and option ~= "" then
-        loadConfig(option)
+    selectedConfigName = option or ""
+end)
+
+CreateButton(ConfigManagementSection, "Загрузить выбранный конфиг", "Загрузить конфиг выбранный выше", function()
+    if selectedConfigName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
     end
+    
+    loadConfig(selectedConfigName)
 end)
 
 CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
@@ -2755,27 +2785,7 @@ spawn(function()
     end
 end)
 
--- Мониторинг игроков для ESP
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        wait(1)
-        if espSettings.enabled then
-            updateESP()
-        end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    -- Удаляем чамс игрока который покинул
-    if playerChams[player] then
-        playerChams[player]:Destroy()
-        playerChams[player] = nil
-    end
-    
-    if espSettings.enabled then
-        updateESP()
-    end
-end)
+-- Эти обработчики уже есть выше, убираем дубликаты
 
 -- Функция восстановления настроек после респавна
 local function restorePlayerSettings()
@@ -2807,23 +2817,58 @@ LocalPlayer.CharacterAdded:Connect(function(character)
     end
 end)
 
--- Мониторинг смерти игроков
-spawn(function()
-    while true do
-        for _, player in pairs(Players:GetPlayers()) do
-            if player.Character then
-                local humanoid = player.Character:FindFirstChild("Humanoid")
-                if humanoid then
-                    humanoid.Died:Connect(function()
-                        wait(0.5)
-                        if espSettings.enabled then
-                            updateESP()
-                        end
-                    end)
-                end
+-- Мониторинг смерти игроков (упрощенный)
+local connectedPlayers = {}
+
+local function connectPlayerDeath(player)
+    if connectedPlayers[player] or not player.Character then return end
+    
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        local connection = humanoid.Died:Connect(function()
+            wait(0.5)
+            if espSettings.enabled then
+                updateESP()
             end
+            connectedPlayers[player] = nil -- Убираем из списка после смерти
+        end)
+        connectedPlayers[player] = connection
+    end
+end
+
+-- Подключаем для всех текущих игроков
+for _, player in pairs(Players:GetPlayers()) do
+    connectPlayerDeath(player)
+end
+
+-- Подключаем для новых игроков
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        wait(1)
+        connectPlayerDeath(player)
+        if espSettings.enabled then
+            updateESP()
         end
-        wait(5)
+    end)
+end)
+
+-- Очищаем соединения при выходе игрока
+Players.PlayerRemoving:Connect(function(player)
+    if connectedPlayers[player] then
+        connectedPlayers[player]:Disconnect()
+        connectedPlayers[player] = nil
+    end
+    
+    -- Удаляем чамс игрока который покинул
+    if playerChams[player] then
+        pcall(function()
+            playerChams[player]:Destroy()
+        end)
+        playerChams[player] = nil
+    end
+    
+    if espSettings.enabled then
+        updateESP()
     end
 end)
 
