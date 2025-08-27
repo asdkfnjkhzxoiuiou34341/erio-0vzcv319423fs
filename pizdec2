@@ -609,15 +609,7 @@ local function loadAllSavedConfigs()
     end)
 end
 
--- Автосохранение при выходе (для некоторых эксплойтов)
-if storageMethod ~= "none" then
-    game:BindToClose(function()
-        saveConfigPersistent("AutoSave_Exit", {
-            lastSession = os.date("%Y-%m-%d %H:%M:%S"),
-            currentSettings = configs[currentConfig] or configs["Default"]
-        })
-    end)
-end
+-- Автосохранение при выходе убрано - не работает в клиенте
 
 -- Запускаем загрузку сохраненных конфигов
 loadAllSavedConfigs()
@@ -832,9 +824,11 @@ end
 
 -- Функции показа/скрытия GUI
 local function ShowGUI()
+    print("SSLKin: ShowGUI вызвана") -- Отладка
     MainFrame.Visible = true
     
     if MainFrame.Size == originalSize then
+        print("SSLKin: GUI уже открыто") -- Отладка
         return -- Уже открыто
     end
     
@@ -850,6 +844,7 @@ local function ShowGUI()
 end
 
 local function HideGUI()
+    print("SSLKin: HideGUI вызвана") -- Отладка
     local hideTween = CreateTween(MainFrame, {
         Size = UDim2.new(0, 0, 0, 0),
         Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -3347,16 +3342,21 @@ end)
 CloseButton.MouseButton1Click:Connect(HideGUI)
 
 -- Горячие клавиши
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.Insert then
-        if MainFrame.Visible then
-            HideGUI()
-        else
-            ShowGUI()
+spawn(function()
+    wait(1) -- Ждем полной инициализации
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.Insert then
+            print("SSLKin: Insert нажат, MainFrame.Visible =", MainFrame.Visible) -- Отладка
+            if MainFrame.Visible then
+                HideGUI()
+            else
+                ShowGUI()
+            end
         end
-    end
+    end)
+    print("SSLKin: Горячие клавиши инициализированы")
 end)
 
 -- Инициализация
