@@ -368,6 +368,10 @@ local drawingObjects = {}
 -- FOV Circle
 local fovCircle = nil
 
+-- Система конфигов
+local configs = {}
+local currentConfig = "Default"
+
 -- Сохранение оригинальных значений освещения
 local originalLighting = {
     Brightness = Lighting.Brightness,
@@ -1234,6 +1238,23 @@ local function CreateDropdown(parent, text, description, options, defaultOption,
         end
     end)
     
+    -- Закрытие dropdown при клике вне его области
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and isOpen then
+            local mousePosition = UserInputService:GetMouseLocation()
+            local framePosition = DropdownFrame.AbsolutePosition
+            local frameSize = DropdownFrame.AbsoluteSize
+            
+            -- Проверяем, находится ли клик вне dropdown
+            if mousePosition.X < framePosition.X or mousePosition.X > framePosition.X + frameSize.X or
+               mousePosition.Y < framePosition.Y or mousePosition.Y > framePosition.Y + frameSize.Y then
+                isOpen = false
+                OptionsList.Visible = false
+                DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+            end
+        end
+    end)
+    
     return DropdownFrame
 end
 
@@ -1256,6 +1277,9 @@ local function clearESP()
         end
     end
     drawingObjects = {}
+    
+    -- Очистка данных игроков
+    playerESPData = {}
 end
 
 local function getPlayerTeam(player)
@@ -1290,6 +1314,9 @@ local function createESPBox(player)
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return end
     
+    -- Регистрируем игрока в системе ESP
+    playerESPData[player] = true
+    
     local isEnemy = isPlayerEnemy(player)
     local espColor = isEnemy and espSettings.enemyColor or espSettings.allyColor
     
@@ -1317,13 +1344,13 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, box)
         
-        -- Обновление квадрата
-        spawn(function()
-            while box and character.Parent and humanoidRootPart.Parent do
+        -- Обновление квадрата в реальном времени
+        local boxConnection = RunService.Heartbeat:Connect(function()
+            if box and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.boxes then
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
                     local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid then
+                    if humanoid and humanoid.Health > 0 then
                         local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
                         local scaleFactor = 1000 / distance
                         local width = math.clamp(scaleFactor, 3, 15)
@@ -1338,12 +1365,16 @@ local function createESPBox(player)
                 else
                     box.Visible = false
                 end
-                wait()
-            end
-            if box then
-                pcall(function()
-                    box:Remove()
-                end)
+            else
+                box.Visible = false
+                if boxConnection then
+                    boxConnection:Disconnect()
+                end
+                if box then
+                    pcall(function()
+                        box:Remove()
+                    end)
+                end
             end
         end)
     end
@@ -1392,12 +1423,15 @@ local function createESPBox(player)
             distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
             yOffset = yOffset + 20
             
-            -- Обновление дистанции
-            spawn(function()
-                while distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") do
+            -- Обновление дистанции в реальном времени
+            local distanceConnection = RunService.Heartbeat:Connect(function()
+                if distanceLabel.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and humanoidRootPart.Parent then
                     local distance = (LocalPlayer.Character.HumanoidRootPart.Position - humanoidRootPart.Position).Magnitude
                     distanceLabel.Text = math.floor(distance) .. "m"
-                    wait(0.1)
+                else
+                    if distanceConnection then
+                        distanceConnection:Disconnect()
+                    end
                 end
             end)
         end
@@ -1447,36 +1481,59 @@ local function createESPBox(player)
         
         table.insert(drawingObjects, line)
         
-        -- Обновление трейсера
-        spawn(function()
-            while line and character.Parent and humanoidRootPart.Parent do
+        -- Обновление трейсера в реальном времени
+        local tracerConnection = RunService.Heartbeat:Connect(function()
+            if line and character.Parent and humanoidRootPart.Parent and espSettings.enabled and espSettings.tracers then
                 local vector, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
-                    line.To = Vector2.new(vector.X, vector.Y)
-                    line.Visible = true
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        line.To = Vector2.new(vector.X, vector.Y)
+                        line.Visible = true
+                    else
+                        line.Visible = false
+                    end
                 else
                     line.Visible = false
                 end
-                wait()
-            end
-            if line then
-                pcall(function()
-                    line:Remove()
-                end)
+            else
+                line.Visible = false
+                if tracerConnection then
+                    tracerConnection:Disconnect()
+                end
+                if line then
+                    pcall(function()
+                        line:Remove()
+                    end)
+                end
             end
         end)
     end
 end
 
+-- Хранилище ESP объектов для каждого игрока
+local playerESPData = {}
+
 local function updateESP()
-    clearESP()
-    
     if espSettings.enabled then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
-                createESPBox(player)
+                -- Создаем ESP только если его еще нет для этого игрока
+                if not playerESPData[player] then
+                    createESPBox(player)
+                end
             end
         end
+        
+        -- Удаляем ESP для игроков которые покинули игру
+        for player, _ in pairs(playerESPData) do
+            if not Players:FindFirstChild(player.Name) then
+                playerESPData[player] = nil
+            end
+        end
+    else
+        clearESP()
     end
 end
 
@@ -1498,12 +1555,11 @@ local function createFOVCircle()
         fovCircle.Filled = false
         fovCircle.Visible = true
         
-        -- Обновление позиции и размера круга
-        spawn(function()
-            while fovCircle and showFOVCircle do
+        -- Обновление позиции и размера круга в реальном времени
+        RunService.Heartbeat:Connect(function()
+            if fovCircle and showFOVCircle then
                 fovCircle.Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                 fovCircle.Radius = aimbotFOV
-                wait()
             end
         end)
     end
@@ -1546,6 +1602,7 @@ if currentGame == "Centaura" then
 end
 
 local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
+local ConfigTab = CreateTab("Конфиги", "💾", Color3.fromRGB(100, 255, 200))
 
 -- ВКЛАДКА ИГРОКА
 local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
@@ -1932,6 +1989,207 @@ CreateToggle(ESPSection, "Проверка команды", "Разные цве
     updateESP()
 end)
 
+-- Система конфигов
+local function saveConfig(configName)
+    local configData = {
+        -- Движение
+        speedEnabled = speedEnabled,
+        walkSpeed = walkSpeed,
+        jumpEnabled = jumpEnabled,
+        jumpPower = jumpPower,
+        infiniteJumpEnabled = infiniteJumpEnabled,
+        
+        -- Визуалы
+        fullBrightEnabled = fullBrightEnabled,
+        noFogEnabled = noFogEnabled,
+        
+        -- ESP
+        espSettings = {
+            enabled = espSettings.enabled,
+            boxes = espSettings.boxes,
+            chams = espSettings.chams,
+            names = espSettings.names,
+            distance = espSettings.distance,
+            health = espSettings.health,
+            tracers = espSettings.tracers,
+            teamCheck = espSettings.teamCheck
+        }
+    }
+    
+    -- Для Centaura добавляем настройки аимбота
+    if currentGame == "Centaura" then
+        configData.aimbotEnabled = aimbotEnabled
+        configData.aimbotFOV = aimbotFOV
+        configData.aimbotSmoothness = aimbotSmoothness
+        configData.aimbotTargetPart = aimbotTargetPart
+        configData.aimbotVisibleOnly = aimbotVisibleOnly
+        configData.aimbotTeamCheck = aimbotTeamCheck
+        configData.showFOVCircle = showFOVCircle
+    end
+    
+    configs[configName] = configData
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Конфиг '" .. configName .. "' сохранен!",
+        Duration = 3
+    })
+end
+
+local function loadConfig(configName)
+    local configData = configs[configName]
+    if not configData then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+        return
+    end
+    
+    -- Загружаем движение
+    speedEnabled = configData.speedEnabled or false
+    walkSpeed = configData.walkSpeed or 16
+    jumpEnabled = configData.jumpEnabled or false
+    jumpPower = configData.jumpPower or 7.2
+    infiniteJumpEnabled = configData.infiniteJumpEnabled or false
+    
+    -- Загружаем визуалы
+    fullBrightEnabled = configData.fullBrightEnabled or false
+    noFogEnabled = configData.noFogEnabled or false
+    toggleFullBright(fullBrightEnabled)
+    toggleNoFog(noFogEnabled)
+    
+    -- Загружаем ESP
+    if configData.espSettings then
+        espSettings.enabled = configData.espSettings.enabled or false
+        espSettings.boxes = configData.espSettings.boxes or false
+        espSettings.chams = configData.espSettings.chams or false
+        espSettings.names = configData.espSettings.names or false
+        espSettings.distance = configData.espSettings.distance or false
+        espSettings.health = configData.espSettings.health or false
+        espSettings.tracers = configData.espSettings.tracers or false
+        espSettings.teamCheck = configData.espSettings.teamCheck or true
+        updateESP()
+    end
+    
+    -- Для Centaura загружаем аимбот
+    if currentGame == "Centaura" then
+        aimbotEnabled = configData.aimbotEnabled or false
+        aimbotFOV = configData.aimbotFOV or 90
+        aimbotSmoothness = configData.aimbotSmoothness or 5
+        aimbotTargetPart = configData.aimbotTargetPart or "Head"
+        aimbotVisibleOnly = configData.aimbotVisibleOnly or true
+        aimbotTeamCheck = configData.aimbotTeamCheck or true
+        showFOVCircle = configData.showFOVCircle or false
+        createFOVCircle()
+    end
+    
+    -- Применяем настройки к персонажу
+    restorePlayerSettings()
+    
+    currentConfig = configName
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Конфиг '" .. configName .. "' загружен!",
+        Duration = 3
+    })
+end
+
+local function deleteConfig(configName)
+    if configName == "Default" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Нельзя удалить конфиг по умолчанию!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if configs[configName] then
+        configs[configName] = nil
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' удален!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+    end
+end
+
+local function getConfigNames()
+    local names = {}
+    for name, _ in pairs(configs) do
+        table.insert(names, name)
+    end
+    if #names == 0 then
+        table.insert(names, "Default")
+    end
+    return names
+end
+
+-- Создаем конфиг по умолчанию
+saveConfig("Default")
+
+-- ВКЛАДКА КОНФИГОВ
+local ConfigManagementSection = CreateSection(ConfigTab, "💾 Управление конфигами")
+
+-- Поле ввода имени конфига
+local configNameInput = ""
+CreateButton(ConfigManagementSection, "Ввести имя конфига", "Введите имя для нового конфига в чат", function()
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "Ввод имени конфига",
+        Text = "Напишите в чат имя для конфига и нажмите Enter",
+        Duration = 5
+    })
+    
+    local connection
+    connection = LocalPlayer.Chatted:Connect(function(message)
+        configNameInput = message
+        connection:Disconnect()
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Имя конфига установлено: " .. configNameInput,
+            Duration = 3
+        })
+    end)
+end)
+
+CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки", function()
+    if configNameInput == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала введите имя конфига!",
+            Duration = 3
+        })
+        return
+    end
+    
+    saveConfig(configNameInput)
+    configNameInput = ""
+end)
+
+CreateDropdown(ConfigManagementSection, "Загрузить конфиг", "Выберите конфиг для загрузки", 
+    getConfigNames(), "Default", function(option)
+    loadConfig(option)
+end)
+
+CreateDropdown(ConfigManagementSection, "Удалить конфиг", "Выберите конфиг для удаления", 
+    getConfigNames(), "Default", function(option)
+    deleteConfig(option)
+end)
+
+CreateButton(ConfigManagementSection, "Автосохранение", "Сохранить текущие настройки в автосохранение", function()
+    saveConfig("AutoSave_" .. os.date("%H-%M-%S"))
+end)
+
 -- ВКЛАДКА РАЗНОЕ
 local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
 
@@ -2064,6 +2322,36 @@ end)
 
 Players.PlayerRemoving:Connect(function()
     if espSettings.enabled then
+        updateESP()
+    end
+end)
+
+-- Функция восстановления настроек после респавна
+local function restorePlayerSettings()
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            -- Восстановление скорости
+            if speedEnabled then
+                humanoid.WalkSpeed = walkSpeed
+            end
+            
+            -- Восстановление прыжка
+            if jumpEnabled then
+                humanoid.JumpHeight = jumpPower
+            end
+        end
+    end
+end
+
+-- Мониторинг респавна локального игрока
+LocalPlayer.CharacterAdded:Connect(function(character)
+    wait(1) -- Ждем полной загрузки персонажа
+    restorePlayerSettings()
+    
+    -- Обновляем ESP
+    if espSettings.enabled then
+        wait(0.5)
         updateESP()
     end
 end)
