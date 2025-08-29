@@ -1,0 +1,2075 @@
+привет, обьясни мне, в этом коде есть что то связанное с отдачей скоростью стрельбы и патронами? вот код: -- Decompiler will be improved VERY SOON!
+-- Decompiled with Konstant V2.1, a fast Luau decompiler made in Luau by plusgiant5 (https://discord.gg/brNTY8nX8t)
+-- Decompiled on 2025-08-29 04:04:37
+-- Luau version 6, Types version 3
+-- Time taken: 0.050965 seconds
+
+local LocalPlayer_upvr = game.Players.LocalPlayer
+local Character_upvr = LocalPlayer_upvr.Character
+if not Character_upvr then
+	Character_upvr = LocalPlayer_upvr.CharacterAdded:Wait()
+end
+local Humanoid_upvr = Character_upvr:WaitForChild("Humanoid")
+local mouse_upvr = LocalPlayer_upvr:GetMouse()
+local CurrentCamera_upvr = workspace.CurrentCamera
+local Parent_2_upvr = script.Parent
+local ReplicatedStorage_upvr = game:GetService("ReplicatedStorage")
+local ContextActionService_upvr = game:GetService("ContextActionService")
+local UserInputService_upvr = game:GetService("UserInputService")
+local TREKModules_upvr = ReplicatedStorage_upvr:WaitForChild("TREKModules")
+local TREKRemotes_upvr = ReplicatedStorage_upvr.TREKRemotes
+local any_upvr = require(TREKModules_upvr.GunSettings[Parent_2_upvr.Name])
+local TweenModule_upvr = require(TREKModules_upvr.TweenModule)
+local GlobalSettings_upvr = require(TREKModules_upvr.GlobalSettings)
+local TREKHud_upvr = game.Players.LocalPlayer.PlayerGui:WaitForChild("TREKHud")
+local MobileButtons_upvr = game.Players.LocalPlayer.PlayerGui:WaitForChild("MobileUI"):WaitForChild("MobileButtons")
+local Ammo_upvr = TREKHud_upvr:WaitForChild("Ammo")
+local tick_result1_upvw = tick()
+shared.rolling = false
+shared.charging = false
+shared.sprintCooldown = false
+shared.ReloadingWeapon = false
+local var19_upvw = false
+local var20_upvw = false
+local var21_upvw = true
+local var22_upvw = false
+local var23_upvw = false
+local sprinting_upvr = LocalPlayer_upvr:WaitForChild("MovementSettings").sprinting
+local crouching_upvr = LocalPlayer_upvr:WaitForChild("MovementSettings").crouching
+local PercentMultiplier_upvr = LocalPlayer_upvr:WaitForChild("MovementSettings"):WaitForChild("PercentMultiplier")
+local AmmoCount_upvw = any_upvr.AmmoCount
+local var28_upvr = AmmoCount_upvw
+shared.TargetedChar = nil
+local tbl_6_upvr = {workspace.IgnoreList, Character_upvr}
+mouse_upvr.TargetFilter = workspace.IgnoreList
+local var30_upvw
+if any_upvr.useTeam == true then
+	var30_upvw = LocalPlayer_upvr.TeamColor.Color
+else
+	var30_upvw = any_upvr.customColor
+end
+local var31_upvw
+local var32_upvw
+local var33_upvw
+local var34_upvw
+local var35_upvw
+local var36_upvw
+local var37_upvw
+local var38_upvw
+local var39_upvw
+local var40_upvw
+local var41_upvw
+local var42_upvw = false
+if shared.MobileUser then
+	if shared.MobileAutoFireEnabled then
+		MobileButtons_upvr.AutofireToggleButton.ImageColor3 = Color3.fromRGB(0, 255, 0)
+	else
+		MobileButtons_upvr.AutofireToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+	end
+	MobileButtons_upvr.AutofireToggleButton.Activated:Connect(function() -- Line 84
+		--[[ Upvalues[2]:
+			[1]: var22_upvw (read and write)
+			[2]: MobileButtons_upvr (readonly)
+		]]
+		if not var22_upvw then
+		else
+			if shared.MobileAutoFireEnabled then
+				shared.MobileAutoFireEnabled = false
+				MobileButtons_upvr.AutofireToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+				MobileButtons_upvr.FireButton.Visible = true
+				return
+			end
+			shared.MobileAutoFireEnabled = true
+			MobileButtons_upvr.AutofireToggleButton.ImageColor3 = Color3.fromRGB(0, 255, 0)
+			MobileButtons_upvr.FireButton.Visible = false
+		end
+	end)
+	MobileButtons_upvr.FireButton.MouseButton1Down:Connect(function() -- Line 96
+		--[[ Upvalues[1]:
+			[1]: var42_upvw (read and write)
+		]]
+		var42_upvw = true
+		Shoot()
+	end)
+	MobileButtons_upvr.FireButton.MouseButton1Up:Connect(function() -- Line 97
+		--[[ Upvalues[2]:
+			[1]: var42_upvw (read and write)
+			[2]: var20_upvw (read and write)
+		]]
+		var42_upvw = false
+		var20_upvw = false
+	end)
+	MobileButtons_upvr.ReloadButton.Activated:Connect(function() -- Line 98
+		processReload()
+	end)
+	MobileButtons_upvr.AimButton.Activated:Connect(function() -- Line 99
+		handleTPSZoom()
+	end)
+	MobileButtons_upvr.BayonetButton.Activated:Connect(function() -- Line 100
+		bayonetCharge()
+	end)
+end
+local var49_upvw
+local RaycastParams_new_result1_upvr = RaycastParams.new()
+RaycastParams_new_result1_upvr.FilterType = Enum.RaycastFilterType.Exclude
+RaycastParams_new_result1_upvr.FilterDescendantsInstances = {Character_upvr}
+RaycastParams_new_result1_upvr.IgnoreWater = true
+local RaycastHitboxModule_upvr = require(ReplicatedStorage_upvr.RaycastHitboxModule)
+local function LoadAnimations_upvr() -- Line 112, Named "LoadAnimations"
+	--[[ Upvalues[20]:
+		[1]: TREKModules_upvr (readonly)
+		[2]: Parent_2_upvr (readonly)
+		[3]: var31_upvw (read and write)
+		[4]: Humanoid_upvr (readonly)
+		[5]: var32_upvw (read and write)
+		[6]: var40_upvw (read and write)
+		[7]: var41_upvw (read and write)
+		[8]: var33_upvw (read and write)
+		[9]: var34_upvw (read and write)
+		[10]: var35_upvw (read and write)
+		[11]: var36_upvw (read and write)
+		[12]: any_upvr (readonly)
+		[13]: var37_upvw (read and write)
+		[14]: var38_upvw (read and write)
+		[15]: var39_upvw (read and write)
+		[16]: ReplicatedStorage_upvr (readonly)
+		[17]: var49_upvw (read and write)
+		[18]: RaycastHitboxModule_upvr (readonly)
+		[19]: RaycastParams_new_result1_upvr (readonly)
+		[20]: Character_upvr (readonly)
+	]]
+	local Animations = TREKModules_upvr.GunSettings[Parent_2_upvr.Name]:FindFirstChild("Animations")
+	var31_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("Aim"))
+	if Animations:FindFirstChild("AimFire") then
+		var32_upvw = Humanoid_upvr:LoadAnimation(Animations.AimFire)
+	end
+	if Animations:FindFirstChild("HammerDown") then
+		var40_upvw = Humanoid_upvr:LoadAnimation(Animations.HammerDown)
+	end
+	if Animations:FindFirstChild("HammerDown2") then
+		var41_upvw = Humanoid_upvr:LoadAnimation(Animations.HammerDown2)
+	end
+	var33_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("Idle"))
+	var34_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("Recoil"))
+	var35_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("Reload"))
+	var36_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("Sprint"))
+	if any_upvr.ReloadType == "Recharge" then
+		var37_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("ReloadStart"))
+		var38_upvw = Humanoid_upvr:LoadAnimation(Animations:FindFirstChild("ReloadStop"))
+		var37_upvw.Priority = Enum.AnimationPriority.Action3
+		var38_upvw.Priority = Enum.AnimationPriority.Action3
+	end
+	var33_upvw.Priority = Enum.AnimationPriority.Movement
+	var34_upvw.Priority = Enum.AnimationPriority.Action3
+	var35_upvw.Priority = Enum.AnimationPriority.Action3
+	var36_upvw.Priority = Enum.AnimationPriority.Action
+	var31_upvw.Priority = Enum.AnimationPriority.Action2
+	if var32_upvw then
+		var32_upvw.Priority = Enum.AnimationPriority.Action4
+	end
+	if var40_upvw then
+		var40_upvw.Priority = Enum.AnimationPriority.Action
+	end
+	if var41_upvw then
+		var41_upvw.Priority = Enum.AnimationPriority.Action
+	end
+	var39_upvw = Humanoid_upvr:LoadAnimation(ReplicatedStorage_upvr.TREKStorage.Charge)
+	if any_upvr.GunType == "Melee" then
+		var49_upvw = RaycastHitboxModule_upvr.new(Parent_2_upvr)
+		var34_upvw:GetMarkerReachedSignal("StartHitbox"):Connect(function() -- Line 156
+			--[[ Upvalues[1]:
+				[1]: var49_upvw (copied, read and write)
+			]]
+			var49_upvw:HitStart()
+		end)
+		var34_upvw:GetMarkerReachedSignal("EndHitbox"):Connect(function() -- Line 159
+			--[[ Upvalues[1]:
+				[1]: var49_upvw (copied, read and write)
+			]]
+			var49_upvw:HitStop()
+		end)
+		var49_upvw.OnHit:Connect(function(arg1, arg2) -- Line 163
+			--[[ Upvalues[3]:
+				[1]: Humanoid_upvr (copied, readonly)
+				[2]: RaycastParams_new_result1_upvr (copied, readonly)
+				[3]: Character_upvr (copied, readonly)
+			]]
+			if arg2 == Humanoid_upvr or arg2.Name ~= "Humanoid" then
+			else
+				RaycastParams_new_result1_upvr.FilterDescendantsInstances = {Character_upvr, arg2.Parent}
+				if not workspace:Raycast(Character_upvr.Head.Position, arg1.Position - Character_upvr.Head.Position, RaycastParams_new_result1_upvr) then
+					DealDamage(arg2.Parent.PrimaryPart, arg1, "Melee")
+				end
+			end
+		end)
+	end
+end
+local function _(arg1, arg2, arg3) -- Line 175, Named "PlayStopAnimation"
+	if arg1 then
+		if arg2 == "play" then
+			arg1:Play(arg3)
+			return
+		end
+		if arg2 == "stop" then
+			arg1:Stop(arg3)
+		end
+	end
+end
+local function FiringAnimations_upvr(arg1) -- Line 185, Named "FiringAnimations"
+	--[[ Upvalues[6]:
+		[1]: var36_upvw (read and write)
+		[2]: any_upvr (readonly)
+		[3]: var32_upvw (read and write)
+		[4]: var34_upvw (read and write)
+		[5]: var41_upvw (read and write)
+		[6]: var40_upvw (read and write)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [6] 5. Error Block 2 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [6] 5. Error Block 2 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [11] 8. Error Block 3 start (CF ANALYSIS FAILED)
+	do
+		return
+	end
+	-- KONSTANTERROR: [11] 8. Error Block 3 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [12] 9. Error Block 4 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [12] 9. Error Block 4 end (CF ANALYSIS FAILED)
+end
+function ChargeMotion() -- Line 217
+	--[[ Upvalues[5]:
+		[1]: Character_upvr (readonly)
+		[2]: UserInputService_upvr (readonly)
+		[3]: ContextActionService_upvr (readonly)
+		[4]: GlobalSettings_upvr (readonly)
+		[5]: PercentMultiplier_upvr (readonly)
+	]]
+	local HumanoidRootPart_4_upvr = Character_upvr:FindFirstChild("HumanoidRootPart")
+	UserInputService_upvr.ModalEnabled = true
+	ContextActionService_upvr:BindActionAtPriority("DisableMovementKeys", function() -- Line 221
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Up, Enum.KeyCode.Down)
+	UserInputService_upvr.MouseDeltaSensitivity = 0.1
+	local BodyVelocity_upvr = Instance.new("BodyVelocity")
+	BodyVelocity_upvr.Name = "ChargeBodyMover"
+	BodyVelocity_upvr.MaxForce = Vector3.new(9999999, 0, 9999999)
+	BodyVelocity_upvr.Velocity = HumanoidRootPart_4_upvr.CFrame.LookVector * GlobalSettings_upvr.charge_speed
+	BodyVelocity_upvr.Parent = HumanoidRootPart_4_upvr
+	local var62_upvw = (GlobalSettings_upvr.charge_speed) * (PercentMultiplier_upvr.Value / 100)
+	task.spawn(function() -- Line 235
+		--[[ Upvalues[3]:
+			[1]: BodyVelocity_upvr (readonly)
+			[2]: HumanoidRootPart_4_upvr (readonly)
+			[3]: var62_upvw (read and write)
+		]]
+		while BodyVelocity_upvr do
+			BodyVelocity_upvr.Velocity = HumanoidRootPart_4_upvr.CFrame.LookVector * var62_upvw
+			task.wait()
+		end
+	end)
+end
+function EndChargeMotion() -- Line 243
+	--[[ Upvalues[3]:
+		[1]: Character_upvr (readonly)
+		[2]: UserInputService_upvr (readonly)
+		[3]: ContextActionService_upvr (readonly)
+	]]
+	local HumanoidRootPart_2 = Character_upvr:FindFirstChild("HumanoidRootPart")
+	if HumanoidRootPart_2:FindFirstChild("ChargeBodyMover") then
+		HumanoidRootPart_2.ChargeBodyMover:Destroy()
+	end
+	UserInputService_upvr.ModalEnabled = false
+	ContextActionService_upvr:UnbindAction("DisableMovementKeys")
+	UserInputService_upvr.MouseDeltaSensitivity = 1
+end
+local function _() -- Line 256, Named "showAmmo"
+	--[[ Upvalues[3]:
+		[1]: TweenModule_upvr (readonly)
+		[2]: Ammo_upvr (readonly)
+		[3]: AmmoCount_upvw (read and write)
+	]]
+	pcall(function() -- Line 257
+		--[[ Upvalues[3]:
+			[1]: TweenModule_upvr (copied, readonly)
+			[2]: Ammo_upvr (copied, readonly)
+			[3]: AmmoCount_upvw (copied, read and write)
+		]]
+		TweenModule_upvr.tween(Ammo_upvr, {
+			Position = UDim2.new(1, -16, 1, -16);
+		}, 0.3, "Cubic", "Out"):Play()
+		Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+	end)
+end
+local function _() -- Line 265, Named "hideAmmo"
+	--[[ Upvalues[2]:
+		[1]: TweenModule_upvr (readonly)
+		[2]: Ammo_upvr (readonly)
+	]]
+	pcall(function() -- Line 266
+		--[[ Upvalues[2]:
+			[1]: TweenModule_upvr (copied, readonly)
+			[2]: Ammo_upvr (copied, readonly)
+		]]
+		TweenModule_upvr.tween(Ammo_upvr, {
+			Position = UDim2.new(1, -16, 1, 90);
+		}, 0.4, "Cubic", "InOut"):Play()
+	end)
+end
+local function _(arg1) -- Line 273, Named "switchFrames"
+	--[[ Upvalues[2]:
+		[1]: TweenModule_upvr (readonly)
+		[2]: Ammo_upvr (readonly)
+	]]
+	pcall(function() -- Line 274
+		--[[ Upvalues[3]:
+			[1]: arg1 (readonly)
+			[2]: TweenModule_upvr (copied, readonly)
+			[3]: Ammo_upvr (copied, readonly)
+		]]
+		if arg1 == "reload" then
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, -0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		elseif arg1 == "ammo" then
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 1.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		end
+	end)
+end
+local function _() -- Line 293, Named "updateAmmo"
+	--[[ Upvalues[2]:
+		[1]: Ammo_upvr (readonly)
+		[2]: AmmoCount_upvw (read and write)
+	]]
+	pcall(function() -- Line 294
+		--[[ Upvalues[2]:
+			[1]: Ammo_upvr (copied, readonly)
+			[2]: AmmoCount_upvw (copied, read and write)
+		]]
+		Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+	end)
+end
+local function hitMarker_upvr(arg1, arg2) -- Line 318, Named "hitMarker"
+	--[[ Upvalues[2]:
+		[1]: TREKHud_upvr (readonly)
+		[2]: TweenModule_upvr (readonly)
+	]]
+	local Marker = TREKHud_upvr.Hitmarker.Marker
+	local DamageCounter = TREKHud_upvr.Hitmarker.DamageCounter
+	if shared.TargetedChar == arg2 then
+		if DamageCounter.TextTransparency ~= 1 then
+			DamageCounter.Text = tonumber(DamageCounter.Text) + arg1
+		else
+			DamageCounter.Text = arg1
+		end
+	else
+		shared.TargetedChar = arg2
+		DamageCounter.Text = arg1
+	end
+	Marker.ImageTransparency = 0
+	if shared.Setting_DamageCountersEnabled then
+		if arg2:FindFirstChild("Armored") then
+			DamageCounter.TextColor3 = Color3.fromRGB(4, 51, 255)
+		else
+			DamageCounter.TextColor3 = Color3.fromRGB(255, 32, 32)
+		end
+		DamageCounter.TextTransparency = 0
+		DamageCounter.TextSize = 30
+	end
+	TweenModule_upvr.tween(Marker, {
+		Size = UDim2.new(0, 50, 0, 50);
+	}, 0.2, "Quint", "Out"):Play()
+	TweenModule_upvr.tween(Marker, {
+		ImageTransparency = 1;
+	}, 0.2, "Linear", "Out"):Play()
+	if shared.Setting_DamageCountersEnabled then
+		TweenModule_upvr.tween(DamageCounter, {
+			TextSize = 20;
+		}, 0.2, "Quint", "Out"):Play()
+		TweenModule_upvr.tween(DamageCounter, {
+			TextTransparency = 1;
+		}, 3, "Linear", "Out"):Play()
+	end
+end
+local function _() -- Line 358, Named "ZoomIn"
+	--[[ Upvalues[4]:
+		[1]: var23_upvw (read and write)
+		[2]: UserInputService_upvr (readonly)
+		[3]: var31_upvw (read and write)
+		[4]: var36_upvw (read and write)
+	]]
+	if shared.charging then
+	else
+		var23_upvw = true
+		shared.AimingDownSight = true
+		UserInputService_upvr.MouseDeltaSensitivity = shared.Setting_ADSSensitivityMultiplier / 100
+		local var84 = var31_upvw
+		if var84 then
+			var84:Play(nil)
+		end
+		local var85 = var36_upvw
+		if var85 then
+			var85:Stop(nil)
+		end
+	end
+end
+local function _() -- Line 370, Named "ZoomOut"
+	--[[ Upvalues[3]:
+		[1]: var23_upvw (read and write)
+		[2]: UserInputService_upvr (readonly)
+		[3]: var31_upvw (read and write)
+	]]
+	if shared.charging then
+	else
+		var23_upvw = false
+		shared.AimingDownSight = false
+		UserInputService_upvr.MouseDeltaSensitivity = 1
+		local var86 = var31_upvw
+		if var86 then
+			var86:Stop(nil)
+		end
+	end
+end
+function handleTPSZoom() -- Line 380
+	--[[ Upvalues[5]:
+		[1]: var23_upvw (read and write)
+		[2]: any_upvr (readonly)
+		[3]: UserInputService_upvr (readonly)
+		[4]: var31_upvw (read and write)
+		[5]: var36_upvw (read and write)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [2] 3. Error Block 2 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [2] 3. Error Block 2 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [6] 6. Error Block 3 start (CF ANALYSIS FAILED)
+	local charging = shared.charging
+	-- KONSTANTERROR: [6] 6. Error Block 3 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [43] 32. Error Block 9 start (CF ANALYSIS FAILED)
+	charging:Stop(nil)
+	do
+		return
+	end
+	-- KONSTANTERROR: [43] 32. Error Block 9 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [48] 36. Error Block 17 start (CF ANALYSIS FAILED)
+	if shared.charging then return end
+	var23_upvw = false
+	shared.AimingDownSight = false
+	UserInputService_upvr.MouseDeltaSensitivity = 1
+	local var88 = var31_upvw
+	if var88 then
+		var88:Stop(nil)
+	end
+	-- KONSTANTERROR: [48] 36. Error Block 17 end (CF ANALYSIS FAILED)
+end
+local function _(arg1, arg2) -- Line 397, Named "isDesecendantOfName"
+	for _, v in pairs(string.split(arg1:GetFullName(), '.')) do
+		if v == arg2 then
+			return true
+		end
+	end
+	return false
+end
+local function _(arg1, arg2) -- Line 408, Named "findDescendantByName"
+	local var94
+	while var94 and var94.Parent.Name ~= arg2 do
+		var94 = var94.Parent
+		print(var94)
+	end
+	return var94.Parent
+end
+function mobileCursorPosition() -- Line 418
+	--[[ Upvalues[2]:
+		[1]: CurrentCamera_upvr (readonly)
+		[2]: tbl_6_upvr (readonly)
+	]]
+	local _, workspace_FindPartOnRayWithIgnoreList_result2_5 = workspace:FindPartOnRayWithIgnoreList(Ray.new(CurrentCamera_upvr.CFrame.Position, CurrentCamera_upvr.CFrame.LookVector * 5000), tbl_6_upvr)
+	return workspace_FindPartOnRayWithIgnoreList_result2_5
+end
+local function mobileGUI_upvr(arg1) -- Line 428, Named "mobileGUI"
+	--[[ Upvalues[2]:
+		[1]: MobileButtons_upvr (readonly)
+		[2]: any_upvr (readonly)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [50] 35. Error Block 11 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [50] 35. Error Block 11 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [61] 43. Error Block 13 start (CF ANALYSIS FAILED)
+	MobileButtons_upvr.AutofireToggleButton.Visible = false
+	MobileButtons_upvr.AimButton.Visible = false
+	MobileButtons_upvr.FireButton.Visible = false
+	MobileButtons_upvr.ReloadButton.Visible = false
+	MobileButtons_upvr.BayonetButton.Visible = false
+	-- KONSTANTERROR: [61] 43. Error Block 13 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [91] 63. Error Block 14 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [91] 63. Error Block 14 end (CF ANALYSIS FAILED)
+end
+local function _() -- Line 503, Named "inFirstPerson"
+	--[[ Upvalues[1]:
+		[1]: CurrentCamera_upvr (readonly)
+	]]
+	local var127 = CurrentCamera_upvr.CFrame.Position - CurrentCamera_upvr.Focus.Position
+	if var127.Magnitude >= 1 then
+		var127 = false
+	else
+		var127 = true
+	end
+	return var127
+end
+local function turnPlayer_upvr(arg1) -- Line 508, Named "turnPlayer"
+	--[[ Upvalues[2]:
+		[1]: Character_upvr (readonly)
+		[2]: Humanoid_upvr (readonly)
+	]]
+	if shared.ShiftLocked then
+	else
+		local HumanoidRootPart_3 = Character_upvr:FindFirstChild("HumanoidRootPart")
+		Humanoid_upvr.AutoRotate = false
+		HumanoidRootPart_3.CFrame = HumanoidRootPart_3.CFrame:Lerp(CFrame.new(HumanoidRootPart_3.Position, Vector3.new(arg1.X, HumanoidRootPart_3.Position.Y, arg1.Z)), 0.25)
+	end
+end
+local function LockToCamera_upvr() -- Line 539, Named "LockToCamera"
+	--[[ Upvalues[3]:
+		[1]: Character_upvr (readonly)
+		[2]: CurrentCamera_upvr (readonly)
+		[3]: Humanoid_upvr (readonly)
+	]]
+	local HumanoidRootPart = Character_upvr:FindFirstChild("HumanoidRootPart")
+	local LookVector = CurrentCamera_upvr.CFrame.LookVector
+	local var131 = -LookVector.X
+	local arctangent = math.atan2(var131, -LookVector.Z)
+	if (CurrentCamera_upvr.CFrame.Position - CurrentCamera_upvr.Focus.Position).Magnitude >= 1 then
+		var131 = false
+	else
+		var131 = true
+	end
+	if var131 or shared.charging then
+		Humanoid_upvr.AutoRotate = false
+		HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position) * CFrame.Angles(0, arctangent, 0)
+	else
+		Humanoid_upvr.AutoRotate = false
+		HumanoidRootPart.CFrame = HumanoidRootPart.CFrame:Lerp(CFrame.new(HumanoidRootPart.Position) * CFrame.Angles(0, arctangent, 0), 0.25)
+	end
+end
+local function getSpread_upvr(arg1, arg2) -- Line 559, Named "getSpread"
+	--[[ Upvalues[3]:
+		[1]: Parent_2_upvr (readonly)
+		[2]: crouching_upvr (readonly)
+		[3]: any_upvr (readonly)
+	]]
+	local var133
+	local var134
+	local magnitude = (Parent_2_upvr.Barrel.Position - arg1).magnitude
+	if crouching_upvr.Value == false then
+		if jumpCheck() and not arg2 then
+			var133 = -(any_upvr.spread * 15 / 100) * magnitude
+			var134 = any_upvr.spread * 15 / 100 * magnitude
+		else
+			var133 = -(any_upvr.spread / 100) * magnitude
+			var134 = any_upvr.spread / 100 * magnitude
+		end
+	elseif crouching_upvr.Value == true then
+		if jumpCheck() and not arg2 then
+			var133 = -(any_upvr.spread * 15 / 100) * magnitude
+			var134 = any_upvr.spread * 15 / 100 * magnitude
+		else
+			var133 = -(any_upvr.crouchSpread / 100) * magnitude
+			var134 = any_upvr.crouchSpread / 100 * magnitude
+		end
+	end
+	return Vector3.new(arg1.x + math.random(var133, var134), arg1.y + math.random(var133, var134), arg1.z + math.random(var133, var134))
+end
+function GetLinearInterpolation(arg1) -- Line 579
+	--[[ Upvalues[1]:
+		[1]: any_upvr (readonly)
+	]]
+	if arg1 <= any_upvr.MinFalloffDistance then
+		return 0
+	end
+	if any_upvr.MaxFalloffDistance <= arg1 then
+		return 1
+	end
+	if any_upvr.MinFalloffDistance < arg1 and arg1 < any_upvr.MaxFalloffDistance then
+		return (arg1 - any_upvr.MinFalloffDistance) / (any_upvr.MaxFalloffDistance - any_upvr.MinFalloffDistance)
+	end
+end
+function roundNum(arg1) -- Line 596
+	return math.floor(arg1 + 0.5)
+end
+function GetDamage(arg1) -- Line 600
+	--[[ Upvalues[1]:
+		[1]: any_upvr (readonly)
+	]]
+	local GetLinearInterpolation_result1 = GetLinearInterpolation(arg1)
+	return roundNum(GetLinearInterpolation_result1 * any_upvr.MinDamage + (1 - GetLinearInterpolation_result1) * any_upvr.MaxDamage)
+end
+function isBlocked() -- Line 608
+	--[[ Upvalues[3]:
+		[1]: Character_upvr (readonly)
+		[2]: Parent_2_upvr (readonly)
+		[3]: tbl_6_upvr (readonly)
+	]]
+	local workspace_FindPartOnRayWithIgnoreList_result1 = workspace:FindPartOnRayWithIgnoreList(Ray.new(Character_upvr.HumanoidRootPart.Position, CFrame.new(Character_upvr.HumanoidRootPart.Position, Parent_2_upvr.Barrel.Position).LookVector * (Character_upvr.HumanoidRootPart.Position - Parent_2_upvr.Barrel.Position).Magnitude), tbl_6_upvr)
+	if workspace_FindPartOnRayWithIgnoreList_result1 ~= nil then
+		return true
+	end
+	if workspace_FindPartOnRayWithIgnoreList_result1 == nil then
+		return false
+	end
+end
+local function canDamage_upvr(arg1) -- Line 618, Named "canDamage"
+	--[[ Upvalues[2]:
+		[1]: LocalPlayer_upvr (readonly)
+		[2]: any_upvr (readonly)
+	]]
+	if arg1:FindFirstChild("Humanoid") and arg1.Humanoid.Health <= 0 then
+		return false
+	end
+	local any_GetPlayerFromCharacter_result1 = game.Players:GetPlayerFromCharacter(arg1)
+	if any_GetPlayerFromCharacter_result1 then
+		if any_GetPlayerFromCharacter_result1.Team == LocalPlayer_upvr.Team then
+			if any_upvr.teamkill == true then
+				return true
+			end
+			return false
+		end
+		return true
+	end
+	if arg1.Name == "Vehicle" or arg1:FindFirstChild("Armored") then
+		if any_upvr.GunType == "Flamethrower" or any_upvr.GunType == "AntiMateriel" or arg1.Armored:GetAttribute("NoProtection") then
+			return true
+		end
+		return false
+	end
+	return true
+end
+function DealDamage(arg1, arg2, arg3) -- Line 644
+	--[[ Upvalues[6]:
+		[1]: Character_upvr (readonly)
+		[2]: any_upvr (readonly)
+		[3]: canDamage_upvr (readonly)
+		[4]: TREKRemotes_upvr (readonly)
+		[5]: Parent_2_upvr (readonly)
+		[6]: hitMarker_upvr (readonly)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [25] 17. Error Block 32 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [25] 17. Error Block 32 end (CF ANALYSIS FAILED)
+end
+function DealDamageBayonet(arg1, arg2) -- Line 672
+	--[[ Upvalues[4]:
+		[1]: canDamage_upvr (readonly)
+		[2]: TREKRemotes_upvr (readonly)
+		[3]: Parent_2_upvr (readonly)
+		[4]: hitMarker_upvr (readonly)
+	]]
+	local Parent = arg1.Parent
+	if canDamage_upvr(Parent) == true then
+		TREKRemotes_upvr.DamagerRemote:FireServer(script, Parent_2_upvr.Barrel.Position, Parent, 1000, arg2, "Melee")
+		hitMarker_upvr(100, Parent)
+	end
+end
+function penetrationRay(arg1, arg2, arg3, arg4, arg5, arg6, arg7) -- Line 683
+	--[[ Upvalues[1]:
+		[1]: TREKRemotes_upvr (readonly)
+	]]
+	local tbl_7 = {}
+	for i_2, v_2 in pairs(arg3) do
+		table.insert(tbl_7, v_2)
+	end
+	table.insert(tbl_7, arg4)
+	i_2 = arg5
+	TREKRemotes_upvr.PenRemote:FireServer(arg4, i_2)
+	i_2 = arg5
+	TREKRemotes_upvr.PenBind:Fire(arg4, i_2)
+	local var148 = arg6 - arg7
+	i_2 = CFrame.new
+	v_2 = arg5
+	i_2 = i_2(v_2, arg1.Origin)
+	v_2 = CFrame.new(0, 0, var148)
+	local var149 = i_2 * v_2
+	i_2 = Ray.new
+	v_2 = var149.Position
+	i_2 = i_2(v_2, var149.LookVector * var148)
+	v_2 = workspace
+	local tbl = {}
+	tbl[1] = arg4
+	v_2 = v_2:FindPartOnRayWithWhitelist(i_2, tbl)
+	local any_FindPartOnRayWithWhitelist_result1, any_FindPartOnRayWithWhitelist_result2 = v_2:FindPartOnRayWithWhitelist(i_2, tbl)
+	local var153 = arg7 + (any_FindPartOnRayWithWhitelist_result2 - arg5).Magnitude
+	if any_FindPartOnRayWithWhitelist_result1 and var153 < arg6 then
+		local handleTargeting_result1_2, handleTargeting_result2 = handleTargeting(arg1, arg2, tbl_7, arg6, var153)
+		TREKRemotes_upvr.PenRemote:FireServer(any_FindPartOnRayWithWhitelist_result1, any_FindPartOnRayWithWhitelist_result2)
+		TREKRemotes_upvr.PenBind:Fire(any_FindPartOnRayWithWhitelist_result1, any_FindPartOnRayWithWhitelist_result2)
+		return handleTargeting_result1_2, handleTargeting_result2
+	end
+	return arg5, arg4
+end
+function handleTargeting(arg1, arg2, arg3, arg4, arg5) -- Line 716
+	--[[ Upvalues[2]:
+		[1]: LocalPlayer_upvr (readonly)
+		[2]: TREKRemotes_upvr (readonly)
+	]]
+	local workspace_FindPartOnRayWithIgnoreList_result1_2, workspace_FindPartOnRayWithIgnoreList_result2_4 = workspace:FindPartOnRayWithIgnoreList(arg1, arg3)
+	local tbl_2 = {}
+	for i_3, v_3 in pairs(arg3) do
+		table.insert(tbl_2, v_3)
+	end
+	if workspace_FindPartOnRayWithIgnoreList_result1_2 then
+		if workspace_FindPartOnRayWithIgnoreList_result1_2.Parent:FindFirstChild("Humanoid") then
+			v_3 = LocalPlayer_upvr
+			i_3 = v_3.Team
+			if not workspace_FindPartOnRayWithIgnoreList_result1_2.Parent:FindFirstChild(i_3.Name) then
+				i_3 = arg2
+				DealDamage(workspace_FindPartOnRayWithIgnoreList_result1_2, workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+				table.insert(tbl_2, workspace_FindPartOnRayWithIgnoreList_result1_2.Parent)
+				if workspace_FindPartOnRayWithIgnoreList_result1_2.Parent:FindFirstChild("Armored") and not workspace_FindPartOnRayWithIgnoreList_result1_2.Parent.Armored:GetAttribute("NoProtection") then
+					-- KONSTANTWARNING: GOTO [135] #93
+				end
+				-- KONSTANTWARNING: GOTO [135] #93
+			end
+		end
+		if workspace_FindPartOnRayWithIgnoreList_result1_2.Parent.Parent:FindFirstChild("Humanoid") then
+			v_3 = LocalPlayer_upvr
+			i_3 = v_3.Team
+			if not workspace_FindPartOnRayWithIgnoreList_result1_2.Parent.Parent:FindFirstChild(i_3.Name) then
+				i_3 = arg2
+				DealDamage(workspace_FindPartOnRayWithIgnoreList_result1_2.Parent, workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+				i_3 = workspace_FindPartOnRayWithIgnoreList_result1_2.Parent
+				table.insert(tbl_2, i_3.Parent)
+				if workspace_FindPartOnRayWithIgnoreList_result1_2.Parent.Parent:FindFirstChild("Armored") and not workspace_FindPartOnRayWithIgnoreList_result1_2.Parent.Parent.Armored:GetAttribute("NoProtection") then
+				end
+			end
+		end
+		if workspace_FindPartOnRayWithIgnoreList_result1_2.Name == "Terrain" and arg2 ~= "Flame" then
+			i_3 = workspace_FindPartOnRayWithIgnoreList_result2_4
+			TREKRemotes_upvr.PenRemote:FireServer(workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+			i_3 = workspace_FindPartOnRayWithIgnoreList_result2_4
+			TREKRemotes_upvr.PenBind:Fire(workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+		end
+		local var179
+		if workspace_FindPartOnRayWithIgnoreList_result1_2:FindFirstChild("NoPenetration") and arg4 < workspace_FindPartOnRayWithIgnoreList_result1_2.NoPenetration.Value then
+			var179 = false
+			if arg2 ~= "Flame" then
+				i_3 = workspace_FindPartOnRayWithIgnoreList_result2_4
+				TREKRemotes_upvr.PenRemote:FireServer(workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+				i_3 = workspace_FindPartOnRayWithIgnoreList_result2_4
+				TREKRemotes_upvr.PenBind:Fire(workspace_FindPartOnRayWithIgnoreList_result1_2, i_3)
+			end
+		end
+		if var179 and 0 < arg4 and arg5 < arg4 then
+			i_3 = tbl_2
+			v_3 = workspace_FindPartOnRayWithIgnoreList_result1_2
+			local penetrationRay_result1_2, penetrationRay_result2_2 = penetrationRay(arg1, arg2, i_3, v_3, workspace_FindPartOnRayWithIgnoreList_result2_4, arg4, arg5)
+			return penetrationRay_result1_2, penetrationRay_result2_2
+		end
+		return workspace_FindPartOnRayWithIgnoreList_result2_4, workspace_FindPartOnRayWithIgnoreList_result1_2
+	end
+	if workspace_FindPartOnRayWithIgnoreList_result2_4 then
+		return workspace_FindPartOnRayWithIgnoreList_result2_4, workspace_FindPartOnRayWithIgnoreList_result1_2
+	end
+	return arg1
+end
+function findPlayersInRay(arg1, arg2) -- Line 775
+	--[[ Upvalues[3]:
+		[1]: any_upvr (readonly)
+		[2]: LocalPlayer_upvr (readonly)
+		[3]: tbl_6_upvr (readonly)
+	]]
+	local var182 = any_upvr.Penetration or 0
+	if LocalPlayer_upvr.EquippedPerks:FindFirstChild("HARDENED CORE") then
+		var182 *= 1.25
+	end
+	local handleTargeting_result1, handleTargeting_result2_2 = handleTargeting(arg1, arg2, tbl_6_upvr, var182, 0)
+	return handleTargeting_result1, handleTargeting_result2_2
+end
+local function findPlayersInRayBayonet_upvr(arg1) -- Line 870, Named "findPlayersInRayBayonet"
+	--[[ Upvalues[2]:
+		[1]: Character_upvr (readonly)
+		[2]: LocalPlayer_upvr (readonly)
+	]]
+	local workspace_FindPartOnRayWithIgnoreList_result1_3, workspace_FindPartOnRayWithIgnoreList_result2 = workspace:FindPartOnRayWithIgnoreList(arg1, {workspace.IgnoreList, Character_upvr, workspace.Terrain, workspace.Map})
+	if workspace_FindPartOnRayWithIgnoreList_result1_3 then
+		if workspace_FindPartOnRayWithIgnoreList_result1_3.Parent:FindFirstChild("Humanoid") and not workspace_FindPartOnRayWithIgnoreList_result1_3.Parent:FindFirstChild(LocalPlayer_upvr.Team.Name) then
+			DealDamageBayonet(workspace_FindPartOnRayWithIgnoreList_result1_3, workspace_FindPartOnRayWithIgnoreList_result1_3)
+			return workspace_FindPartOnRayWithIgnoreList_result2, workspace_FindPartOnRayWithIgnoreList_result1_3
+		end
+		if workspace_FindPartOnRayWithIgnoreList_result1_3.Parent.Parent:FindFirstChild("Humanoid") and not workspace_FindPartOnRayWithIgnoreList_result1_3.Parent.Parent:FindFirstChild(LocalPlayer_upvr.Team.Name) then
+			DealDamageBayonet(workspace_FindPartOnRayWithIgnoreList_result1_3.Parent, workspace_FindPartOnRayWithIgnoreList_result1_3)
+			return workspace_FindPartOnRayWithIgnoreList_result2, workspace_FindPartOnRayWithIgnoreList_result1_3
+		end
+	end
+	if workspace_FindPartOnRayWithIgnoreList_result2 ~= nil then
+		return workspace_FindPartOnRayWithIgnoreList_result2, workspace_FindPartOnRayWithIgnoreList_result1_3
+	end
+	return arg1
+end
+function sprintCheck() -- Line 888
+	--[[ Upvalues[1]:
+		[1]: sprinting_upvr (readonly)
+	]]
+	if sprinting_upvr.Value == true then
+		sprinting_upvr.Value = false
+	end
+end
+function crouchCheck() -- Line 893
+	--[[ Upvalues[1]:
+		[1]: crouching_upvr (readonly)
+	]]
+	if crouching_upvr.Value == true then
+		crouching_upvr.Value = false
+	end
+end
+function jumpCheck() -- Line 899
+	--[[ Upvalues[1]:
+		[1]: Humanoid_upvr (readonly)
+	]]
+	if Humanoid_upvr:GetState() == Enum.HumanoidStateType.Freefall then
+		return true
+	end
+	return false
+end
+local function _() -- Line 907, Named "FireChecks"
+	--[[ Upvalues[4]:
+		[1]: var22_upvw (read and write)
+		[2]: var19_upvw (read and write)
+		[3]: var21_upvw (read and write)
+		[4]: Character_upvr (readonly)
+	]]
+	if var22_upvw and not shared.ReloadingWeapon and not var19_upvw and var21_upvw and not shared.rolling and Character_upvr.Humanoid and 0 < Character_upvr.Humanoid.Health then
+		return true
+	end
+	return false
+end
+local function recharge_upvr() -- Line 916, Named "recharge"
+	--[[ Upvalues[13]:
+		[1]: var21_upvw (read and write)
+		[2]: var19_upvw (read and write)
+		[3]: FiringAnimations_upvr (readonly)
+		[4]: var37_upvw (read and write)
+		[5]: AmmoCount_upvw (read and write)
+		[6]: var28_upvr (readonly)
+		[7]: var22_upvw (read and write)
+		[8]: Ammo_upvr (readonly)
+		[9]: var35_upvw (read and write)
+		[10]: TREKModules_upvr (readonly)
+		[11]: Parent_2_upvr (readonly)
+		[12]: any_upvr (readonly)
+		[13]: var38_upvw (read and write)
+	]]
+	-- KONSTANTERROR: [89] 67. Error Block 12 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [89] 67. Error Block 12 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 59 start (CF ANALYSIS FAILED)
+	-- KONSTANTWARNING: Failed to evaluate expression, replaced with nil [89.0]
+	if nil then
+	end
+	repeat
+		-- KONSTANTERROR: Expression was reused, decompilation is incorrect
+	until not nil
+	-- KONSTANTERROR: Expression was reused, decompilation is incorrect
+	-- KONSTANTWARNING: Failed to evaluate expression, replaced with nil [89.4290707528]
+	-- KONSTANTWARNING: Failed to evaluate expression, replaced with nil [89.1]
+	if nil < nil then
+		-- KONSTANTERROR: Expression was reused, decompilation is incorrect (x2)
+		if nil and nil then
+			-- KONSTANTERROR: Expression was reused, decompilation is incorrect
+			if nil then
+			end
+			-- KONSTANTWARNING: GOTO [26] #22
+		end
+		-- KONSTANTWARNING: GOTO [91] #69
+	end
+	-- KONSTANTERROR: [0] 1. Error Block 59 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [91] 69. Error Block 51 start (CF ANALYSIS FAILED)
+	repeat
+		task.wait()
+	until not var35_upvw.IsPlaying
+	if var22_upvw then
+		local var191 = var37_upvw
+		if var191 then
+			var191:Stop(nil)
+		end
+		local var192 = var35_upvw
+		if var192 then
+			var192:Stop(nil)
+		end
+		local var193 = var38_upvw
+		if var193 then
+			var193:Play(nil)
+		end
+	end
+	repeat
+		task.wait()
+	until not var38_upvw.IsPlaying
+	shared.ReloadingWeapon = false
+	var21_upvw = true
+	-- KONSTANTERROR: [91] 69. Error Block 51 end (CF ANALYSIS FAILED)
+end
+local function reload_upvr() -- Line 948, Named "reload"
+	--[[ Upvalues[13]:
+		[1]: var21_upvw (read and write)
+		[2]: var19_upvw (read and write)
+		[3]: TREKRemotes_upvr (readonly)
+		[4]: FiringAnimations_upvr (readonly)
+		[5]: var35_upvw (read and write)
+		[6]: TweenModule_upvr (readonly)
+		[7]: Ammo_upvr (readonly)
+		[8]: TREKModules_upvr (readonly)
+		[9]: Parent_2_upvr (readonly)
+		[10]: any_upvr (readonly)
+		[11]: var22_upvw (read and write)
+		[12]: AmmoCount_upvw (read and write)
+		[13]: var28_upvr (readonly)
+	]]
+	shared.ReloadingWeapon = true
+	var21_upvw = false
+	var19_upvw = false
+	TREKRemotes_upvr.ReloadRemote:FireServer()
+	FiringAnimations_upvr("stop")
+	local var194 = var35_upvw
+	if var194 then
+		var194:Play(nil)
+	end
+	local var196_upvr = "reload"
+	pcall(function() -- Line 274
+		--[[ Upvalues[3]:
+			[1]: var196_upvr (readonly)
+			[2]: TweenModule_upvr (copied, readonly)
+			[3]: Ammo_upvr (copied, readonly)
+		]]
+		if var196_upvr == "reload" then
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, -0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		elseif var196_upvr == "ammo" then
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 1.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		end
+	end)
+	var196_upvr = TREKModules_upvr.GunSettings
+	local clone = var196_upvr[Parent_2_upvr.Name].Reload:Clone()
+	var196_upvr = Parent_2_upvr
+	clone.Parent = var196_upvr.Handle
+	clone:Play()
+	var196_upvr = game
+	var196_upvr.Debris:AddItem(clone, clone.TimeLength)
+	var196_upvr = tick()
+	repeat
+		var196_upvr = var22_upvw
+		if not var196_upvr then break end
+		var196_upvr = task.wait
+		var196_upvr()
+		var196_upvr = tick()
+	until var196_upvr + any_upvr.ReloadSpeed <= var196_upvr
+	var196_upvr = var22_upvw
+	if var196_upvr then
+		var196_upvr = var28_upvr
+		AmmoCount_upvw = var196_upvr
+	end
+	var196_upvr = pcall
+	local const_string_upvr = "ammo"
+	var196_upvr(function() -- Line 274
+		--[[ Upvalues[3]:
+			[1]: const_string_upvr (readonly)
+			[2]: TweenModule_upvr (copied, readonly)
+			[3]: Ammo_upvr (copied, readonly)
+		]]
+		if const_string_upvr == "reload" then
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, -0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		elseif const_string_upvr == "ammo" then
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Size = UDim2.new(1, -16, 1, -16);
+			}, 0.75, "Cubic", "Out"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.ReloadingFrame, {
+				Position = UDim2.new(0.5, 0, 1.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Size = UDim2.new(1, 0, 1, 0);
+			}, 0.75, "Cubic", "In"):Play()
+			TweenModule_upvr.tween(Ammo_upvr.AmmoCountFrame, {
+				Position = UDim2.new(0.5, 0, 0.5, 0);
+			}, 0.75, "Cubic", "InOut"):Play()
+		end
+	end)
+	var196_upvr = pcall
+	var196_upvr(function() -- Line 294
+		--[[ Upvalues[2]:
+			[1]: Ammo_upvr (copied, readonly)
+			[2]: AmmoCount_upvw (copied, read and write)
+		]]
+		Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+	end)
+	var196_upvr = shared
+	var196_upvr.ReloadingWeapon = false
+	var196_upvr = true
+	var21_upvw = var196_upvr
+end
+function processReload() -- Line 975
+	--[[ Upvalues[5]:
+		[1]: any_upvr (readonly)
+		[2]: AmmoCount_upvw (read and write)
+		[3]: var28_upvr (readonly)
+		[4]: recharge_upvr (readonly)
+		[5]: reload_upvr (readonly)
+	]]
+	if any_upvr.CanReload == true and AmmoCount_upvw < var28_upvr and not shared.ReloadingWeapon and not shared.charging then
+		if any_upvr.ReloadType == "Recharge" then
+			recharge_upvr()
+			return
+		end
+		if any_upvr.ReloadType == "Reload" then
+			reload_upvr()
+		end
+	end
+end
+local cframe_upvw = CFrame.Angles(0, 0, 0)
+local function _() -- Line 992, Named "RecoilCamera"
+	--[[ Upvalues[3]:
+		[1]: any_upvr (readonly)
+		[2]: CurrentCamera_upvr (readonly)
+		[3]: cframe_upvw (read and write)
+	]]
+	if any_upvr.Recoil then
+		task.spawn(function() -- Line 994
+			--[[ Upvalues[3]:
+				[1]: CurrentCamera_upvr (copied, readonly)
+				[2]: any_upvr (copied, readonly)
+				[3]: cframe_upvw (copied, read and write)
+			]]
+			task.wait()
+			CurrentCamera_upvr.CFrame *= CFrame.Angles(math.rad(any_upvr.Recoil * 0.6), 0, 0)
+			cframe_upvw = cframe_upvw:Lerp(CFrame.Angles(math.rad(-any_upvr.Recoil), 0, 0), 0.1)
+		end)
+	end
+end
+local function _(arg1, arg2) -- Line 1002, Named "FireBullet"
+	--[[ Upvalues[4]:
+		[1]: TREKRemotes_upvr (readonly)
+		[2]: Parent_2_upvr (readonly)
+		[3]: var30_upvw (read and write)
+		[4]: any_upvr (readonly)
+	]]
+	TREKRemotes_upvr.BulletRemote:FireServer(Parent_2_upvr.Barrel.Position, arg1, var30_upvw, arg2, any_upvr.Suppression)
+	TREKRemotes_upvr.BulletBind:Fire(Parent_2_upvr.Barrel.Position, arg1, var30_upvw, arg2, any_upvr.Suppression)
+end
+local function _() -- Line 1007, Named "FireEffects"
+	--[[ Upvalues[2]:
+		[1]: TREKRemotes_upvr (readonly)
+		[2]: LocalPlayer_upvr (readonly)
+	]]
+	TREKRemotes_upvr.FlashRemote:FireServer()
+	TREKRemotes_upvr.FlashBind:Fire(LocalPlayer_upvr)
+end
+function FireWhileSprinting(arg1) -- Line 1012
+	--[[ Upvalues[2]:
+		[1]: any_upvr (readonly)
+		[2]: tbl_6_upvr (readonly)
+	]]
+	local _, workspace_FindPartOnRayWithIgnoreList_result2_3 = workspace:FindPartOnRayWithIgnoreList(Ray.new(arg1.Position, arg1.CFrame.LookVector * any_upvr.Range), tbl_6_upvr)
+	return workspace_FindPartOnRayWithIgnoreList_result2_3
+end
+local var254_upvw
+local var255_upvr = ({
+	Semi = function() -- Line 1018, Named "SemiFire"
+		--[[ Upvalues[16]:
+			[1]: AmmoCount_upvw (read and write)
+			[2]: var19_upvw (read and write)
+			[3]: Ammo_upvr (readonly)
+			[4]: FiringAnimations_upvr (readonly)
+			[5]: TREKRemotes_upvr (readonly)
+			[6]: LocalPlayer_upvr (readonly)
+			[7]: sprinting_upvr (readonly)
+			[8]: var36_upvw (read and write)
+			[9]: Parent_2_upvr (readonly)
+			[10]: mouse_upvr (readonly)
+			[11]: getSpread_upvr (readonly)
+			[12]: any_upvr (readonly)
+			[13]: Character_upvr (readonly)
+			[14]: var30_upvw (read and write)
+			[15]: CurrentCamera_upvr (readonly)
+			[16]: cframe_upvw (read and write)
+		]]
+		local var221
+		if 0 < AmmoCount_upvw then
+			var19_upvw = true
+			AmmoCount_upvw -= 1
+			pcall(function() -- Line 294
+				--[[ Upvalues[2]:
+					[1]: Ammo_upvr (copied, readonly)
+					[2]: AmmoCount_upvw (copied, read and write)
+				]]
+				Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+			end)
+			FiringAnimations_upvr("play")
+			TREKRemotes_upvr.FlashRemote:FireServer()
+			TREKRemotes_upvr.FlashBind:Fire(LocalPlayer_upvr)
+			local var223
+			if sprinting_upvr.Value or 0 < var36_upvw.WeightCurrent then
+				var223 = FireWhileSprinting(Parent_2_upvr.Barrel)
+			else
+				local mobileCursorPosition_result1 = mobileCursorPosition()
+				if not mobileCursorPosition_result1 then
+					mobileCursorPosition_result1 = mouse_upvr.Hit.p
+				end
+				var223 = mobileCursorPosition_result1
+			end
+			local getSpread_result1_3 = getSpread_upvr(var223)
+			local var226
+			if any_upvr.CornerFire then
+				var221 = Parent_2_upvr.Barrel
+				var221 = (getSpread_result1_3 - Parent_2_upvr.Barrel.Position).Unit * any_upvr.Range
+				var226 = Ray.new(var221.Position, var221)
+			else
+				var221 = Character_upvr.Head
+				var221 = (getSpread_result1_3 - Character_upvr.Head.Position).Unit * any_upvr.Range
+				var226 = Ray.new(var221.Position, var221)
+			end
+			local findPlayersInRay_result1_3, findPlayersInRay_result2_3 = findPlayersInRay(var226)
+			local function INLINED() -- Internal function, doesn't exist in bytecode
+				var221 = findPlayersInRay_result1_3
+				return var221
+			end
+			if findPlayersInRay_result1_3 == nil or not INLINED() then
+				var221 = getSpread_result1_3
+			end
+			TREKRemotes_upvr.BulletRemote:FireServer(Parent_2_upvr.Barrel.Position, var221, var30_upvw, findPlayersInRay_result2_3, any_upvr.Suppression)
+			TREKRemotes_upvr.BulletBind:Fire(Parent_2_upvr.Barrel.Position, var221, var30_upvw, findPlayersInRay_result2_3, any_upvr.Suppression)
+			var221 = any_upvr.Recoil
+			if var221 then
+				var221 = task.spawn
+				var221(function() -- Line 994
+					--[[ Upvalues[3]:
+						[1]: CurrentCamera_upvr (copied, readonly)
+						[2]: any_upvr (copied, readonly)
+						[3]: cframe_upvw (copied, read and write)
+					]]
+					task.wait()
+					CurrentCamera_upvr.CFrame *= CFrame.Angles(math.rad(any_upvr.Recoil * 0.6), 0, 0)
+					cframe_upvw = cframe_upvw:Lerp(CFrame.Angles(math.rad(-any_upvr.Recoil), 0, 0), 0.1)
+				end)
+			end
+			var221 = sprinting_upvr.Value
+			if var221 then
+				var221 = sprintCheck
+				var221()
+			end
+			var221 = task.wait
+			var221(60 / any_upvr.firerate)
+			var221 = false
+			var19_upvw = var221
+		else
+			processReload()
+		end
+	end;
+	Auto = function() -- Line 1087, Named "AutoFire"
+		--[[ Upvalues[20]:
+			[1]: AmmoCount_upvw (read and write)
+			[2]: var20_upvw (read and write)
+			[3]: var22_upvw (read and write)
+			[4]: var19_upvw (read and write)
+			[5]: var21_upvw (read and write)
+			[6]: Character_upvr (readonly)
+			[7]: Ammo_upvr (readonly)
+			[8]: FiringAnimations_upvr (readonly)
+			[9]: TREKRemotes_upvr (readonly)
+			[10]: LocalPlayer_upvr (readonly)
+			[11]: sprinting_upvr (readonly)
+			[12]: var36_upvw (read and write)
+			[13]: Parent_2_upvr (readonly)
+			[14]: mouse_upvr (readonly)
+			[15]: getSpread_upvr (readonly)
+			[16]: any_upvr (readonly)
+			[17]: var30_upvw (read and write)
+			[18]: CurrentCamera_upvr (readonly)
+			[19]: cframe_upvw (read and write)
+			[20]: tick_result1_upvw (read and write)
+		]]
+		-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [4] 4. Error Block 57 start (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [4] 4. Error Block 57 end (CF ANALYSIS FAILED)
+	end;
+	Shotgun = function() -- Line 1051, Named "ShotgunFire"
+		--[[ Upvalues[17]:
+			[1]: AmmoCount_upvw (read and write)
+			[2]: var19_upvw (read and write)
+			[3]: Ammo_upvr (readonly)
+			[4]: FiringAnimations_upvr (readonly)
+			[5]: TREKRemotes_upvr (readonly)
+			[6]: LocalPlayer_upvr (readonly)
+			[7]: any_upvr (readonly)
+			[8]: sprinting_upvr (readonly)
+			[9]: var36_upvw (read and write)
+			[10]: Parent_2_upvr (readonly)
+			[11]: mouse_upvr (readonly)
+			[12]: getSpread_upvr (readonly)
+			[13]: Character_upvr (readonly)
+			[14]: var30_upvw (read and write)
+			[15]: CurrentCamera_upvr (readonly)
+			[16]: cframe_upvw (read and write)
+			[17]: tick_result1_upvw (read and write)
+		]]
+		if 0 < AmmoCount_upvw then
+			var19_upvw = true
+			AmmoCount_upvw -= 1
+			pcall(function() -- Line 294
+				--[[ Upvalues[2]:
+					[1]: Ammo_upvr (copied, readonly)
+					[2]: AmmoCount_upvw (copied, read and write)
+				]]
+				Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+			end)
+			FiringAnimations_upvr("play")
+			TREKRemotes_upvr.FlashRemote:FireServer()
+			TREKRemotes_upvr.FlashBind:Fire(LocalPlayer_upvr)
+			for _ = 1, any_upvr.ShellsPerShot do
+				local var233
+				local var234
+				if sprinting_upvr.Value or 0 < var36_upvw.WeightCurrent then
+					var233 = FireWhileSprinting(Parent_2_upvr.Barrel)
+				else
+					local mobileCursorPosition_result1_2 = mobileCursorPosition()
+					if not mobileCursorPosition_result1_2 then
+						mobileCursorPosition_result1_2 = mouse_upvr.Hit.p
+					end
+					var233 = mobileCursorPosition_result1_2
+				end
+				local getSpread_result1_2 = getSpread_upvr(var233)
+				local var237
+				if any_upvr.CornerFire then
+					var234 = Parent_2_upvr.Barrel
+					var234 = (getSpread_result1_2 - Parent_2_upvr.Barrel.Position).Unit * any_upvr.Range
+					var237 = Ray.new(var234.Position, var234)
+				else
+					var234 = Character_upvr.Head
+					var234 = (getSpread_result1_2 - Character_upvr.Head.Position).Unit * any_upvr.Range
+					var237 = Ray.new(var234.Position, var234)
+				end
+				local findPlayersInRay_result1, findPlayersInRay_result2_2 = findPlayersInRay(var237)
+				local function INLINED_2() -- Internal function, doesn't exist in bytecode
+					var234 = findPlayersInRay_result1
+					return var234
+				end
+				if findPlayersInRay_result1 == nil or not INLINED_2() then
+					var234 = getSpread_result1_2
+				end
+				TREKRemotes_upvr.BulletRemote:FireServer(Parent_2_upvr.Barrel.Position, var234, var30_upvw, findPlayersInRay_result2_2, any_upvr.Suppression)
+				TREKRemotes_upvr.BulletBind:Fire(Parent_2_upvr.Barrel.Position, var234, var30_upvw, findPlayersInRay_result2_2, any_upvr.Suppression)
+			end
+			if any_upvr.Recoil then
+				task.spawn(function() -- Line 994
+					--[[ Upvalues[3]:
+						[1]: CurrentCamera_upvr (copied, readonly)
+						[2]: any_upvr (copied, readonly)
+						[3]: cframe_upvw (copied, read and write)
+					]]
+					task.wait()
+					CurrentCamera_upvr.CFrame *= CFrame.Angles(math.rad(any_upvr.Recoil * 0.6), 0, 0)
+					cframe_upvw = cframe_upvw:Lerp(CFrame.Angles(math.rad(-any_upvr.Recoil), 0, 0), 0.1)
+				end)
+			end
+			if sprinting_upvr.Value then
+				sprintCheck()
+			end
+			tick_result1_upvw = tick() + 1
+			task.wait(60 / any_upvr.firerate)
+			var19_upvw = false
+		else
+			processReload()
+		end
+	end;
+	AutoShotgun = function() -- Line 1130, Named "AutoShotgunFire"
+		--[[ Upvalues[20]:
+			[1]: AmmoCount_upvw (read and write)
+			[2]: var20_upvw (read and write)
+			[3]: var22_upvw (read and write)
+			[4]: var19_upvw (read and write)
+			[5]: var21_upvw (read and write)
+			[6]: Character_upvr (readonly)
+			[7]: Ammo_upvr (readonly)
+			[8]: FiringAnimations_upvr (readonly)
+			[9]: TREKRemotes_upvr (readonly)
+			[10]: LocalPlayer_upvr (readonly)
+			[11]: any_upvr (readonly)
+			[12]: sprinting_upvr (readonly)
+			[13]: var36_upvw (read and write)
+			[14]: Parent_2_upvr (readonly)
+			[15]: mouse_upvr (readonly)
+			[16]: getSpread_upvr (readonly)
+			[17]: var30_upvw (read and write)
+			[18]: CurrentCamera_upvr (readonly)
+			[19]: cframe_upvw (read and write)
+			[20]: tick_result1_upvw (read and write)
+		]]
+		-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [4] 4. Error Block 61 start (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [4] 4. Error Block 61 end (CF ANALYSIS FAILED)
+	end;
+	Flamethrower = function() -- Line 1175, Named "FlamethrowerFire"
+		--[[ Upvalues[17]:
+			[1]: sprinting_upvr (readonly)
+			[2]: AmmoCount_upvw (read and write)
+			[3]: var20_upvw (read and write)
+			[4]: any_upvr (readonly)
+			[5]: var22_upvw (read and write)
+			[6]: var19_upvw (read and write)
+			[7]: var21_upvw (read and write)
+			[8]: Character_upvr (readonly)
+			[9]: var28_upvr (readonly)
+			[10]: Ammo_upvr (readonly)
+			[11]: FiringAnimations_upvr (readonly)
+			[12]: TREKRemotes_upvr (readonly)
+			[13]: LocalPlayer_upvr (readonly)
+			[14]: mouse_upvr (readonly)
+			[15]: getSpread_upvr (readonly)
+			[16]: Parent_2_upvr (readonly)
+			[17]: tick_result1_upvw (read and write)
+		]]
+		-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [4] 4. Error Block 2 start (CF ANALYSIS FAILED)
+		sprintCheck()
+		do
+			return
+		end
+		-- KONSTANTERROR: [4] 4. Error Block 2 end (CF ANALYSIS FAILED)
+		-- KONSTANTERROR: [8] 7. Error Block 3 start (CF ANALYSIS FAILED)
+		workspace.Sounds.FlamethrowerIgnition:Play()
+		task.wait(0.5)
+		-- KONSTANTERROR: [8] 7. Error Block 3 end (CF ANALYSIS FAILED)
+	end;
+	AntiMateriel = function() -- Line 1251, Named "AntiMaterielFire"
+		--[[ Upvalues[16]:
+			[1]: AmmoCount_upvw (read and write)
+			[2]: var19_upvw (read and write)
+			[3]: Ammo_upvr (readonly)
+			[4]: FiringAnimations_upvr (readonly)
+			[5]: TREKRemotes_upvr (readonly)
+			[6]: LocalPlayer_upvr (readonly)
+			[7]: sprinting_upvr (readonly)
+			[8]: var36_upvw (read and write)
+			[9]: Parent_2_upvr (readonly)
+			[10]: mouse_upvr (readonly)
+			[11]: getSpread_upvr (readonly)
+			[12]: any_upvr (readonly)
+			[13]: Character_upvr (readonly)
+			[14]: var30_upvw (read and write)
+			[15]: CurrentCamera_upvr (readonly)
+			[16]: cframe_upvw (read and write)
+		]]
+		local var241
+		if 0 < AmmoCount_upvw then
+			var19_upvw = true
+			AmmoCount_upvw -= 1
+			pcall(function() -- Line 294
+				--[[ Upvalues[2]:
+					[1]: Ammo_upvr (copied, readonly)
+					[2]: AmmoCount_upvw (copied, read and write)
+				]]
+				Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+			end)
+			FiringAnimations_upvr("play")
+			TREKRemotes_upvr.FlashRemote:FireServer()
+			TREKRemotes_upvr.FlashBind:Fire(LocalPlayer_upvr)
+			local var243
+			if sprinting_upvr.Value or 0 < var36_upvw.WeightCurrent then
+				var243 = FireWhileSprinting(Parent_2_upvr.Barrel)
+			else
+				local mobileCursorPosition_result1_3 = mobileCursorPosition()
+				if not mobileCursorPosition_result1_3 then
+					mobileCursorPosition_result1_3 = mouse_upvr.Hit.p
+				end
+				var243 = mobileCursorPosition_result1_3
+			end
+			local getSpread_result1 = getSpread_upvr(var243)
+			local var246
+			if any_upvr.CornerFire then
+				var241 = Parent_2_upvr.Barrel
+				var241 = (getSpread_result1 - Parent_2_upvr.Barrel.Position).Unit * any_upvr.Range
+				var246 = Ray.new(var241.Position, var241)
+			else
+				var241 = Character_upvr.Head
+				var241 = (getSpread_result1 - Character_upvr.Head.Position).Unit * any_upvr.Range
+				var246 = Ray.new(var241.Position, var241)
+			end
+			var241 = "AntiMateriel"
+			local findPlayersInRay_result1_2, findPlayersInRay_result2 = findPlayersInRay(var246, var241)
+			local function INLINED_3() -- Internal function, doesn't exist in bytecode
+				var241 = findPlayersInRay_result1_2
+				return var241
+			end
+			if findPlayersInRay_result1_2 == nil or not INLINED_3() then
+				var241 = getSpread_result1
+			end
+			TREKRemotes_upvr.BulletRemote:FireServer(Parent_2_upvr.Barrel.Position, var241, var30_upvw, findPlayersInRay_result2, any_upvr.Suppression)
+			TREKRemotes_upvr.BulletBind:Fire(Parent_2_upvr.Barrel.Position, var241, var30_upvw, findPlayersInRay_result2, any_upvr.Suppression)
+			var241 = any_upvr.Recoil
+			if var241 then
+				var241 = task.spawn
+				var241(function() -- Line 994
+					--[[ Upvalues[3]:
+						[1]: CurrentCamera_upvr (copied, readonly)
+						[2]: any_upvr (copied, readonly)
+						[3]: cframe_upvw (copied, read and write)
+					]]
+					task.wait()
+					CurrentCamera_upvr.CFrame *= CFrame.Angles(math.rad(any_upvr.Recoil * 0.6), 0, 0)
+					cframe_upvw = cframe_upvw:Lerp(CFrame.Angles(math.rad(-any_upvr.Recoil), 0, 0), 0.1)
+				end)
+			end
+			var241 = sprinting_upvr.Value
+			if var241 then
+				var241 = sprintCheck
+				var241()
+			end
+			var241 = task.wait
+			var241(60 / any_upvr.firerate)
+			var241 = false
+			var19_upvw = var241
+		else
+			processReload()
+		end
+	end;
+	Melee = function() -- Line 1284, Named "Melee"
+		--[[ Upvalues[12]:
+			[1]: var20_upvw (read and write)
+			[2]: var22_upvw (read and write)
+			[3]: var19_upvw (read and write)
+			[4]: var21_upvw (read and write)
+			[5]: Character_upvr (readonly)
+			[6]: Ammo_upvr (readonly)
+			[7]: AmmoCount_upvw (read and write)
+			[8]: FiringAnimations_upvr (readonly)
+			[9]: TREKRemotes_upvr (readonly)
+			[10]: LocalPlayer_upvr (readonly)
+			[11]: tick_result1_upvw (read and write)
+			[12]: any_upvr (readonly)
+		]]
+		while var20_upvw == true do
+			if var22_upvw and not shared.ReloadingWeapon and not var19_upvw and var21_upvw then
+				if not shared.rolling and Character_upvr.Humanoid and 0 < Character_upvr.Humanoid.Health then
+					-- KONSTANTWARNING: GOTO [35] #27
+				end
+			end
+			if false == false then return end
+			if not Character_upvr.Humanoid or Character_upvr.Humanoid.Health <= 0 then break end
+			pcall(function() -- Line 294
+				--[[ Upvalues[2]:
+					[1]: Ammo_upvr (copied, readonly)
+					[2]: AmmoCount_upvw (copied, read and write)
+				]]
+				Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+			end)
+			FiringAnimations_upvr("play")
+			TREKRemotes_upvr.FlashRemote:FireServer()
+			TREKRemotes_upvr.FlashBind:Fire(LocalPlayer_upvr)
+			var19_upvw = true
+			var21_upvw = false
+			tick_result1_upvw = tick() + 1
+			task.wait(60 / any_upvr.firerate)
+			var19_upvw = false
+			var21_upvw = true
+		end
+	end;
+})[any_upvr.GunType]
+function Shoot() -- Line 1323
+	--[[ Upvalues[7]:
+		[1]: var22_upvw (read and write)
+		[2]: var21_upvw (read and write)
+		[3]: var20_upvw (read and write)
+		[4]: var254_upvw (read and write)
+		[5]: var19_upvw (read and write)
+		[6]: Character_upvr (readonly)
+		[7]: var255_upvr (readonly)
+	]]
+	if var22_upvw and var21_upvw == true and not shared.FreeMouse and not shared.charging then
+		var20_upvw = true
+		var254_upvw = tick()
+		if var22_upvw and not shared.ReloadingWeapon and not var19_upvw and var21_upvw then
+			if not shared.rolling and Character_upvr.Humanoid and 0 < Character_upvr.Humanoid.Health then
+				-- KONSTANTWARNING: GOTO [53] #40
+			end
+		end
+		if false == true then
+			var255_upvr()
+		end
+	end
+end
+local var256_upvw = true
+local charging_upvr = LocalPlayer_upvr:WaitForChild("MovementSettings").charging
+local WarCries_upvr = ReplicatedStorage_upvr.Voicelines.WarCries
+function bayonetCharge() -- Line 1335
+	--[[ Upvalues[16]:
+		[1]: var22_upvw (read and write)
+		[2]: var256_upvw (read and write)
+		[3]: any_upvr (readonly)
+		[4]: var23_upvw (read and write)
+		[5]: UserInputService_upvr (readonly)
+		[6]: var31_upvw (read and write)
+		[7]: charging_upvr (readonly)
+		[8]: ReplicatedStorage_upvr (readonly)
+		[9]: WarCries_upvr (readonly)
+		[10]: var39_upvw (read and write)
+		[11]: Character_upvr (readonly)
+		[12]: findPlayersInRayBayonet_upvr (readonly)
+		[13]: LocalPlayer_upvr (readonly)
+		[14]: Humanoid_upvr (readonly)
+		[15]: GlobalSettings_upvr (readonly)
+		[16]: PercentMultiplier_upvr (readonly)
+	]]
+	if var22_upvw and var256_upvw and any_upvr.Bayonet and not shared.ReloadingWeapon and not shared.charging then
+		var256_upvw = false
+		if shared.charging then
+		else
+			var23_upvw = false
+			shared.AimingDownSight = false
+			UserInputService_upvr.MouseDeltaSensitivity = 1
+			local var259 = var31_upvw
+			if var259 then
+				var259:Stop(nil)
+			end
+		end
+		shared.charging = true
+		charging_upvr.Value = true
+		sprintCheck()
+		crouchCheck()
+		ChargeMotion()
+		ReplicatedStorage_upvr.Voiceline:FireServer(WarCries_upvr["charge"..math.random(1, #WarCries_upvr:GetChildren())])
+		var39_upvw:Play()
+		task.spawn(function() -- Line 1346
+			--[[ Upvalues[9]:
+				[1]: Character_upvr (copied, readonly)
+				[2]: findPlayersInRayBayonet_upvr (copied, readonly)
+				[3]: LocalPlayer_upvr (copied, readonly)
+				[4]: charging_upvr (copied, readonly)
+				[5]: var39_upvw (copied, read and write)
+				[6]: Humanoid_upvr (copied, readonly)
+				[7]: GlobalSettings_upvr (copied, readonly)
+				[8]: PercentMultiplier_upvr (copied, readonly)
+				[9]: var256_upvw (copied, read and write)
+			]]
+			local var265
+			while shared.charging and not var265 do
+				local _, findPlayersInRayBayonet_result2_2 = findPlayersInRayBayonet_upvr(Ray.new(Character_upvr.HumanoidRootPart.Position, Character_upvr.HumanoidRootPart.CFrame.LookVector * 5))
+				if findPlayersInRayBayonet_result2_2 then
+					local any_GetPlayerFromCharacter_result1_2 = game.Players:GetPlayerFromCharacter(findPlayersInRayBayonet_result2_2.Parent)
+					if any_GetPlayerFromCharacter_result1_2 and any_GetPlayerFromCharacter_result1_2.Team ~= LocalPlayer_upvr.Team then
+						var265 = true
+					end
+				end
+				task.wait()
+			end
+			shared.charging = false
+			if var265 then
+				charging_upvr.Value = false
+				EndChargeMotion()
+				var39_upvw:Stop()
+				Humanoid_upvr.WalkSpeed = (GlobalSettings_upvr.walk_speed) * (PercentMultiplier_upvr.Value / 100)
+				var256_upvw = true
+			else
+				shared.sprintCooldown = true
+				charging_upvr.Value = false
+				EndChargeMotion()
+				var39_upvw:Stop()
+				Humanoid_upvr.WalkSpeed = (GlobalSettings_upvr.walk_speed) * (PercentMultiplier_upvr.Value / 100)
+				if LocalPlayer_upvr.EquippedPerks:FindFirstChild("CHARGER") then
+					task.wait(2.5)
+				else
+					task.wait(5)
+				end
+				var256_upvw = true
+				shared.sprintCooldown = false
+			end
+		end)
+		if LocalPlayer_upvr.EquippedPerks:FindFirstChild("CHARGER") then
+			task.wait(6)
+		else
+			task.wait(4)
+		end
+		shared.charging = false
+	end
+end
+local tbl_5_upvr = {
+	[Enum.KeyCode.R] = processReload;
+	[Enum.KeyCode.ButtonX] = processReload;
+	[Enum.KeyCode.Z] = handleTPSZoom;
+	[Enum.KeyCode.X] = bayonetCharge;
+	[Enum.KeyCode.ButtonY] = bayonetCharge;
+}
+local function _(arg1, arg2) -- Line 1400, Named "input"
+	--[[ Upvalues[1]:
+		[1]: tbl_5_upvr (readonly)
+	]]
+	if tbl_5_upvr[arg1.KeyCode] then
+		tbl_5_upvr[arg1.KeyCode]()
+	end
+end
+UserInputService_upvr.InputBegan:Connect(function(arg1, arg2) -- Line 1408
+	--[[ Upvalues[7]:
+		[1]: var22_upvw (read and write)
+		[2]: tbl_5_upvr (readonly)
+		[3]: any_upvr (readonly)
+		[4]: var23_upvw (read and write)
+		[5]: UserInputService_upvr (readonly)
+		[6]: var31_upvw (read and write)
+		[7]: var36_upvw (read and write)
+	]]
+	if not arg2 and var22_upvw then
+		if tbl_5_upvr[arg1.KeyCode] then
+			tbl_5_upvr[arg1.KeyCode]()
+		end
+		if arg1.KeyCode == Enum.KeyCode.ButtonL2 and any_upvr.CanZoom == true and var22_upvw then
+			if not shared.charging then
+				sprintCheck()
+				if shared.charging then return end
+				var23_upvw = true
+				shared.AimingDownSight = true
+				UserInputService_upvr.MouseDeltaSensitivity = shared.Setting_ADSSensitivityMultiplier / 100
+				local var271 = var31_upvw
+				if var271 then
+					var271:Play(nil)
+				end
+				local var272 = var36_upvw
+				if var272 then
+					var272:Stop(nil)
+				end
+			end
+		end
+	end
+end)
+UserInputService_upvr.InputEnded:Connect(function(arg1, arg2) -- Line 1424
+	--[[ Upvalues[5]:
+		[1]: var22_upvw (read and write)
+		[2]: any_upvr (readonly)
+		[3]: var23_upvw (read and write)
+		[4]: UserInputService_upvr (readonly)
+		[5]: var31_upvw (read and write)
+	]]
+	if not arg2 and var22_upvw and arg1.KeyCode == Enum.KeyCode.ButtonL2 and any_upvr.CanZoom == true and var22_upvw then
+		if not shared.charging then
+			if shared.charging then return end
+			var23_upvw = false
+			shared.AimingDownSight = false
+			UserInputService_upvr.MouseDeltaSensitivity = 1
+			local var274 = var31_upvw
+			if var274 then
+				var274:Stop(nil)
+			end
+		end
+	end
+end)
+function lerp(arg1, arg2, arg3) -- Line 1438
+	return arg1 + (arg2 - arg1) * arg3
+end
+LoadAnimations_upvr()
+game:GetService("RunService").RenderStepped:Connect(function(arg1) -- Line 1444
+	--[[ Upvalues[6]:
+		[1]: GlobalSettings_upvr (readonly)
+		[2]: var22_upvw (read and write)
+		[3]: LockToCamera_upvr (readonly)
+		[4]: turnPlayer_upvr (readonly)
+		[5]: mouse_upvr (readonly)
+		[6]: tick_result1_upvw (read and write)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [7] 6. Error Block 12 start (CF ANALYSIS FAILED)
+	if shared.ShiftLocked then
+		LockToCamera_upvr()
+		return
+	end
+	turnPlayer_upvr(mouse_upvr.hit.p)
+	do
+		return
+	end
+	-- KONSTANTERROR: [7] 6. Error Block 12 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [23] 18. Error Block 10 start (CF ANALYSIS FAILED)
+	if GlobalSettings_upvr.TurnOnFire == true and tick() < tick_result1_upvw then
+		turnPlayer_upvr(mouse_upvr.hit.p)
+	end
+	-- KONSTANTERROR: [23] 18. Error Block 10 end (CF ANALYSIS FAILED)
+end)
+game:GetService("RunService").Heartbeat:Connect(function(arg1) -- Line 1460
+	--[[ Upvalues[8]:
+		[1]: CurrentCamera_upvr (readonly)
+		[2]: var22_upvw (read and write)
+		[3]: cframe_upvw (read and write)
+		[4]: var31_upvw (read and write)
+		[5]: tbl_6_upvr (readonly)
+		[6]: LocalPlayer_upvr (readonly)
+		[7]: var42_upvw (read and write)
+		[8]: var20_upvw (read and write)
+	]]
+	if CurrentCamera_upvr.CameraType ~= Enum.CameraType.Scriptable and var22_upvw then
+		CurrentCamera_upvr.CFrame *= cframe_upvw
+		cframe_upvw = cframe_upvw:Lerp(CFrame.Angles(0, 0, 0), 0.2)
+	end
+	if shared.AimingDownSight and not shared.ReloadingWeapon and var22_upvw then
+		var31_upvw:AdjustWeight(lerp(var31_upvw.WeightCurrent, 1, 0.15 * arg1 * 60), 0)
+	else
+		var31_upvw:AdjustWeight(lerp(var31_upvw.WeightCurrent, 0.001, 0.15 * arg1 * 60), 0)
+	end
+	if shared.MobileUser then
+		if var22_upvw and shared.MobileAutoFireEnabled then
+			local workspace_FindPartOnRayWithIgnoreList_result1_4, _ = workspace:FindPartOnRayWithIgnoreList(Ray.new(CurrentCamera_upvr.CFrame.Position, CurrentCamera_upvr.CFrame.LookVector * 5000), tbl_6_upvr)
+			if workspace_FindPartOnRayWithIgnoreList_result1_4 and workspace_FindPartOnRayWithIgnoreList_result1_4.Parent:FindFirstChild("Humanoid") then
+				local any_GetPlayerFromCharacter_result1_4 = game.Players:GetPlayerFromCharacter(workspace_FindPartOnRayWithIgnoreList_result1_4.Parent)
+				if any_GetPlayerFromCharacter_result1_4 then
+					if any_GetPlayerFromCharacter_result1_4.Team ~= LocalPlayer_upvr.Team then
+						task.wait(0.1)
+						Shoot()
+						-- KONSTANTWARNING: GOTO [193] #138
+					end
+				else
+					task.wait(0.1)
+					Shoot()
+				end
+			elseif workspace_FindPartOnRayWithIgnoreList_result1_4 and workspace_FindPartOnRayWithIgnoreList_result1_4.Parent.Parent:FindFirstChild("Humanoid") then
+				local any_GetPlayerFromCharacter_result1_5 = game.Players:GetPlayerFromCharacter(workspace_FindPartOnRayWithIgnoreList_result1_4.Parent.Parent)
+				if any_GetPlayerFromCharacter_result1_5 then
+					if any_GetPlayerFromCharacter_result1_5.Team ~= LocalPlayer_upvr.Team then
+						task.wait(0.1)
+						Shoot()
+						-- KONSTANTWARNING: GOTO [193] #138
+					end
+				else
+					task.wait(0.1)
+					Shoot()
+				end
+			end
+		end
+		if not var42_upvw then
+			var20_upvw = false
+		end
+	end
+end)
+sprinting_upvr:GetPropertyChangedSignal("Value"):Connect(function() -- Line 1508
+	--[[ Upvalues[8]:
+		[1]: var22_upvw (read and write)
+		[2]: sprinting_upvr (readonly)
+		[3]: var36_upvw (read and write)
+		[4]: var23_upvw (read and write)
+		[5]: UserInputService_upvr (readonly)
+		[6]: var31_upvw (read and write)
+		[7]: var33_upvw (read and write)
+		[8]: crouching_upvr (readonly)
+	]]
+	if var22_upvw == true then
+		if sprinting_upvr.Value == true then
+			local var282 = var36_upvw
+			if var282 then
+				var282:Play(nil)
+			end
+			if shared.charging then
+			else
+				var23_upvw = false
+				shared.AimingDownSight = false
+				UserInputService_upvr.MouseDeltaSensitivity = 1
+				local var283 = var31_upvw
+				if var283 then
+					var283:Stop(nil)
+				end
+			end
+			shared.AimpointEnabled = false
+		else
+			local var284 = var36_upvw
+			if var284 then
+				var284:Stop(0.3)
+			end
+			local var285 = var33_upvw
+			if var285 then
+				var285:Play(nil)
+			end
+			task.spawn(function() -- Line 1517
+				--[[ Upvalues[1]:
+					[1]: var36_upvw (copied, read and write)
+				]]
+				repeat
+					task.wait()
+				until var36_upvw.WeightCurrent == 0
+				shared.AimpointEnabled = true
+			end)
+		end
+		if crouching_upvr.Value == true then
+			local var287 = var33_upvw
+			if var287 then
+				var287:Play(nil)
+			end
+			shared.AimpointEnabled = true
+		end
+	end
+end)
+mouse_upvr.Button1Down:Connect(function() -- Line 1529
+	if not shared.MobileUser then
+		Shoot()
+	end
+end)
+mouse_upvr.Button1Up:Connect(function() -- Line 1534
+	--[[ Upvalues[1]:
+		[1]: var20_upvw (read and write)
+	]]
+	var20_upvw = false
+end)
+mouse_upvr.Button2Down:Connect(function() -- Line 1536
+	--[[ Upvalues[6]:
+		[1]: any_upvr (readonly)
+		[2]: var22_upvw (read and write)
+		[3]: var23_upvw (read and write)
+		[4]: UserInputService_upvr (readonly)
+		[5]: var31_upvw (read and write)
+		[6]: var36_upvw (read and write)
+	]]
+	if any_upvr.CanZoom == true and var22_upvw and not shared.charging then
+		sprintCheck()
+		if shared.charging then return end
+		var23_upvw = true
+		shared.AimingDownSight = true
+		UserInputService_upvr.MouseDeltaSensitivity = shared.Setting_ADSSensitivityMultiplier / 100
+		local var291 = var31_upvw
+		if var291 then
+			var291:Play(nil)
+		end
+		local var292 = var36_upvw
+		if var292 then
+			var292:Stop(nil)
+		end
+	end
+end)
+mouse_upvr.Button2Up:Connect(function() -- Line 1546
+	--[[ Upvalues[5]:
+		[1]: any_upvr (readonly)
+		[2]: var22_upvw (read and write)
+		[3]: var23_upvw (read and write)
+		[4]: UserInputService_upvr (readonly)
+		[5]: var31_upvw (read and write)
+	]]
+	if any_upvr.CanZoom == true and var22_upvw and not shared.charging then
+		if shared.charging then return end
+		var23_upvw = false
+		shared.AimingDownSight = false
+		UserInputService_upvr.MouseDeltaSensitivity = 1
+		local var294 = var31_upvw
+		if var294 then
+			var294:Stop(nil)
+		end
+	end
+end)
+Parent_2_upvr.Equipped:Connect(function() -- Line 456, Named "onEquip"
+	--[[ Upvalues[10]:
+		[1]: var22_upvw (read and write)
+		[2]: any_upvr (readonly)
+		[3]: LoadAnimations_upvr (readonly)
+		[4]: TweenModule_upvr (readonly)
+		[5]: Ammo_upvr (readonly)
+		[6]: AmmoCount_upvw (read and write)
+		[7]: mobileGUI_upvr (readonly)
+		[8]: sprinting_upvr (readonly)
+		[9]: var36_upvw (read and write)
+		[10]: var33_upvw (read and write)
+	]]
+	-- KONSTANTERROR: [0] 1. Error Block 1 start (CF ANALYSIS FAILED)
+	var22_upvw = true
+	shared.TargetFOV = any_upvr.SniperFov or 90
+	LoadAnimations_upvr()
+	pcall(function() -- Line 257
+		--[[ Upvalues[3]:
+			[1]: TweenModule_upvr (copied, readonly)
+			[2]: Ammo_upvr (copied, readonly)
+			[3]: AmmoCount_upvw (copied, read and write)
+		]]
+		TweenModule_upvr.tween(Ammo_upvr, {
+			Position = UDim2.new(1, -16, 1, -16);
+		}, 0.3, "Cubic", "Out"):Play()
+		Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+	end)
+	mobileGUI_upvr(true)
+	local Value = sprinting_upvr.Value
+	-- KONSTANTERROR: [0] 1. Error Block 1 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [29] 24. Error Block 3 start (CF ANALYSIS FAILED)
+	Value:Play(nil)
+	do
+		return
+	end
+	-- KONSTANTERROR: [29] 24. Error Block 3 end (CF ANALYSIS FAILED)
+	-- KONSTANTERROR: [34] 28. Error Block 7 start (CF ANALYSIS FAILED)
+	local var100 = var33_upvw
+	if var100 then
+		var100:Play(nil)
+	end
+	-- KONSTANTERROR: [34] 28. Error Block 7 end (CF ANALYSIS FAILED)
+end)
+Parent_2_upvr.Unequipped:Connect(function() -- Line 470, Named "onUnequip"
+	--[[ Upvalues[18]:
+		[1]: var22_upvw (read and write)
+		[2]: Humanoid_upvr (readonly)
+		[3]: Character_upvr (readonly)
+		[4]: Ammo_upvr (readonly)
+		[5]: AmmoCount_upvw (read and write)
+		[6]: mobileGUI_upvr (readonly)
+		[7]: TweenModule_upvr (readonly)
+		[8]: sprinting_upvr (readonly)
+		[9]: var36_upvw (read and write)
+		[10]: var23_upvw (read and write)
+		[11]: UserInputService_upvr (readonly)
+		[12]: var31_upvw (read and write)
+		[13]: var33_upvw (read and write)
+		[14]: var35_upvw (read and write)
+		[15]: var37_upvw (read and write)
+		[16]: var38_upvw (read and write)
+		[17]: var39_upvw (read and write)
+		[18]: FiringAnimations_upvr (readonly)
+	]]
+	var22_upvw = false
+	Humanoid_upvr.AutoRotate = true
+	shared.charging = false
+	EndChargeMotion()
+	if Character_upvr:FindFirstChildOfClass("Tool") then
+		if Character_upvr:FindFirstChildOfClass("Tool"):FindFirstChild("Gun") then
+			pcall(function() -- Line 294
+				--[[ Upvalues[2]:
+					[1]: Ammo_upvr (copied, readonly)
+					[2]: AmmoCount_upvw (copied, read and write)
+				]]
+				Ammo_upvr.AmmoCountFrame.Count.Text = AmmoCount_upvw
+			end)
+		else
+			mobileGUI_upvr(false)
+			pcall(function() -- Line 266
+				--[[ Upvalues[2]:
+					[1]: TweenModule_upvr (copied, readonly)
+					[2]: Ammo_upvr (copied, readonly)
+				]]
+				TweenModule_upvr.tween(Ammo_upvr, {
+					Position = UDim2.new(1, -16, 1, 90);
+				}, 0.4, "Cubic", "InOut"):Play()
+			end)
+		end
+	else
+		mobileGUI_upvr(false)
+		pcall(function() -- Line 266
+			--[[ Upvalues[2]:
+				[1]: TweenModule_upvr (copied, readonly)
+				[2]: Ammo_upvr (copied, readonly)
+			]]
+			TweenModule_upvr.tween(Ammo_upvr, {
+				Position = UDim2.new(1, -16, 1, 90);
+			}, 0.4, "Cubic", "InOut"):Play()
+		end)
+	end
+	if sprinting_upvr.Value == true then
+		local var119 = var36_upvw
+		if var119 then
+			var119:Stop(nil)
+		end
+	end
+	if var23_upvw then
+		if shared.charging then
+		else
+			var23_upvw = false
+			shared.AimingDownSight = false
+			UserInputService_upvr.MouseDeltaSensitivity = 1
+			local var120 = var31_upvw
+			if var120 then
+				var120:Stop(nil)
+			end
+		end
+	end
+	local var121 = var33_upvw
+	if var121 then
+		var121:Stop(nil)
+	end
+	local var122 = var35_upvw
+	if var122 then
+		var122:Stop(nil)
+	end
+	local var123 = var31_upvw
+	if var123 then
+		var123:Stop(nil)
+	end
+	local var124 = var37_upvw
+	if var124 then
+		var124:Stop(nil)
+	end
+	local var125 = var38_upvw
+	if var125 then
+		var125:Stop(nil)
+	end
+	local var126 = var39_upvw
+	if var126 then
+		var126:Stop(nil)
+	end
+	FiringAnimations_upvr("stop")
+end)
+Character_upvr.Humanoid.Died:Connect(function() -- Line 1559
+	--[[ Upvalues[4]:
+		[1]: var49_upvw (read and write)
+		[2]: var23_upvw (read and write)
+		[3]: UserInputService_upvr (readonly)
+		[4]: var31_upvw (read and write)
+	]]
+	if var49_upvw then
+		var49_upvw:HitStop()
+	end
+	if var23_upvw then
+		if shared.charging then return end
+		var23_upvw = false
+		shared.AimingDownSight = false
+		UserInputService_upvr.MouseDeltaSensitivity = 1
+		local var296 = var31_upvw
+		if var296 then
+			var296:Stop(nil)
+		end
+	end
+end)
