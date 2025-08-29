@@ -2089,6 +2089,26 @@ end
 local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(255, 200, 100))
 local ConfigTab = CreateTab("Конфиги", "💾", Color3.fromRGB(100, 255, 200))
 
+-- Дропдаун для выбора конфига
+local configDropdown = CreateDropdown(configSection, "Конфиги", "Выбор сохранённого конфига", {}, "Нет конфигов", function(option)
+    currentConfig = option
+end)
+
+-- Контейнер для опций
+local optionsList = Instance.new("Frame")
+optionsList.Parent = configDropdown
+optionsList.BackgroundTransparency = 1
+optionsList.Size = UDim2.new(1, 0, 0, 0)
+
+-- При открытии вкладки Configs обновляем список
+local oldSelectTab = SelectTab
+SelectTab = function(name)
+    oldSelectTab(name)
+    if name == "Configs" then
+        RefreshConfigsDropdown(configDropdown, optionsList)
+    end
+end
+
 -- ВКЛАДКА ИГРОКА
 local MovementSection = CreateSection(PlayerTab, "🏃 Передвижение")
 
