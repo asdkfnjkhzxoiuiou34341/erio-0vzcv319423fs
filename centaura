@@ -173,35 +173,6 @@ detectStorageMethods()
 print("SSLKin: Метод сохранения:", storageMethod, "-", storageInfo)
 
 -- Универсальные функции сохранения
-local function saveConfigPersistent(configName, configData)
-    if storageMethod == "files" then
-        -- Сохранение в файл
-        local success = pcall(function()
-            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
-            local jsonData = HttpService:JSONEncode(configData)
-            writefile(filePath, jsonData)
-        end)
-        return success
-        
-    elseif storageMethod = "global" then
-        -- Сохранение в глобальную память эксплойта
-        local success = pcall(function()
-            getgenv().SSLKinConfigs[configName] = configData
-        end)
-        return success
-        
-    elseif storageMethod == "clipboard" then
-        -- Копирование в буфер обмена
-        local success = pcall(function()
-            local jsonData = HttpService:JSONEncode(configData)
-            local clipboardText = "-- SSLKin Config: " .. configName .. " (Сохрани в блокнот!)\n" .. jsonData
-            setclipboard(clipboardText)
-        end)
-        return success
-    end
-    
-    return false
-end
 
 local function loadConfigPersistent(configName)
     if storageMethod == "files" then
