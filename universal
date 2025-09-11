@@ -1,0 +1,2416 @@
+-- Защита от повторного запуска
+if getgenv().SSLKinUniLoaded then
+    warn("SSLKin Uni Script уже запущен!")
+    return
+end
+getgenv().SSLKinUniLoaded = true
+
+-- Основные сервисы
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Teams = game:GetService("Teams")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+
+-- Определение игры
+local currentGame = "Universal"
+local gameSpecificFeatures = {}
+
+-- Переменные состояния
+local isFlying = false
+local flySpeed = 50
+local isNoclipActive = false
+local espEnabled = false
+local infiniteJumpEnabled = false
+local speedEnabled = false
+local jumpEnabled = false
+local walkSpeed = 16
+local jumpPower = 50
+local fullBrightEnabled = false
+local noFogEnabled = false
+
+-- ESP настройки
+local espSettings = {
+    enabled = false,
+    boxes = true,
+    chams = false,
+    names = false,
+    distance = false,
+    health = false,
+    healthBar = false,
+    tracers = false,
+    teamCheck = true,
+    enemyColor = Color3.fromRGB(255, 0, 0),
+    allyColor = Color3.fromRGB(0, 255, 0),
+    nameColor = Color3.fromRGB(255, 255, 255),
+    tracerColor = Color3.fromRGB(0, 255, 0),
+    -- Настройки HP бара
+    healthBarPosition = "Top", -- Top, Bottom, Left, Right
+    healthBarSize = 120, -- Длина/ширина в процентах от размера игрока
+    healthBarThickness = 2, -- Толщина полоски
+    healthBarBackground = Color3.fromRGB(60, 60, 60),
+    healthBarForeground = Color3.fromRGB(0, 255, 0),
+    healthBarLowHealth = Color3.fromRGB(255, 255, 0),
+    healthBarCriticalHealth = Color3.fromRGB(255, 0, 0)
+}
+
+-- ESP объекты и Drawing объекты
+local espObjects = {}
+local drawingObjects = {}
+local playerChams = {} -- Отдельное хранилище для чамсов
+
+-- Система конфигов
+local configs = {}
+local currentConfig = "Default"
+
+-- Умная система сохранения для разных эксплойтов
+local HttpService = game:GetService("HttpService")
+
+-- Настройки сохранения
+local CONFIGS_FOLDER = "SSLKinConfigs"
+local storageMethod = "none"
+local storageInfo = ""
+
+-- Определяем эксплойт
+local executorName = "Unknown"
+if KRNL_LOADED then
+    executorName = "KRNL"
+elseif syn then
+    executorName = "Synapse X"
+elseif getgenv().SOLARA_LOADED or getgenv().solara then
+    executorName = "Solara"
+elseif FLUXUS_LOADED then
+    executorName = "Fluxus"
+elseif getgenv and getgenv().is_sirhurt_closure then
+    executorName = "SirHurt"
+end
+
+print("SSLKin: Определен эксплойт:", executorName)
+
+-- Проверяем разные методы сохранения
+local function detectStorageMethods()
+    -- 1. Проверяем файловую систему
+    local fileSuccess = pcall(function()
+        if not (isfolder and writefile and readfile and delfile and isfile) then 
+            return false 
+        end
+        
+        if not isfolder(CONFIGS_FOLDER) then
+            makefolder(CONFIGS_FOLDER)
+        end
+        
+        local testFile = CONFIGS_FOLDER .. "/test.txt"
+        writefile(testFile, "test")
+        local content = readfile(testFile)
+        delfile(testFile)
+        
+        return content == "test"
+    end)
+    
+    if fileSuccess then
+        storageMethod = "files"
+        storageInfo = "Папка: " .. CONFIGS_FOLDER
+        return true
+    end
+    
+    -- 2. Проверяем буфер обмена
+    local clipboardSuccess = pcall(function()
+        if setclipboard then
+            setclipboard("test")
+            return true
+        end
+        return false
+    end)
+    
+    if clipboardSuccess then
+        storageMethod = "clipboard"
+        storageInfo = "Через буфер обмена"
+        return true
+    end
+    
+    -- 3. Глобальное хранилище (работает во всех эксплойтах)
+    if getgenv then
+        storageMethod = "global"
+        storageInfo = "В памяти эксплойта"
+        
+        -- Инициализируем глобальное хранилище
+        if not getgenv().SSLKinConfigs then
+            getgenv().SSLKinConfigs = {}
+        end
+        return true
+    end
+    
+    storageMethod = "none"
+    storageInfo = "Недоступно"
+    return false
+end
+
+-- Проверяем методы при запуске
+detectStorageMethods()
+
+print("SSLKin: Метод сохранения:", storageMethod, "-", storageInfo)
+
+-- Универсальные функции сохранения
+local function saveConfigPersistent(configName, configData)
+    if storageMethod == "files" then
+        -- Сохранение в файл
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            local jsonData = HttpService:JSONEncode(configData)
+            writefile(filePath, jsonData)
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        -- Сохранение в глобальную память эксплойта
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = configData
+        end)
+        return success
+        
+    elseif storageMethod == "clipboard" then
+        -- Копирование в буфер обмена
+        local success = pcall(function()
+            local jsonData = HttpService:JSONEncode(configData)
+            local clipboardText = "-- SSLKin Config: " .. configName .. " (Сохрани в блокнот!)\n" .. jsonData
+            setclipboard(clipboardText)
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function loadConfigPersistent(configName)
+    if storageMethod == "files" then
+        -- Загрузка из файла
+        local success, result = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if not isfile(filePath) then return nil end
+            
+            local content = readfile(filePath)
+            return HttpService:JSONDecode(content)
+        end)
+        return success and result or nil
+        
+    elseif storageMethod == "global" then
+        -- Загрузка из глобальной памяти
+        local success, result = pcall(function()
+            return getgenv().SSLKinConfigs[configName]
+        end)
+        return success and result or nil
+    end
+    
+    return nil
+end
+
+local function deleteConfigPersistent(configName)
+    if storageMethod == "files" then
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            if isfile(filePath) then
+                delfile(filePath)
+            end
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = nil
+        end)
+        return success
+    end
+    
+    return false
+end
+
+local function getPersistentConfigNames()
+    if storageMethod == "files" then
+        local success, result = pcall(function()
+            if not isfolder(CONFIGS_FOLDER) then return {} end
+            
+            local files = listfiles(CONFIGS_FOLDER)
+            local configNames = {}
+            
+            for _, filePath in pairs(files) do
+                local fileName = filePath:match("([^/\\]+)$")
+                if fileName and fileName:match("%.json$") then
+                    local configName = fileName:gsub("%.json$", "")
+                    table.insert(configNames, configName)
+                end
+            end
+            
+            return configNames
+        end)
+        return success and result or {}
+        
+    elseif storageMethod == "global" then
+        local success, result = pcall(function()
+            local names = {}
+            for configName, _ in pairs(getgenv().SSLKinConfigs) do
+                table.insert(names, configName)
+            end
+            return names
+        end)
+        return success and result or {}
+    end
+    
+    return {}
+end
+
+-- Загрузка всех сохраненных конфигов при запуске
+local function loadAllSavedConfigs()
+    if storageMethod == "none" then return end
+    
+    spawn(function()
+        wait(2) -- Ждем инициализацию GUI
+        
+        local savedConfigs = getPersistentConfigNames()
+        if #savedConfigs > 0 then
+            print("SSLKin: Найдено", #savedConfigs, "сохраненных конфигов:", table.concat(savedConfigs, ", "))
+            
+            -- Загружаем конфиги в память
+            for _, configName in pairs(savedConfigs) do
+                local configData = loadConfigPersistent(configName)
+                if configData then
+                    configs[configName] = configData
+                end
+            end
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "SSLKin Uni Script",
+                Text = "Загружено " .. #savedConfigs .. " сохраненных конфигов! (" .. storageMethod .. ")",
+                Duration = 3
+            })
+        else
+            print("SSLKin: Сохраненных конфигов не найдено")
+        end
+    end)
+end
+
+-- Запускаем загрузку сохраненных конфигов
+loadAllSavedConfigs()
+
+-- Сохранение оригинальных значений освещения
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+-- Создание ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SSLKinUniScript"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 100
+
+-- Основное окно
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -400, 0.5, -275)
+MainFrame.Size = UDim2.new(0, 800, 0, 550)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false
+
+-- Обводка главного окна
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Parent = MainFrame
+MainStroke.Color = Color3.fromRGB(60, 60, 255)
+MainStroke.Thickness = 2
+MainStroke.Transparency = 0.3
+
+-- Закругление главного окна
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
+
+-- Заголовок
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "HeaderFrame"
+HeaderFrame.Parent = MainFrame
+HeaderFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+HeaderFrame.BorderSizePixel = 0
+HeaderFrame.Size = UDim2.new(1, 0, 0, 60)
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = HeaderFrame
+
+-- Фикс углов заголовка
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Parent = HeaderFrame
+HeaderFix.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Position = UDim2.new(0, 0, 0.5, 0)
+HeaderFix.Size = UDim2.new(1, 0, 0.5, 0)
+
+-- Градиент заголовка
+local HeaderGradient = Instance.new("UIGradient")
+HeaderGradient.Parent = HeaderFrame
+HeaderGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 80, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 40, 200)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 30))
+}
+HeaderGradient.Rotation = 90
+
+-- Логотип и заголовок
+local LogoLabel = Instance.new("TextLabel")
+LogoLabel.Name = "LogoLabel"
+LogoLabel.Parent = HeaderFrame
+LogoLabel.BackgroundTransparency = 1
+LogoLabel.Position = UDim2.new(0, 20, 0, 5)
+LogoLabel.Size = UDim2.new(0, 50, 0, 50)
+LogoLabel.Font = Enum.Font.GothamBold
+LogoLabel.Text = "🚀"
+LogoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogoLabel.TextScaled = true
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = HeaderFrame
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 80, 0, 10)
+TitleLabel.Size = UDim2.new(1, -200, 0, 25)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "SSLKin Uni Script"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 20
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local SubtitleLabel = Instance.new("TextLabel")
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.Parent = HeaderFrame
+SubtitleLabel.BackgroundTransparency = 1
+SubtitleLabel.Position = UDim2.new(0, 80, 0, 35)
+SubtitleLabel.Size = UDim2.new(1, -200, 0, 20)
+SubtitleLabel.Font = Enum.Font.Gotham
+SubtitleLabel.Text = "Universal Mode v3.1"
+SubtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+SubtitleLabel.TextSize = 12
+SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Кнопка закрытия
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Parent = HeaderFrame
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(1, -45, 0, 15)
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+-- Контейнер для контента
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Parent = MainFrame
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Position = UDim2.new(0, 0, 0, 60)
+ContentContainer.Size = UDim2.new(1, 0, 1, -60)
+
+-- Боковая панель навигации
+local SidePanel = Instance.new("Frame")
+SidePanel.Name = "SidePanel"
+SidePanel.Parent = ContentContainer
+SidePanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanel.BorderSizePixel = 0
+SidePanel.Size = UDim2.new(0, 200, 1, 0)
+
+local SidePanelCorner = Instance.new("UICorner")
+SidePanelCorner.CornerRadius = UDim.new(0, 8)
+SidePanelCorner.Parent = SidePanel
+
+-- Фикс углов боковой панели
+local SidePanelFix = Instance.new("Frame")
+SidePanelFix.Parent = SidePanel
+SidePanelFix.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanelFix.BorderSizePixel = 0
+SidePanelFix.Position = UDim2.new(0, 0, 0, 0)
+SidePanelFix.Size = UDim2.new(1, 0, 0, 8)
+
+local SidePanelFix2 = Instance.new("Frame")
+SidePanelFix2.Parent = SidePanel
+SidePanelFix2.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+SidePanelFix2.BorderSizePixel = 0
+SidePanelFix2.Position = UDim2.new(1, -8, 0, 0)
+SidePanelFix2.Size = UDim2.new(0, 8, 1, 0)
+
+-- Основная область контента
+local MainContent = Instance.new("ScrollingFrame")
+MainContent.Name = "MainContent"
+MainContent.Parent = ContentContainer
+MainContent.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContent.BorderSizePixel = 0
+MainContent.Position = UDim2.new(0, 200, 0, 0)
+MainContent.Size = UDim2.new(1, -200, 1, 0)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+MainContent.ScrollBarThickness = 6
+MainContent.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 255)
+MainContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local MainContentCorner = Instance.new("UICorner")
+MainContentCorner.CornerRadius = UDim.new(0, 8)
+MainContentCorner.Parent = MainContent
+
+-- Фикс углов основного контента
+local MainContentFix = Instance.new("Frame")
+MainContentFix.Parent = MainContent
+MainContentFix.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContentFix.BorderSizePixel = 0
+MainContentFix.Position = UDim2.new(0, -8, 0, 0)
+MainContentFix.Size = UDim2.new(0, 8, 1, 0)
+
+local MainContentFix2 = Instance.new("Frame")
+MainContentFix2.Parent = MainContent
+MainContentFix2.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainContentFix2.BorderSizePixel = 0
+MainContentFix2.Position = UDim2.new(0, 0, 0, 0)
+MainContentFix2.Size = UDim2.new(1, 0, 0, 8)
+
+-- Состояние GUI
+local originalSize = UDim2.new(0, 800, 0, 550)
+local originalPosition = UDim2.new(0.5, -400, 0.5, -275)
+
+-- Анимации
+local function CreateTween(object, properties, duration, easingStyle, easingDirection)
+    local tweenInfo = TweenInfo.new(
+        duration or 0.3,
+        easingStyle or Enum.EasingStyle.Quad,
+        easingDirection or Enum.EasingDirection.Out
+    )
+    return TweenService:Create(object, tweenInfo, properties)
+end
+
+-- Функции показа/скрытия GUI
+local function ShowGUI()
+    print("SSLKin: ShowGUI вызвана") -- Отладка
+    MainFrame.Visible = true
+    
+    if MainFrame.Size == originalSize then
+        print("SSLKin: GUI уже открыто") -- Отладка
+        return -- Уже открыто
+    end
+    
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    
+    local showTween = CreateTween(MainFrame, {
+        Size = originalSize,
+        Position = originalPosition
+    }, 0.6, Enum.EasingStyle.Back)
+    
+    showTween:Play()
+end
+
+local function HideGUI()
+    print("SSLKin: HideGUI вызвана") -- Отладка
+    local hideTween = CreateTween(MainFrame, {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    }, 0.4, Enum.EasingStyle.Quad)
+    
+    hideTween:Play()
+    
+    hideTween.Completed:Connect(function()
+        MainFrame.Visible = false
+    end)
+end
+
+-- Система вкладок
+local tabs = {}
+local currentTab = nil
+
+local function CreateTab(name, icon, color)
+    local tabColor = color or Color3.fromRGB(60, 120, 255)
+    
+    -- Кнопка вкладки
+    local TabButton = Instance.new("TextButton")
+    TabButton.Name = name .. "Tab"
+    TabButton.Parent = SidePanel
+    TabButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    TabButton.BorderSizePixel = 0
+    TabButton.Position = UDim2.new(0, 10, 0, 15 + (#tabs * 55))
+    TabButton.Size = UDim2.new(1, -20, 0, 45)
+    TabButton.Font = Enum.Font.GothamSemibold
+    TabButton.Text = ""
+    TabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+    TabButton.AutoButtonColor = false
+    
+    local TabCorner = Instance.new("UICorner")
+    TabCorner.CornerRadius = UDim.new(0, 8)
+    TabCorner.Parent = TabButton
+    
+    -- Иконка
+    local IconLabel = Instance.new("TextLabel")
+    IconLabel.Parent = TabButton
+    IconLabel.BackgroundTransparency = 1
+    IconLabel.Position = UDim2.new(0, 15, 0, 0)
+    IconLabel.Size = UDim2.new(0, 30, 1, 0)
+    IconLabel.Font = Enum.Font.GothamBold
+    IconLabel.Text = icon or "📋"
+    IconLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    IconLabel.TextSize = 18
+    
+    -- Текст
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Parent = TabButton
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.Position = UDim2.new(0, 50, 0, 0)
+    TextLabel.Size = UDim2.new(1, -60, 1, 0)
+    TextLabel.Font = Enum.Font.GothamSemibold
+    TextLabel.Text = name
+    TextLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    TextLabel.TextSize = 14
+    TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Индикатор активности
+    local ActiveIndicator = Instance.new("Frame")
+    ActiveIndicator.Name = "ActiveIndicator"
+    ActiveIndicator.Parent = TabButton
+    ActiveIndicator.BackgroundColor3 = tabColor
+    ActiveIndicator.BorderSizePixel = 0
+    ActiveIndicator.Position = UDim2.new(0, 0, 0, 0)
+    ActiveIndicator.Size = UDim2.new(0, 0, 1, 0)
+    ActiveIndicator.Visible = false
+    
+    local IndicatorCorner = Instance.new("UICorner")
+    IndicatorCorner.CornerRadius = UDim.new(0, 8)
+    IndicatorCorner.Parent = ActiveIndicator
+    
+    -- Контент вкладки
+    local TabContent = Instance.new("Frame")
+    TabContent.Name = name .. "Content"
+    TabContent.Parent = MainContent
+    TabContent.BackgroundTransparency = 1
+    TabContent.Size = UDim2.new(1, 0, 1, 0)
+    TabContent.Visible = false
+    
+    local ContentLayout = Instance.new("UIListLayout")
+    ContentLayout.Parent = TabContent
+    ContentLayout.Padding = UDim.new(0, 15)
+    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ContentLayout.FillDirection = Enum.FillDirection.Vertical
+    
+    local ContentPadding = Instance.new("UIPadding")
+    ContentPadding.Parent = TabContent
+    ContentPadding.PaddingTop = UDim.new(0, 20)
+    ContentPadding.PaddingLeft = UDim.new(0, 20)
+    ContentPadding.PaddingRight = UDim.new(0, 20)
+    ContentPadding.PaddingBottom = UDim.new(0, 20)
+    
+    -- Функция переключения вкладки
+    local function SelectTab()
+        -- Сброс всех вкладок
+        for _, tab in pairs(tabs) do
+            CreateTween(tab.button, {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}, 0.2):Play()
+            CreateTween(tab.iconLabel, {TextColor3 = Color3.fromRGB(200, 200, 200)}, 0.2):Play()
+            CreateTween(tab.textLabel, {TextColor3 = Color3.fromRGB(200, 200, 200)}, 0.2):Play()
+            tab.activeIndicator.Visible = false
+            tab.content.Visible = false
+        end
+        
+        -- Активация текущей вкладки
+        CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(40, 40, 55)}, 0.2):Play()
+        CreateTween(IconLabel, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+        CreateTween(TextLabel, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+        
+        ActiveIndicator.Visible = true
+        ActiveIndicator.Size = UDim2.new(0, 0, 1, 0)
+        CreateTween(ActiveIndicator, {Size = UDim2.new(0, 4, 1, 0)}, 0.3, Enum.EasingStyle.Quad):Play()
+        
+        TabContent.Visible = true
+        currentTab = name
+    end
+    
+    -- События
+    TabButton.MouseButton1Click:Connect(SelectTab)
+    
+    TabButton.MouseEnter:Connect(function()
+        if currentTab ~= name then
+            CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(35, 35, 45)}, 0.2):Play()
+        end
+    end)
+    
+    TabButton.MouseLeave:Connect(function()
+        if currentTab ~= name then
+            CreateTween(TabButton, {BackgroundColor3 = Color3.fromRGB(30, 30, 40)}, 0.2):Play()
+        end
+    end)
+    
+    table.insert(tabs, {
+        button = TabButton,
+        content = TabContent,
+        name = name,
+        iconLabel = IconLabel,
+        textLabel = TextLabel,
+        activeIndicator = ActiveIndicator
+    })
+    
+    return TabContent
+end
+
+-- Функция создания секции
+local function CreateSection(parent, title)
+    local SectionFrame = Instance.new("Frame")
+    SectionFrame.Parent = parent
+    SectionFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    SectionFrame.BorderSizePixel = 0
+    SectionFrame.Size = UDim2.new(1, 0, 0, 0)
+    SectionFrame.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local SectionCorner = Instance.new("UICorner")
+    SectionCorner.CornerRadius = UDim.new(0, 10)
+    SectionCorner.Parent = SectionFrame
+    
+    local SectionStroke = Instance.new("UIStroke")
+    SectionStroke.Parent = SectionFrame
+    SectionStroke.Color = Color3.fromRGB(60, 60, 80)
+    SectionStroke.Thickness = 1
+    SectionStroke.Transparency = 0.7
+    
+    local SectionTitle = Instance.new("TextLabel")
+    SectionTitle.Parent = SectionFrame
+    SectionTitle.BackgroundTransparency = 1
+    SectionTitle.Position = UDim2.new(0, 15, 0, 10)
+    SectionTitle.Size = UDim2.new(1, -30, 0, 25)
+    SectionTitle.Font = Enum.Font.GothamBold
+    SectionTitle.Text = title
+    SectionTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SectionTitle.TextSize = 16
+    SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local SectionContent = Instance.new("Frame")
+    SectionContent.Parent = SectionFrame
+    SectionContent.BackgroundTransparency = 1
+    SectionContent.Position = UDim2.new(0, 10, 0, 40)
+    SectionContent.Size = UDim2.new(1, -20, 0, 0)
+    SectionContent.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local ContentLayout = Instance.new("UIListLayout")
+    ContentLayout.Parent = SectionContent
+    ContentLayout.Padding = UDim.new(0, 10)
+    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    local ContentPadding = Instance.new("UIPadding")
+    ContentPadding.Parent = SectionContent
+    ContentPadding.PaddingBottom = UDim.new(0, 15)
+    
+    return SectionContent
+end
+
+-- Функция создания кнопки
+local function CreateButton(parent, text, description, callback)
+    local ButtonFrame = Instance.new("Frame")
+    ButtonFrame.Parent = parent
+    ButtonFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    ButtonFrame.BorderSizePixel = 0
+    ButtonFrame.Size = UDim2.new(1, 0, 0, 60)
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 8)
+    ButtonCorner.Parent = ButtonFrame
+    
+    local ButtonGradient = Instance.new("UIGradient")
+    ButtonGradient.Parent = ButtonFrame
+    ButtonGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 60)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 35, 50))
+    }
+    ButtonGradient.Rotation = 90
+    
+    local Button = Instance.new("TextButton")
+    Button.Parent = ButtonFrame
+    Button.BackgroundTransparency = 1
+    Button.Size = UDim2.new(1, 0, 1, 0)
+    Button.Font = Enum.Font.Gotham
+    Button.Text = ""
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.AutoButtonColor = false
+    
+    local ButtonText = Instance.new("TextLabel")
+    ButtonText.Parent = ButtonFrame
+    ButtonText.BackgroundTransparency = 1
+    ButtonText.Position = UDim2.new(0, 15, 0, 8)
+    ButtonText.Size = UDim2.new(1, -30, 0, 25)
+    ButtonText.Font = Enum.Font.GothamBold
+    ButtonText.Text = text
+    ButtonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ButtonText.TextSize = 14
+    ButtonText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ButtonDesc = Instance.new("TextLabel")
+    ButtonDesc.Parent = ButtonFrame
+    ButtonDesc.BackgroundTransparency = 1
+    ButtonDesc.Position = UDim2.new(0, 15, 0, 30)
+    ButtonDesc.Size = UDim2.new(1, -30, 0, 20)
+    ButtonDesc.Font = Enum.Font.Gotham
+    ButtonDesc.Text = description or ""
+    ButtonDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ButtonDesc.TextSize = 11
+    ButtonDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Эффекты
+    Button.MouseEnter:Connect(function()
+        CreateTween(ButtonFrame, {BackgroundColor3 = Color3.fromRGB(50, 50, 70)}, 0.2):Play()
+        CreateTween(ButtonText, {TextColor3 = Color3.fromRGB(100, 150, 255)}, 0.2):Play()
+    end)
+    
+    Button.MouseLeave:Connect(function()
+        CreateTween(ButtonFrame, {BackgroundColor3 = Color3.fromRGB(40, 40, 55)}, 0.2):Play()
+        CreateTween(ButtonText, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2):Play()
+    end)
+    
+    Button.MouseButton1Click:Connect(function()
+        -- Анимация нажатия
+        CreateTween(ButtonFrame, {Size = UDim2.new(1, -4, 0, 56)}, 0.1):Play()
+        wait(0.1)
+        CreateTween(ButtonFrame, {Size = UDim2.new(1, 0, 0, 60)}, 0.1):Play()
+        
+        if callback then 
+            spawn(callback)
+        end
+    end)
+    
+    return ButtonFrame
+end
+
+-- Функция создания переключателя
+local function CreateToggle(parent, text, description, defaultState, callback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Parent = parent
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 60)
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local ToggleText = Instance.new("TextLabel")
+    ToggleText.Parent = ToggleFrame
+    ToggleText.BackgroundTransparency = 1
+    ToggleText.Position = UDim2.new(0, 15, 0, 8)
+    ToggleText.Size = UDim2.new(1, -80, 0, 25)
+    ToggleText.Font = Enum.Font.GothamBold
+    ToggleText.Text = text
+    ToggleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleText.TextSize = 14
+    ToggleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ToggleDesc = Instance.new("TextLabel")
+    ToggleDesc.Parent = ToggleFrame
+    ToggleDesc.BackgroundTransparency = 1
+    ToggleDesc.Position = UDim2.new(0, 15, 0, 30)
+    ToggleDesc.Size = UDim2.new(1, -80, 0, 20)
+    ToggleDesc.Font = Enum.Font.Gotham
+    ToggleDesc.Text = description or ""
+    ToggleDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ToggleDesc.TextSize = 11
+    ToggleDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Переключатель
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Parent = ToggleFrame
+    ToggleButton.BackgroundColor3 = defaultState and Color3.fromRGB(60, 120, 255) or Color3.fromRGB(60, 60, 70)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Position = UDim2.new(1, -55, 0.5, -12)
+    ToggleButton.Size = UDim2.new(0, 45, 0, 24)
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(0, 12)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    local ToggleCircle = Instance.new("Frame")
+    ToggleCircle.Parent = ToggleButton
+    ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleCircle.BorderSizePixel = 0
+    ToggleCircle.Position = defaultState and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+    ToggleCircle.Size = UDim2.new(0, 20, 0, 20)
+    
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(0, 10)
+    CircleCorner.Parent = ToggleCircle
+    
+    local isToggled = defaultState
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        isToggled = not isToggled
+        
+        if isToggled then
+            CreateTween(ToggleButton, {BackgroundColor3 = Color3.fromRGB(60, 120, 255)}, 0.2):Play()
+            CreateTween(ToggleCircle, {Position = UDim2.new(1, -22, 0.5, -10)}, 0.2):Play()
+        else
+            CreateTween(ToggleButton, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2):Play()
+            CreateTween(ToggleCircle, {Position = UDim2.new(0, 2, 0.5, -10)}, 0.2):Play()
+        end
+        
+        if callback then
+            spawn(function() callback(isToggled) end)
+        end
+    end)
+    
+    return ToggleFrame, isToggled
+end
+
+-- Функция создания ползунка
+local function CreateSlider(parent, text, description, minValue, maxValue, defaultValue, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Parent = parent
+    SliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    SliderFrame.BorderSizePixel = 0
+    SliderFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(0, 8)
+    SliderCorner.Parent = SliderFrame
+    
+    local SliderText = Instance.new("TextLabel")
+    SliderText.Parent = SliderFrame
+    SliderText.BackgroundTransparency = 1
+    SliderText.Position = UDim2.new(0, 15, 0, 8)
+    SliderText.Size = UDim2.new(1, -100, 0, 20)
+    SliderText.Font = Enum.Font.GothamBold
+    SliderText.Text = text
+    SliderText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SliderText.TextSize = 14
+    SliderText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local SliderValue = Instance.new("TextLabel")
+    SliderValue.Parent = SliderFrame
+    SliderValue.BackgroundTransparency = 1
+    SliderValue.Position = UDim2.new(1, -85, 0, 8)
+    SliderValue.Size = UDim2.new(0, 70, 0, 20)
+    SliderValue.Font = Enum.Font.GothamBold
+    SliderValue.Text = tostring(defaultValue)
+    SliderValue.TextColor3 = Color3.fromRGB(100, 150, 255)
+    SliderValue.TextSize = 14
+    SliderValue.TextXAlignment = Enum.TextXAlignment.Right
+    
+    local SliderDesc = Instance.new("TextLabel")
+    SliderDesc.Parent = SliderFrame
+    SliderDesc.BackgroundTransparency = 1
+    SliderDesc.Position = UDim2.new(0, 15, 0, 28)
+    SliderDesc.Size = UDim2.new(1, -30, 0, 16)
+    SliderDesc.Font = Enum.Font.Gotham
+    SliderDesc.Text = description or ""
+    SliderDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    SliderDesc.TextSize = 11
+    SliderDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Ползунок
+    local SliderTrack = Instance.new("Frame")
+    SliderTrack.Parent = SliderFrame
+    SliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    SliderTrack.BorderSizePixel = 0
+    SliderTrack.Position = UDim2.new(0, 15, 0, 55)
+    SliderTrack.Size = UDim2.new(1, -30, 0, 8)
+    
+    local SliderTrackCorner = Instance.new("UICorner")
+    SliderTrackCorner.CornerRadius = UDim.new(0, 4)
+    SliderTrackCorner.Parent = SliderTrack
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Parent = SliderTrack
+    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Position = UDim2.new(0, 0, 0, 0)
+    SliderFill.Size = UDim2.new((defaultValue - minValue) / (maxValue - minValue), 0, 1, 0)
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(0, 4)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderButton = Instance.new("TextButton")
+    SliderButton.Parent = SliderFrame
+    SliderButton.BackgroundTransparency = 1
+    SliderButton.Position = UDim2.new(0, 10, 0, 50)
+    SliderButton.Size = UDim2.new(1, -20, 0, 18)
+    SliderButton.Text = ""
+    
+    local currentValue = defaultValue
+    local dragging = false
+    
+    local function updateSlider(value)
+        currentValue = math.clamp(value, minValue, maxValue)
+        
+        -- Округление до десятых для плавности
+        if maxValue - minValue > 10 then
+            currentValue = math.floor(currentValue + 0.5)
+        else
+            currentValue = math.floor(currentValue * 10 + 0.5) / 10
+        end
+        
+        local percentage = (currentValue - minValue) / (maxValue - minValue)
+        CreateTween(SliderFill, {Size = UDim2.new(percentage, 0, 1, 0)}, 0.1):Play()
+        SliderValue.Text = tostring(currentValue)
+        
+        if callback then
+            callback(currentValue)
+        end
+    end
+    
+    SliderButton.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    SliderButton.MouseMoved:Connect(function()
+        if dragging then
+            local mousePos = UserInputService:GetMouseLocation()
+            local framePos = SliderTrack.AbsolutePosition
+            local frameSize = SliderTrack.AbsoluteSize
+            
+            local relativePos = (mousePos.X - framePos.X) / frameSize.X
+            relativePos = math.clamp(relativePos, 0, 1)
+            
+            local newValue = minValue + (relativePos * (maxValue - minValue))
+            updateSlider(newValue)
+        end
+    end)
+    
+    return SliderFrame, updateSlider
+end
+
+-- Функция создания текстового поля
+local function CreateTextBox(parent, text, description, placeholder, callback)
+    local TextBoxFrame = Instance.new("Frame")
+    TextBoxFrame.Parent = parent
+    TextBoxFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    TextBoxFrame.BorderSizePixel = 0
+    TextBoxFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local TextBoxCorner = Instance.new("UICorner")
+    TextBoxCorner.CornerRadius = UDim.new(0, 8)
+    TextBoxCorner.Parent = TextBoxFrame
+    
+    local TextBoxText = Instance.new("TextLabel")
+    TextBoxText.Parent = TextBoxFrame
+    TextBoxText.BackgroundTransparency = 1
+    TextBoxText.Position = UDim2.new(0, 15, 0, 8)
+    TextBoxText.Size = UDim2.new(1, -30, 0, 20)
+    TextBoxText.Font = Enum.Font.GothamBold
+    TextBoxText.Text = text
+    TextBoxText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBoxText.TextSize = 14
+    TextBoxText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local TextBoxDesc = Instance.new("TextLabel")
+    TextBoxDesc.Parent = TextBoxFrame
+    TextBoxDesc.BackgroundTransparency = 1
+    TextBoxDesc.Position = UDim2.new(0, 15, 0, 28)
+    TextBoxDesc.Size = UDim2.new(1, -30, 0, 16)
+    TextBoxDesc.Font = Enum.Font.Gotham
+    TextBoxDesc.Text = description or ""
+    TextBoxDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    TextBoxDesc.TextSize = 11
+    TextBoxDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Текстовое поле
+    local TextBox = Instance.new("TextBox")
+    TextBox.Parent = TextBoxFrame
+    TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    TextBox.BorderSizePixel = 0
+    TextBox.Position = UDim2.new(0, 15, 0, 50)
+    TextBox.Size = UDim2.new(1, -30, 0, 25)
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.Text = placeholder or ""
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.TextSize = 12
+    
+    local TextBoxCorner = Instance.new("UICorner")
+    TextBoxCorner.CornerRadius = UDim.new(0, 6)
+    TextBoxCorner.Parent = TextBox
+    
+    TextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and callback then
+            callback(TextBox.Text)
+        end
+    end)
+    
+    return TextBoxFrame, TextBox
+end
+
+-- Функция создания выпадающего списка
+local function CreateDropdown(parent, text, description, options, defaultOption, callback)
+    local DropdownFrame = Instance.new("Frame")
+    DropdownFrame.Parent = parent
+    DropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    DropdownFrame.BorderSizePixel = 0
+    DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+    
+    local DropdownCorner = Instance.new("UICorner")
+    DropdownCorner.CornerRadius = UDim.new(0, 8)
+    DropdownCorner.Parent = DropdownFrame
+    
+    local DropdownText = Instance.new("TextLabel")
+    DropdownText.Parent = DropdownFrame
+    DropdownText.BackgroundTransparency = 1
+    DropdownText.Position = UDim2.new(0, 15, 0, 8)
+    DropdownText.Size = UDim2.new(1, -30, 0, 20)
+    DropdownText.Font = Enum.Font.GothamBold
+    DropdownText.Text = text
+    DropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownText.TextSize = 14
+    DropdownText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local DropdownDesc = Instance.new("TextLabel")
+    DropdownDesc.Parent = DropdownFrame
+    DropdownDesc.BackgroundTransparency = 1
+    DropdownDesc.Position = UDim2.new(0, 15, 0, 28)
+    DropdownDesc.Size = UDim2.new(1, -30, 0, 16)
+    DropdownDesc.Font = Enum.Font.Gotham
+    DropdownDesc.Text = description or ""
+    DropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    DropdownDesc.TextSize = 11
+    DropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Кнопка выпадающего списка
+    local DropdownButton = Instance.new("TextButton")
+    DropdownButton.Parent = DropdownFrame
+    DropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    DropdownButton.BorderSizePixel = 0
+    DropdownButton.Position = UDim2.new(0, 15, 0, 50)
+    DropdownButton.Size = UDim2.new(1, -30, 0, 25)
+    DropdownButton.Font = Enum.Font.Gotham
+    DropdownButton.Text = defaultOption or options[1]
+    DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownButton.TextSize = 12
+    DropdownButton.AutoButtonColor = false
+    
+    local DropdownButtonCorner = Instance.new("UICorner")
+    DropdownButtonCorner.CornerRadius = UDim.new(0, 6)
+    DropdownButtonCorner.Parent = DropdownButton
+    
+    -- Список опций
+    local optionsList = Instance.new("ScrollingFrame")
+    optionsList.Parent = DropdownFrame
+    optionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    optionsList.BorderSizePixel = 0
+    optionsList.Position = UDim2.new(0, 15, 0, 76)
+    optionsList.Size = UDim2.new(1, -30, 0, 0)
+    optionsList.Visible = false
+    optionsList.ZIndex = 10
+    optionsList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    optionsList.ScrollBarThickness = 6
+    
+    local optionsCorner = Instance.new("UICorner")
+    optionsCorner.CornerRadius = UDim.new(0, 6)
+    optionsCorner.Parent = optionsList
+    
+    local optionsLayout = Instance.new("UIListLayout")
+    optionsLayout.Parent = optionsList
+    optionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    local function toggleDropdown()
+        local isOpen = optionsList.Visible
+        
+        if isOpen then
+            optionsList.Visible = false
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        else
+            optionsList.Visible = true
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80 + optionsList.Size.Y.Offset)
+        end
+    end
+    
+    DropdownButton.MouseButton1Click:Connect(toggleDropdown)
+    
+    -- Добавляем опции
+    local totalHeight = 0
+    for i, option in ipairs(options) do
+        local optionButton = Instance.new("TextButton")
+        optionButton.Parent = optionsList
+        optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        optionButton.BorderSizePixel = 0
+        optionButton.Size = UDim2.new(1, 0, 0, 25)
+        optionButton.Font = Enum.Font.Gotham
+        optionButton.Text = option
+        optionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        optionButton.TextSize = 12
+        optionButton.AutoButtonColor = false
+        optionButton.LayoutOrder = i
+        
+        optionButton.MouseEnter:Connect(function()
+            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        end)
+        
+        optionButton.MouseButton1Click:Connect(function()
+            DropdownButton.Text = option
+            optionsList.Visible = false
+            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+            if callback then
+                callback(option)
+            end
+        end)
+        
+        totalHeight = totalHeight + 25
+    end
+    
+    -- Устанавливаем размер списка
+    local maxHeight = math.min(totalHeight, 150)
+    optionsList.Size = UDim2.new(1, -30, 0, maxHeight)
+    optionsList.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+    
+    return DropdownFrame
+end
+
+-- Функция для обновления списка конфигов в выпадающем списке
+local function RefreshConfigsDropdown()
+    -- Очищаем старые опции
+    for _, child in ipairs(configOptionsList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    -- Добавляем новые опции
+    local configNames = getPersistentConfigNames()
+    local totalHeight = 0
+    
+    for i, configName in ipairs(configNames) do
+        local optionButton = Instance.new("TextButton")
+        optionButton.Parent = configOptionsList
+        optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        optionButton.BorderSizePixel = 0
+        optionButton.Size = UDim2.new(1, 0, 0, 25)
+        optionButton.Font = Enum.Font.Gotham
+        optionButton.Text = configName
+        optionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        optionButton.TextSize = 12
+        optionButton.AutoButtonColor = false
+        optionButton.LayoutOrder = i
+        
+        optionButton.MouseEnter:Connect(function()
+            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+        end)
+        
+        optionButton.MouseButton1Click:Connect(function()
+            selectedConfigName = configName
+            configDropdownButton.Text = configName
+            configOptionsList.Visible = false
+            configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+            
+            -- Загружаем конфиг
+            loadConfig(configName, true)
+        end)
+        
+        totalHeight = totalHeight + 25
+    end
+    
+    -- Устанавливаем размер списка
+    local maxHeight = math.min(totalHeight, 150)
+    configOptionsList.Size = UDim2.new(1, -30, 0, maxHeight)
+    configOptionsList.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+
+-- Функции освещения
+local function toggleFullBright(state)
+    if state then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    else
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+    end
+end
+
+local function toggleNoFog(state)
+    if state then
+        Lighting.FogEnd = math.huge
+    else
+        Lighting.FogEnd = originalLighting.FogEnd
+    end
+end
+
+-- Функции ESP
+local function createESP(player)
+    if espObjects[player] then return end
+    
+    espObjects[player] = {}
+    
+    -- Создаем Drawing объекты
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Thickness = 1
+    box.Filled = false
+    
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false
+    tracer.Thickness = 1
+    
+    local nameText = Drawing.new("Text")
+    nameText.Visible = false
+    nameText.Size = 13
+    nameText.Center = true
+    nameText.Outline = true
+    
+    local distanceText = Drawing.new("Text")
+    distanceText.Visible = false
+    distanceText.Size = 13
+    distanceText.Center = true
+    distanceText.Outline = true
+    
+    local healthText = Drawing.new("Text")
+    healthText.Visible = false
+    healthText.Size = 13
+    healthText.Center = true
+    healthText.Outline = true
+    
+    -- HP бар (Drawing Quad для полоски)
+    local healthBarBack = Drawing.new("Quad")
+    healthBarBack.Visible = false
+    healthBarBack.Thickness = espSettings.healthBarThickness
+    healthBarBack.Filled = true
+    healthBarBack.Color = espSettings.healthBarBackground
+    
+    local healthBarFront = Drawing.new("Quad")
+    healthBarFront.Visible = false
+    healthBarFront.Thickness = espSettings.healthBarThickness
+    healthBarFront.Filled = true
+    
+    espObjects[player] = {
+        box = box,
+        tracer = tracer,
+        nameText = nameText,
+        distanceText = distanceText,
+        healthText = healthText,
+        healthBarBack = healthBarBack,
+        healthBarFront = healthBarFront
+    }
+end
+
+local function updatePlayerChams(player)
+    if not espSettings.chams then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    if not playerChams[player] then
+        local highlight = Instance.new("Highlight")
+        highlight.Parent = character
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.OutlineTransparency = 0
+        highlight.FillTransparency = 0.7
+        playerChams[player] = highlight
+    end
+    
+    local highlight = playerChams[player]
+    if highlight then
+        if espSettings.teamCheck then
+            highlight.FillColor = isPlayerEnemy(player) and espSettings.enemyColor or espSettings.allyColor
+            highlight.OutlineColor = isPlayerEnemy(player) and espSettings.enemyColor or espSettings.allyColor
+        else
+            highlight.FillColor = espSettings.enemyColor
+            highlight.OutlineColor = espSettings.enemyColor
+        end
+    end
+end
+
+local function isPlayerEnemy(player)
+    return player.Team ~= LocalPlayer.Team
+end
+
+local function updateESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            createESP(player)
+            updatePlayerChams(player)
+        end
+    end
+end
+
+local function updateDrawingESP()
+    for player, objs in pairs(espObjects) do
+        if espSettings.enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local humanoid = player.Character.Humanoid
+            local rootPart = player.Character.HumanoidRootPart
+            local head = player.Character:FindFirstChild("Head")
+            local isEnemy = isPlayerEnemy(player)
+            
+            if espSettings.teamCheck and not isEnemy then continue end
+            
+            local vector3D, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+            
+            if onScreen then
+                -- Квадрат
+                if espSettings.boxes then
+                    local height = (Camera:WorldToViewportPoint(head.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2.5, 0)).Y) / 2
+                    local width = height / 2
+                    
+                    objs.box.Size = Vector2.new(width, height)
+                    objs.box.Position = Vector2.new(vector3D.X - width / 2, vector3D.Y - height / 2)
+                    objs.box.Color = isEnemy and espSettings.enemyColor or espSettings.allyColor
+                    objs.box.Visible = true
+                else
+                    objs.box.Visible = false
+                end
+                
+                -- Трейсер
+                if espSettings.tracers then
+                    objs.tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    objs.tracer.To = Vector2.new(vector3D.X, vector3D.Y)
+                    objs.tracer.Color = espSettings.tracerColor
+                    objs.tracer.Visible = true
+                else
+                    objs.tracer.Visible = false
+                end
+                
+                -- Имя
+                if espSettings.names and head then
+                    objs.nameText.Text = player.Name
+                    objs.nameText.Color = espSettings.nameColor
+                    objs.nameText.Position = Vector2.new(vector3D.X, vector3D.Y - (height / 2) - 16)
+                    objs.nameText.Visible = true
+                else
+                    objs.nameText.Visible = false
+                end
+                
+                -- Дистанция
+                if espSettings.distance then
+                    local distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude)
+                    objs.distanceText.Text = tostring(distance) .. " studs"
+                    objs.distanceText.Color = Color3.fromRGB(255, 255, 255)
+                    objs.distanceText.Position = Vector2.new(vector3D.X, vector3D.Y + (height / 2) + 2)
+                    objs.distanceText.Visible = true
+                else
+                    objs.distanceText.Visible = false
+                end
+                
+                -- Здоровье текст
+                if espSettings.health then
+                    objs.healthText.Text = math.floor(humanoid.Health) .. "/" .. humanoid.MaxHealth
+                    objs.healthText.Color = Color3.fromRGB(255, 255, 255)
+                    objs.healthText.Position = Vector2.new(vector3D.X - width / 2 - 20, vector3D.Y - height / 2)
+                    objs.healthText.Visible = true
+                else
+                    objs.healthText.Visible = false
+                end
+                
+                -- HP бар
+                if espSettings.healthBar then
+                    local healthPercent = humanoid.Health / humanoid.MaxHealth
+                    local barColor = espSettings.healthBarForeground
+                    if healthPercent < 0.5 then
+                        barColor = espSettings.healthBarLowHealth
+                    end
+                    if healthPercent < 0.25 then
+                        barColor = espSettings.healthBarCriticalHealth
+                    end
+                    
+                    local barSize = (espSettings.healthBarSize / 100) * height
+                    local barFilledSize = barSize * healthPercent
+                    
+                    local barPosition = Vector2.new(0, 0)
+                    local barOffset = 5
+                    
+                    if espSettings.healthBarPosition == "Left" then
+                        barPosition = Vector2.new(vector3D.X - width / 2 - barOffset - espSettings.healthBarThickness, vector3D.Y - height / 2)
+                        objs.healthBarBack.PointA = barPosition + Vector2.new(0, height)
+                        objs.healthBarBack.PointB = barPosition
+                        objs.healthBarBack.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
+                        objs.healthBarBack.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height)
+                        
+                        objs.healthBarFront.PointA = barPosition + Vector2.new(0, height - barFilledSize)
+                        objs.healthBarFront.PointB = barPosition
+                        objs.healthBarFront.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
+                        objs.healthBarFront.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height - barFilledSize)
+                    elseif espSettings.healthBarPosition == "Right" then
+                        barPosition = Vector2.new(vector3D.X + width / 2 + barOffset, vector3D.Y - height / 2)
+                        objs.healthBarBack.PointA = barPosition + Vector2.new(0, height)
+                        objs.healthBarBack.PointB = barPosition
+                        objs.healthBarBack.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
+                        objs.healthBarBack.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height)
+                        
+                        objs.healthBarFront.PointA = barPosition + Vector2.new(0, height - barFilledSize)
+                        objs.healthBarFront.PointB = barPosition
+                        objs.healthBarFront.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
+                        objs.healthBarFront.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height - barFilledSize)
+                    elseif espSettings.healthBarPosition == "Bottom" then
+                        barPosition = Vector2.new(vector3D.X - width / 2, vector3D.Y + height / 2 + barOffset)
+                        objs.healthBarBack.PointA = barPosition
+                        objs.healthBarBack.PointB = barPosition + Vector2.new(width, 0)
+                        objs.healthBarBack.PointC = barPosition + Vector2.new(width, espSettings.healthBarThickness)
+                        objs.healthBarBack.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
+                        
+                        objs.healthBarFront.PointA = barPosition
+                        objs.healthBarFront.PointB = barPosition + Vector2.new(width * healthPercent, 0)
+                        objs.healthBarFront.PointC = barPosition + Vector2.new(width * healthPercent, espSettings.healthBarThickness)
+                        objs.healthBarFront.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
+                    else -- Top by default
+                        barPosition = Vector2.new(vector3D.X - width / 2, vector3D.Y - height / 2 - barOffset - espSettings.healthBarThickness)
+                        objs.healthBarBack.PointA = barPosition
+                        objs.healthBarBack.PointB = barPosition + Vector2.new(width, 0)
+                        objs.healthBarBack.PointC = barPosition + Vector2.new(width, espSettings.healthBarThickness)
+                        objs.healthBarBack.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
+                        
+                        objs.healthBarFront.PointA = barPosition
+                        objs.healthBarFront.PointB = barPosition + Vector2.new(width * healthPercent, 0)
+                        objs.healthBarFront.PointC = barPosition + Vector2.new(width * healthPercent, espSettings.healthBarThickness)
+                        objs.healthBarFront.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
+                    end
+                    
+                    objs.healthBarFront.Color = barColor
+                    objs.healthBarBack.Visible = true
+                    objs.healthBarFront.Visible = true
+                else
+                    objs.healthBarBack.Visible = false
+                    objs.healthBarFront.Visible = false
+                end
+            else
+                -- Скрываем все если не на экране
+                objs.box.Visible = false
+                objs.tracer.Visible = false
+                objs.nameText.Visible = false
+                objs.distanceText.Visible = false
+                objs.healthText.Visible = false
+                objs.healthBarBack.Visible = false
+                objs.healthBarFront.Visible = false
+            end
+        else
+            -- Скрываем все если ESP выключен
+            objs.box.Visible = false
+            objs.tracer.Visible = false
+            objs.nameText.Visible = false
+            objs.distanceText.Visible = false
+            objs.healthText.Visible = false
+            objs.healthBarBack.Visible = false
+            objs.healthBarFront.Visible = false
+        end
+    end
+end
+
+-- Обновление Drawing ESP в Heartbeat
+RunService.Heartbeat:Connect(updateDrawingESP)
+
+-- Улучшенное постоянное обновление чамсов
+spawn(function()
+    while true do
+        if espSettings.enabled and espSettings.chams then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    updatePlayerChams(player)
+                end
+            end
+        else
+            -- Если чамсы выключены, очищаем все
+            for player, cham in pairs(playerChams) do
+                if cham and cham.Parent then
+                    pcall(function()
+                        cham:Destroy()
+                    end)
+                end
+            end
+            playerChams = {}
+        end
+        wait(0.5) -- Обновляем чамсы каждые 0.5 секунды для лучшей отзывчивости
+    end
+end)
+
+-- Создание вкладок
+local MovementTab = CreateTab("Движение", "🏃", Color3.fromRGB(100, 200, 255))
+local GameTab = CreateTab("Игра", "🎮", Color3.fromRGB(255, 100, 100))
+local VisualTab = CreateTab("Визуалы", "👁", Color3.fromRGB(150, 255, 150))
+local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(200, 200, 200))
+local ConfigTab = CreateTab("Конфиги", "💾", Color3.fromRGB(100, 255, 200))
+
+-- ВКЛАДКА ДВИЖЕНИЯ
+local MovementSection = CreateSection(MovementTab, "🏃 Основное движение")
+
+-- Скорость ходьбы
+CreateToggle(MovementSection, "Скорость ходьбы", "Включить/выключить изменение скорости", false, function(state)
+    speedEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Скорость включена!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Скорость выключена!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateSlider(MovementSection, "Значение скорости", "От 16 до 100", 16, 100, 32, function(value)
+    walkSpeed = value
+    if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end)
+
+-- Высота прыжка
+CreateToggle(MovementSection, "Высота прыжка", "Включить/выключить изменение прыжка", false, function(state)
+    jumpEnabled = state
+    
+    if state then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Прыжок включен!",
+            Duration = 3
+        })
+    else
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.JumpHeight = 7.2
+        end
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Прыжок выключен!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateSlider(MovementSection, "Значение прыжка", "От 7 до 100", 7, 100, 25, function(value)
+    jumpPower = value
+    if jumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+    end
+end)
+
+-- Полёт
+CreateToggle(MovementSection, "Полёт", "WASD для управления, Space/Shift для вверх/вниз", false, function(state)
+    if state then
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not rootPart then return end
+        
+        isFlying = true
+        
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.Parent = rootPart
+        
+        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+        bodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0)
+        bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+        bodyAngularVelocity.Parent = rootPart
+        
+        spawn(function()
+            while isFlying and bodyVelocity.Parent do
+                local moveVector = Vector3.new(0, 0, 0)
+                local cam = Camera
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveVector = moveVector + (cam.CFrame.LookVector * flySpeed)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveVector = moveVector - (cam.CFrame.LookVector * flySpeed)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveVector = moveVector - (cam.CFrame.RightVector * flySpeed)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveVector = moveVector + (cam.CFrame.RightVector * flySpeed)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveVector = moveVector + Vector3.new(0, flySpeed, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    moveVector = moveVector - Vector3.new(0, flySpeed, 0)
+                end
+                
+                bodyVelocity.Velocity = moveVector
+                RunService.Heartbeat:Wait()
+            end
+        end)
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полёт активирован!",
+            Duration = 3
+        })
+    else
+        isFlying = false
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                if obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity") then
+                    obj:Destroy()
+                end
+            end
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полёт деактивирован!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateSlider(MovementSection, "Скорость полёта", "От 10 до 200", 10, 200, 50, function(value)
+    flySpeed = value
+end)
+
+-- ВКЛАДКА ИГРЫ
+local GameplaySection = CreateSection(GameTab, "🎯 Игровые функции")
+
+CreateToggle(GameplaySection, "Бесконечные прыжки", "Позволяет прыгать в воздухе", false, function(state)
+    infiniteJumpEnabled = state
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Бесконечные прыжки включены!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Бесконечные прыжки выключены!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateToggle(GameplaySection, "Проход сквозь стены", "Отключает коллизию персонажа", false, function(state)
+    isNoclipActive = state
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Noclip активирован!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Noclip деактивирован!",
+            Duration = 3
+        })
+    end
+end)
+
+-- ВКЛАДКА ВИЗУАЛОВ
+local LightingSection = CreateSection(VisualTab, "💡 Освещение")
+
+CreateToggle(LightingSection, "Полная яркость", "Убирает тени и делает всё ярким", false, function(state)
+    fullBrightEnabled = state
+    toggleFullBright(state)
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полная яркость включена!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Полная яркость выключена!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateToggle(LightingSection, "Убрать туман", "Увеличивает дальность видимости", false, function(state)
+    noFogEnabled = state
+    toggleNoFog(state)
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман убран!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Туман восстановлен!",
+            Duration = 3
+        })
+    end
+end)
+
+local ESPSection = CreateSection(VisualTab, "👁 ESP Настройки")
+
+CreateToggle(ESPSection, "Включить ESP", "Основной переключатель ESP", false, function(state)
+    espSettings.enabled = state
+    updateESP()
+    
+    if state then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "ESP активирован!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "ESP деактивирован!",
+            Duration = 3
+        })
+    end
+end)
+
+CreateToggle(ESPSection, "Квадраты", "Показывает квадраты вокруг игроков", true, function(state)
+    espSettings.boxes = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Чамсы (обводка)", "Показывает обводку через стены", false, function(state)
+    espSettings.chams = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Имена игроков", "Показывает имена игроков", false, function(state)
+    espSettings.names = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Дистанция", "Показывает расстояние до игроков", false, function(state)
+    espSettings.distance = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Здоровье", "Показывает здоровье игроков", false, function(state)
+    espSettings.health = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "HP полоска", "Показывает здоровье в виде полоски", false, function(state)
+    espSettings.healthBar = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
+    espSettings.tracers = state
+    updateESP()
+end)
+
+CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
+    espSettings.teamCheck = state
+    updateESP()
+end)
+
+local HealthBarSection = CreateSection(VisualTab, "💖 Настройки HP полоски")
+
+CreateDropdown(HealthBarSection, "Позиция HP бара", "Где отображать полоску здоровья", 
+    {"Top", "Bottom", "Left", "Right"}, "Top", function(option)
+    espSettings.healthBarPosition = option
+    print("HP Bar позиция изменена на:", option) -- Для отладки
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 150, 120, function(value)
+    espSettings.healthBarSize = value
+    updateESP()
+end)
+
+CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 1, 8, 2, function(value)
+    espSettings.healthBarThickness = value
+    updateESP()
+end)
+
+-- Функции для работы с JSON
+local function encodeJSON(data)
+    local function encode(val)
+        local type_val = type(val)
+        if type_val == "string" then
+            return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
+        elseif type_val == "number" or type_val == "boolean" then
+            return tostring(val)
+        elseif type_val == "table" then
+            local result = {}
+            local is_array = true
+            local count = 0
+            
+            for k, v in pairs(val) do
+                count = count + 1
+                if type(k) ~= "number" or k ~= count then
+                    is_array = false
+                    break
+                end
+            end
+            
+            if is_array then
+                for i, v in ipairs(val) do
+                    table.insert(result, encode(v))
+                end
+                return "[" .. table.concat(result, ",") .. "]"
+            else
+                for k, v in pairs(val) do
+                    table.insert(result, encode(tostring(k)) .. ":" .. encode(v))
+                end
+                return "{" .. table.concat(result, ",") .. "}"
+            end
+        else
+            return "null"
+        end
+    end
+    return encode(data)
+end
+
+local function decodeJSON(str)
+    local function decode(str, pos)
+        pos = pos or 1
+        if pos > #str then return nil, pos end
+        
+        local char = str:sub(pos, pos)
+        if char == '"' then
+            local endPos = pos + 1
+            while endPos <= #str and str:sub(endPos, endPos) ~= '"' do
+                if str:sub(endPos, endPos) == '\\' then
+                    endPos = endPos + 1
+                end
+                endPos = endPos + 1
+            end
+            return str:sub(pos + 1, endPos - 1):gsub('\\"', '"'):gsub('\\\\', '\\'), endPos + 1
+        elseif char == '{' then
+            local obj = {}
+            pos = pos + 1
+            while pos <= #str and str:sub(pos, pos) ~= '}' do
+                if str:sub(pos, pos) == ',' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == '}' then break end
+                
+                local key, newPos = decode(str, pos)
+                pos = newPos
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == ':' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                
+                local value
+                value, pos = decode(str, pos)
+                obj[key] = value
+            end
+            return obj, pos + 1
+        elseif char == '[' then
+            local arr = {}
+            pos = pos + 1
+            while pos <= #str and str:sub(pos, pos) ~= ']' do
+                if str:sub(pos, pos) == ',' then pos = pos + 1 end
+                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
+                if str:sub(pos, pos) == ']' then break end
+                
+                local value
+                value, pos = decode(str, pos)
+                table.insert(arr, value)
+            end
+            return arr, pos + 1
+        elseif char:match('[%d%-]') then
+            local endPos = pos
+            while endPos <= #str and str:sub(endPos, endPos):match('[%d%.-]') do
+                endPos = endPos + 1
+            end
+            return tonumber(str:sub(pos, endPos - 1)), endPos
+        elseif str:sub(pos, pos + 3) == "true" then
+            return true, pos + 4
+        elseif str:sub(pos, pos + 4) == "false" then
+            return false, pos + 5
+        elseif str:sub(pos, pos + 3) == "null" then
+            return nil, pos + 4
+        end
+        return nil, pos + 1
+    end
+    
+    local result = decode(str:gsub('%s', ''))
+    return result
+end
+
+-- Система конфигов
+local function saveConfig(configName, saveToFile)
+    local configData = {
+        -- Движение
+        speedEnabled = speedEnabled,
+        walkSpeed = walkSpeed,
+        jumpEnabled = jumpEnabled,
+        jumpPower = jumpPower,
+        infiniteJumpEnabled = infiniteJumpEnabled,
+        isFlying = isFlying,
+        flySpeed = flySpeed,
+        isNoclipActive = isNoclipActive,
+        
+        -- Визуалы
+        fullBrightEnabled = fullBrightEnabled,
+        noFogEnabled = noFogEnabled,
+        
+        -- ESP
+        espSettings = {
+            enabled = espSettings.enabled,
+            boxes = espSettings.boxes,
+            chams = espSettings.chams,
+            names = espSettings.names,
+            distance = espSettings.distance,
+            health = espSettings.health,
+            healthBar = espSettings.healthBar,
+            tracers = espSettings.tracers,
+            teamCheck = espSettings.teamCheck,
+            healthBarPosition = espSettings.healthBarPosition,
+            healthBarSize = espSettings.healthBarSize,
+            healthBarThickness = espSettings.healthBarThickness
+        }
+    }
+    
+    -- Сохраняем в память
+    configs[configName] = configData
+    
+    local message = "Конфиг '" .. configName .. "' сохранен в память!"
+    
+    -- Сохраняем постоянно если требуется
+    if saveToFile then
+        local persistentSaved = saveConfigPersistent(configName, configData)
+        if persistentSaved then
+            if storageMethod == "files" then
+                message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
+            elseif storageMethod == "global" then
+                message = "Конфиг '" .. configName .. "' сохранен в эксплойт! 🔧\n(Останется после перезапуска скрипта)"
+            elseif storageMethod == "clipboard" then
+                message = "Конфиг '" .. configName .. "' скопирован в буфер! 📋\nВставь в блокнот и сохрани!"
+            end
+        else
+            message = "Ошибка сохранения! Конфиг в памяти: " .. storageMethod
+        end
+    end
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = message,
+        Duration = 4
+    })
+end
+
+local function loadConfig(configName, loadFromStorage)
+    local configData = configs[configName]
+    
+    -- Попытка загрузить из постоянного хранилища если не найден в памяти
+    if not configData and loadFromStorage then
+        configData = loadConfigPersistent(configName)
+        if configData then
+            configs[configName] = configData -- Сохраняем в память
+        end
+    end
+    
+    if not configData then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+        return
+    end
+    
+    -- Загружаем движение
+    speedEnabled = configData.speedEnabled or false
+    walkSpeed = configData.walkSpeed or 16
+    jumpEnabled = configData.jumpEnabled or false
+    jumpPower = configData.jumpPower or 7.2
+    infiniteJumpEnabled = configData.infiniteJumpEnabled or false
+    isFlying = configData.isFlying or false
+    flySpeed = configData.flySpeed or 50
+    isNoclipActive = configData.isNoclipActive or false
+    
+    -- Загружаем визуалы
+    fullBrightEnabled = configData.fullBrightEnabled or false
+    noFogEnabled = configData.noFogEnabled or false
+    toggleFullBright(fullBrightEnabled)
+    toggleNoFog(noFogEnabled)
+    
+    -- Загружаем ESP
+    if configData.espSettings then
+        espSettings.enabled = configData.espSettings.enabled or false
+        espSettings.boxes = configData.espSettings.boxes or false
+        espSettings.chams = configData.espSettings.chams or false
+        espSettings.names = configData.espSettings.names or false
+        espSettings.distance = configData.espSettings.distance or false
+        espSettings.health = configData.espSettings.health or false
+        espSettings.healthBar = configData.espSettings.healthBar or false
+        espSettings.tracers = configData.espSettings.tracers or false
+        espSettings.teamCheck = configData.espSettings.teamCheck or true
+        espSettings.healthBarPosition = configData.espSettings.healthBarPosition or "Top"
+        espSettings.healthBarSize = configData.espSettings.healthBarSize or 120
+        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 2
+        updateESP()
+    end
+    
+    -- Применяем настройки к персонажу
+    restorePlayerSettings()
+    
+    currentConfig = configName
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Конфиг '" .. configName .. "' загружен!",
+        Duration = 3
+    })
+end
+
+local function deleteConfig(configName)
+    if configName == "Default" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Нельзя удалить конфиг по умолчанию!",
+            Duration = 3
+        })
+        return
+    end
+    
+    if configs[configName] then
+        configs[configName] = nil
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' удален из памяти!",
+            Duration = 3
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Конфиг '" .. configName .. "' не найден!",
+            Duration = 3
+        })
+    end
+end
+
+local function getConfigNames(excludeDefault)
+    local names = {}
+    
+    for name, _ in pairs(configs) do
+        if not (excludeDefault and name == "Default") then
+            table.insert(names, name)
+        end
+    end
+    
+    if #names == 0 and not excludeDefault then
+        table.insert(names, "Default")
+    end
+    
+    return names
+end
+
+-- Создаем конфиг по умолчанию
+saveConfig("Default")
+
+-- ВКЛАДКА КОНФИГОВ
+local ConfigManagementSection = CreateSection(ConfigTab, "💾 Управление конфигами")
+
+-- Поле ввода имени конфига
+local configNameInput = ""
+local configTextBoxFrame, configTextBox = CreateTextBox(ConfigManagementSection, "Имя конфига", "Введите имя для нового конфига", "Например: MyConfig", function(text)
+    configNameInput = text
+end)
+
+-- Переменная для хранения выбранного конфига
+local selectedConfigName = ""
+
+-- Выпадающий список для конфигов
+local configDropdownFrame = Instance.new("Frame")
+configDropdownFrame.Parent = ConfigManagementSection
+configDropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+configDropdownFrame.BorderSizePixel = 0
+configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+configDropdownFrame.LayoutOrder = 1
+
+local configDropdownCorner = Instance.new("UICorner")
+configDropdownCorner.CornerRadius = UDim.new(0, 8)
+configDropdownCorner.Parent = configDropdownFrame
+
+local configDropdownText = Instance.new("TextLabel")
+configDropdownText.Parent = configDropdownFrame
+configDropdownText.BackgroundTransparency = 1
+configDropdownText.Position = UDim2.new(0, 15, 0, 8)
+configDropdownText.Size = UDim2.new(1, -30, 0, 20)
+configDropdownText.Font = Enum.Font.GothamBold
+configDropdownText.Text = "Выбрать конфиг"
+configDropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+configDropdownText.TextSize = 14
+configDropdownText.TextXAlignment = Enum.TextXAlignment.Left
+
+local configDropdownDesc = Instance.new("TextLabel")
+configDropdownDesc.Parent = configDropdownFrame
+configDropdownDesc.BackgroundTransparency = 1
+configDropdownDesc.Position = UDim2.new(0, 15, 0, 28)
+configDropdownDesc.Size = UDim2.new(1, -30, 0, 16)
+configDropdownDesc.Font = Enum.Font.Gotham
+configDropdownDesc.Text = "Выберите конфиг для загрузки"
+configDropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+configDropdownDesc.TextSize = 11
+configDropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Кнопка выпадающего списка
+local configDropdownButton = Instance.new("TextButton")
+configDropdownButton.Parent = configDropdownFrame
+configDropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+configDropdownButton.BorderSizePixel = 0
+configDropdownButton.Position = UDim2.new(0, 15, 0, 50)
+configDropdownButton.Size = UDim2.new(1, -30, 0, 25)
+configDropdownButton.Font = Enum.Font.Gotham
+configDropdownButton.Text = "Нажмите для выбора"
+configDropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+configDropdownButton.TextSize = 12
+configDropdownButton.AutoButtonColor = false
+
+local configDropdownButtonCorner = Instance.new("UICorner")
+configDropdownButtonCorner.CornerRadius = UDim.new(0, 6)
+configDropdownButtonCorner.Parent = configDropdownButton
+
+-- Список опций (скрыт по умолчанию)
+local configOptionsList = Instance.new("ScrollingFrame")
+configOptionsList.Parent = configDropdownFrame
+configOptionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+configOptionsList.BorderSizePixel = 0
+configOptionsList.Position = UDim2.new(0, 15, 0, 76)
+configOptionsList.Size = UDim2.new(1, -30, 0, 0)
+configOptionsList.Visible = false
+configOptionsList.ZIndex = 10
+configOptionsList.CanvasSize = UDim2.new(0, 0, 0, 0)
+configOptionsList.ScrollBarThickness = 6
+
+local configOptionsCorner = Instance.new("UICorner")
+configOptionsCorner.CornerRadius = UDim.new(0, 6)
+configOptionsCorner.Parent = configOptionsList
+
+local configOptionsLayout = Instance.new("UIListLayout")
+configOptionsLayout.Parent = configOptionsList
+configOptionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function toggleConfigDropdown()
+    local isOpen = configOptionsList.Visible
+    
+    if isOpen then
+        configOptionsList.Visible = false
+        configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+    else
+        RefreshConfigsDropdown()  -- Обновляем список при открытии
+        configOptionsList.Visible = true
+        configDropdownFrame.Size = UDim2.new(1, 0, 0, 80 + configOptionsList.Size.Y.Offset)
+    end
+end
+
+-- Обработчик клика по кнопке
+configDropdownButton.MouseButton1Click:Connect(toggleConfigDropdown)
+
+-- Закрытие dropdown при клике вне его области
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and configOptionsList.Visible then
+        local mousePosition = UserInputService:GetMouseLocation()
+        local framePosition = configDropdownFrame.AbsolutePosition
+        local frameSize = configDropdownFrame.AbsoluteSize
+        
+        -- Проверяем, находится ли клик вне dropdown
+        if mousePosition.X < framePosition.X or mousePosition.X > framePosition.X + frameSize.X or
+           mousePosition.Y < framePosition.Y or mousePosition.Y > framePosition.Y + frameSize.Y then
+            configOptionsList.Visible = false
+            configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        end
+    end
+end)
+
+-- Кнопки управления конфигами
+CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки с введенным именем", function()
+    local configName = configTextBox.Text
+    if configName == "" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Введите имя конфига!",
+            Duration = 3
+        })
+        return
+    end
+    
+    saveConfig(configName, false)
+    configTextBox.Text = ""
+    
+    -- Обновляем список конфигов
+    toggleConfigDropdown()
+    toggleConfigDropdown()
+end)
+
+CreateButton(ConfigManagementSection, "Загрузить выбранный конфиг", "Загрузить конфиг выбранный выше", function()
+    if selectedConfigName == "" or selectedConfigName == "Нет конфигов" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
+    end
+    
+    loadConfig(selectedConfigName, false)
+end)
+
+CreateButton(ConfigManagementSection, "Удалить конфиг", "Удалить выбранный конфиг", function()
+    if selectedConfigName == "" or selectedConfigName == "Нет конфигов" then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "SSLKin Uni Script",
+            Text = "Сначала выберите конфиг!",
+            Duration = 3
+        })
+        return
+    end
+    
+    deleteConfig(selectedConfigName)
+    selectedConfigName = ""
+    configDropdownButton.Text = "Нажмите для выбора"
+    
+    -- Обновляем список конфигов
+    toggleConfigDropdown()
+    toggleConfigDropdown()
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SSLKin Uni Script",
+        Text = "Конфиг '" .. selectedConfigName .. "' удален!",
+        Duration = 3
+    })
+end)
+
+-- ВКЛАДКА РАЗНОЕ
+local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
+
+CreateButton(UtilitySection, "Информация об игре", "Показывает данные о текущей игре", function()
+    local success, gameInfo = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+    end)
+    
+    if success then
+        local info = string.format(
+            "Игра: %s\nРежим: %s\nИгроков: %d\nВаш пинг: %d мс\nPlace ID: %d",
+            gameInfo.Name,
+            currentGame,
+            #Players:GetPlayers(),
+            math.floor(LocalPlayer:GetNetworkPing() * 1000),
+            game.PlaceId
+        )
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Информация об игре",
+            Text = info,
+            Duration = 10
+        })
+    else
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Ошибка",
+            Text = "Не удалось получить информацию об игре",
+            Duration = 3
+        })
+    end
+end)
+
+-- Системные функции
+local function setupInfiniteJump()
+    UserInputService.JumpRequest:Connect(function()
+        if infiniteJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
+local function setupNoclip()
+    RunService.Stepped:Connect(function()
+        if isNoclipActive and LocalPlayer.Character then
+            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        elseif not isNoclipActive and LocalPlayer.Character then
+            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end)
+end
+
+-- Обработчики кнопок
+CloseButton.MouseButton1Click:Connect(HideGUI)
+
+-- Горячие клавиши
+spawn(function()
+    wait(1) -- Ждем полной инициализации
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.Insert then
+            print("SSLKin: Insert нажат, MainFrame.Visible =", MainFrame.Visible) -- Отладка
+            if MainFrame.Visible then
+                HideGUI()
+            else
+                ShowGUI()
+            end
+        end
+    end)
+    print("SSLKin: Горячие клавиши инициализированы")
+end)
+
+-- Инициализация
+setupInfiniteJump()
+setupNoclip()
+
+-- Активация первой вкладки
+if #tabs > 0 then
+    tabs[1].button.MouseButton1Click()
+end
+
+-- Показать GUI при загрузке
+ShowGUI()
+
+-- Уведомление о загрузке
+game.StarterGui:SetCore("SendNotification", {
+    Title = "SSLKin Uni Script",
+    Text = "Universal Mode v3.1 загружен! Insert для открытия/закрытия",
+    Duration = 5
+})
+
+print("SSLKin Uni Script v3.1 загружен в режиме Universal!")
+print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
