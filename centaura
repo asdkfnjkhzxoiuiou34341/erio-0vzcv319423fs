@@ -15,6 +15,7 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Teams = game:GetService("Teams")
+local Debris = game:GetService("Debris")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -173,6 +174,26 @@ detectStorageMethods()
 print("SSLKin: Метод сохранения:", storageMethod, "-", storageInfo)
 
 -- Универсальные функции сохранения
+
+local function saveConfigPersistent(configName, data)
+    if storageMethod == "files" then
+        -- Сохранение в файл
+        local success = pcall(function()
+            local filePath = CONFIGS_FOLDER .. "/" .. configName .. ".json"
+            writefile(filePath, HttpService:JSONEncode(data))
+        end)
+        return success
+        
+    elseif storageMethod == "global" then
+        -- Сохранение в глобальную память
+        local success = pcall(function()
+            getgenv().SSLKinConfigs[configName] = data
+        end)
+        return success
+    end
+    
+    return false
+end
 
 local function loadConfigPersistent(configName)
     if storageMethod == "files" then
@@ -922,1261 +943,429 @@ local function CreateSlider(parent, text, description, minValue, maxValue, defau
     
     local SliderFill = Instance.new("Frame")
     SliderFill.Parent = SliderTrack
-    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    SliderFill.BackgroundColor3 = Color3.fromRGB(60, 120, 255)
     SliderFill.BorderSizePixel = 0
-    SliderFill.Position = UDim2.new(0, 0, 0, 0)
     SliderFill.Size = UDim2.new((defaultValue - minValue) / (maxValue - minValue), 0, 1, 0)
     
-    local SliderFillCorner = Instance.new("UICorner")
-    SliderFillCorner.CornerRadius = UDim.new(0, 4)
-    SliderFillCorner.Parent = SliderFill
-    
     local SliderButton = Instance.new("TextButton")
-    SliderButton.Parent = SliderFrame
+    SliderButton.Parent = SliderTrack
     SliderButton.BackgroundTransparency = 1
-    SliderButton.Position = UDim2.new(0, 10, 0, 50)
-    SliderButton.Size = UDim2.new(1, -20, 0, 18)
+    SliderButton.Size = UDim2.new(1, 0, 1, 0)
     SliderButton.Text = ""
     
+    local isDragging = false
     local currentValue = defaultValue
-    local dragging = false
     
-    local function updateSlider(value)
-        currentValue = math.clamp(value, minValue, maxValue)
+    local function updateValue(input)
+        local pos = input.Position.X - SliderTrack.AbsolutePosition.X
+        local newX = math.clamp(pos, 0, SliderTrack.AbsoluteSize.X)
+        local value = minValue + (newX / SliderTrack.AbsoluteSize.X) * (maxValue - minValue)
         
-        -- Округление до десятых для плавности
-        if maxValue - minValue > 10 then
-            currentValue = math.floor(currentValue + 0.5)
-        else
-            currentValue = math.floor(currentValue * 10 + 0.5) / 10
-        end
-        
-        local percentage = (currentValue - minValue) / (maxValue - minValue)
-        CreateTween(SliderFill, {Size = UDim2.new(percentage, 0, 1, 0)}, 0.1):Play()
+        currentValue = math.floor(value + 0.5) -- Округление
         SliderValue.Text = tostring(currentValue)
+        
+        local fillSize = (currentValue - minValue) / (maxValue - minValue)
+        SliderFill.Size = UDim2.new(fillSize, 0, 1, 0)
         
         if callback then
             callback(currentValue)
         end
     end
     
-    SliderButton.MouseButton1Down:Connect(function()
-        dragging = true
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
+    SliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
+            isDragging = true
+            updateValue(input)
         end
     end)
     
-    SliderButton.MouseMoved:Connect(function()
-        if dragging then
-            local mousePos = UserInputService:GetMouseLocation()
-            local framePos = SliderTrack.AbsolutePosition
-            local frameSize = SliderTrack.AbsoluteSize
-            
-            local relativePos = (mousePos.X - framePos.X) / frameSize.X
-            relativePos = math.clamp(relativePos, 0, 1)
-            
-            local newValue = minValue + (relativePos * (maxValue - minValue))
-            updateSlider(newValue)
+    SliderButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
         end
     end)
     
-    return SliderFrame, updateSlider
-end
-
--- Функция создания текстового поля
-local function CreateTextBox(parent, text, description, placeholder, callback)
-    local TextBoxFrame = Instance.new("Frame")
-    TextBoxFrame.Parent = parent
-    TextBoxFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-    TextBoxFrame.BorderSizePixel = 0
-    TextBoxFrame.Size = UDim2.new(1, 0, 0, 80)
-    
-    local TextBoxCorner = Instance.new("UICorner")
-    TextBoxCorner.CornerRadius = UDim.new(0, 8)
-    TextBoxCorner.Parent = TextBoxFrame
-    
-    local TextBoxText = Instance.new("TextLabel")
-    TextBoxText.Parent = TextBoxFrame
-    TextBoxText.BackgroundTransparency = 1
-    TextBoxText.Position = UDim2.new(0, 15, 0, 8)
-    TextBoxText.Size = UDim2.new(1, -30, 0, 20)
-    TextBoxText.Font = Enum.Font.GothamBold
-    TextBoxText.Text = text
-    TextBoxText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextBoxText.TextSize = 14
-    TextBoxText.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local TextBoxDesc = Instance.new("TextLabel")
-    TextBoxDesc.Parent = TextBoxFrame
-    TextBoxDesc.BackgroundTransparency = 1
-    TextBoxDesc.Position = UDim2.new(0, 15, 0, 28)
-    TextBoxDesc.Size = UDim2.new(1, -30, 0, 16)
-    TextBoxDesc.Font = Enum.Font.Gotham
-    TextBoxDesc.Text = description or ""
-    TextBoxDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
-    TextBoxDesc.TextSize = 11
-    TextBoxDesc.TextXAlignment = Enum.TextXAlignment.Left
-    
-    -- Текстовое поле
-    local TextBox = Instance.new("TextBox")
-    TextBox.Parent = TextBoxFrame
-    TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
-    TextBox.BorderSizePixel = 0
-    TextBox.Position = UDim2.new(0, 15, 0, 50)
-    TextBox.Size = UDim2.new(1, -30, 0, 25)
-    TextBox.Font = Enum.Font.Gotham
-    TextBox.Text = placeholder or ""
-    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextBox.TextSize = 12
-    
-    local TextBoxCorner = Instance.new("UICorner")
-    TextBoxCorner.CornerRadius = UDim.new(0, 6)
-    TextBoxCorner.Parent = TextBox
-    
-    TextBox.FocusLost:Connect(function(enterPressed)
-        if enterPressed and callback then
-            callback(TextBox.Text)
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateValue(input)
         end
     end)
     
-    return TextBoxFrame, TextBox
+    return SliderFrame, currentValue
 end
 
 -- Функция создания выпадающего списка
-local function CreateDropdown(parent, text, description, options, defaultOption, callback)
+local function CreateDropdown(parent, text, options, defaultOption, callback)
     local DropdownFrame = Instance.new("Frame")
+    DropdownFrame.Name = "Dropdown"
     DropdownFrame.Parent = parent
     DropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
     DropdownFrame.BorderSizePixel = 0
-    DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+    DropdownFrame.Size = UDim2.new(1, 0, 0, 60)
     
     local DropdownCorner = Instance.new("UICorner")
     DropdownCorner.CornerRadius = UDim.new(0, 8)
     DropdownCorner.Parent = DropdownFrame
     
     local DropdownText = Instance.new("TextLabel")
+    DropdownText.Name = "DropdownText"
     DropdownText.Parent = DropdownFrame
     DropdownText.BackgroundTransparency = 1
     DropdownText.Position = UDim2.new(0, 15, 0, 8)
-    DropdownText.Size = UDim2.new(1, -30, 0, 20)
+    DropdownText.Size = UDim2.new(1, -80, 0, 25)
     DropdownText.Font = Enum.Font.GothamBold
     DropdownText.Text = text
     DropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
     DropdownText.TextSize = 14
     DropdownText.TextXAlignment = Enum.TextXAlignment.Left
     
-    local DropdownDesc = Instance.new("TextLabel")
-    DropdownDesc.Parent = DropdownFrame
-    DropdownDesc.BackgroundTransparency = 1
-    DropdownDesc.Position = UDim2.new(0, 15, 0, 28)
-    DropdownDesc.Size = UDim2.new(1, -30, 0, 16)
-    DropdownDesc.Font = Enum.Font.Gotham
-    DropdownDesc.Text = description or ""
-    DropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
-    DropdownDesc.TextSize = 11
-    DropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
+    local DropdownValue = Instance.new("TextLabel")
+    DropdownValue.Name = "DropdownValue"
+    DropdownValue.Parent = DropdownFrame
+    DropdownValue.BackgroundTransparency = 1
+    DropdownValue.Position = UDim2.new(1, -115, 0, 8)
+    DropdownValue.Size = UDim2.new(0, 100, 0, 25)
+    DropdownValue.Font = Enum.Font.Gotham
+    DropdownValue.Text = defaultOption or "Выберите..."
+    DropdownValue.TextColor3 = Color3.fromRGB(180, 180, 180)
+    DropdownValue.TextSize = 12
+    DropdownValue.TextXAlignment = Enum.TextXAlignment.Right
     
-    -- Кнопка выпадающего списка
     local DropdownButton = Instance.new("TextButton")
+    DropdownButton.Name = "DropdownButton"
     DropdownButton.Parent = DropdownFrame
-    DropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
-    DropdownButton.BorderSizePixel = 0
-    DropdownButton.Position = UDim2.new(0, 15, 0, 50)
-    DropdownButton.Size = UDim2.new(1, -30, 0, 25)
-    DropdownButton.Font = Enum.Font.Gotham
-    DropdownButton.Text = defaultOption or options[1]
-    DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    DropdownButton.TextSize = 12
-    DropdownButton.AutoButtonColor = false
+    DropdownButton.BackgroundTransparency = 1
+    DropdownButton.Size = UDim2.new(1, 0, 1, 0)
+    DropdownButton.Text = ""
     
-    local DropdownButtonCorner = Instance.new("UICorner")
-    DropdownButtonCorner.CornerRadius = UDim.new(0, 6)
-    DropdownButtonCorner.Parent = DropdownButton
+    local DropdownArrow = Instance.new("TextLabel")
+    DropdownArrow.Name = "DropdownArrow"
+    DropdownArrow.Parent = DropdownFrame
+    DropdownArrow.BackgroundTransparency = 1
+    DropdownArrow.Position = UDim2.new(1, -25, 0.5, -10)
+    DropdownArrow.Size = UDim2.new(0, 20, 0, 20)
+    DropdownArrow.Font = Enum.Font.SourceSans
+    DropdownArrow.Text = "▼"
+    DropdownArrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DropdownArrow.TextSize = 16
     
-    -- Список опций
-    local optionsList = Instance.new("ScrollingFrame")
-    optionsList.Parent = DropdownFrame
-    optionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-    optionsList.BorderSizePixel = 0
-    optionsList.Position = UDim2.new(0, 15, 0, 76)
-    optionsList.Size = UDim2.new(1, -30, 0, 0)
-    optionsList.Visible = false
-    optionsList.ZIndex = 10
-    optionsList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    optionsList.ScrollBarThickness = 6
+    local DropdownList = Instance.new("ScrollingFrame")
+    DropdownList.Name = "DropdownList"
+    DropdownList.Parent = DropdownFrame
+    DropdownList.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    DropdownList.BorderSizePixel = 0
+    DropdownList.Position = UDim2.new(0, 0, 1, 5)
+    DropdownList.Size = UDim2.new(1, 0, 0, 0)
+    DropdownList.ZIndex = 2
+    DropdownList.Visible = false
+    DropdownList.ScrollBarThickness = 6
+    DropdownList.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 255)
+    DropdownList.AutomaticCanvasSize = Enum.AutomaticSize.Y
     
-    local optionsCorner = Instance.new("UICorner")
-    optionsCorner.CornerRadius = UDim.new(0, 6)
-    optionsCorner.Parent = optionsList
+    local ListLayout = Instance.new("UIListLayout")
+    ListLayout.Parent = DropdownList
+    ListLayout.Padding = UDim.new(0, 5)
+    ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     
-    local optionsLayout = Instance.new("UIListLayout")
-    optionsLayout.Parent = optionsList
-    optionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    
-    local function toggleDropdown()
-        local isOpen = optionsList.Visible
-        
-        if isOpen then
-            optionsList.Visible = false
-            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
-        else
-            optionsList.Visible = true
-            DropdownFrame.Size = UDim2.new(1, 0, 0, 80 + optionsList.Size.Y.Offset)
+    local function populateDropdown()
+        for _, child in pairs(DropdownList:GetChildren()) do
+            if child:IsA("TextButton") or child:IsA("Frame") then
+                child:Destroy()
+            end
+        end
+        for _, option in ipairs(options) do
+            local OptionButton = Instance.new("TextButton")
+            OptionButton.Name = option
+            OptionButton.Parent = DropdownList
+            OptionButton.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+            OptionButton.BorderSizePixel = 0
+            OptionButton.Size = UDim2.new(1, 0, 0, 30)
+            OptionButton.Font = Enum.Font.Gotham
+            OptionButton.Text = option
+            OptionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            OptionButton.TextSize = 12
+            OptionButton.TextXAlignment = Enum.TextXAlignment.Left
+            OptionButton.TextScaled = true
+            
+            local OptionPadding = Instance.new("UIPadding")
+            OptionPadding.Parent = OptionButton
+            OptionPadding.PaddingLeft = UDim.new(0, 10)
+            
+            OptionButton.MouseButton1Click:Connect(function()
+                DropdownValue.Text = option
+                DropdownList.Visible = false
+                if callback then
+                    callback(option)
+                end
+            end)
+            
+            OptionButton.MouseEnter:Connect(function()
+                CreateTween(OptionButton, {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}, 0.1):Play()
+            end)
+            
+            OptionButton.MouseLeave:Connect(function()
+                CreateTween(OptionButton, {BackgroundColor3 = Color3.fromRGB(40, 40, 55)}, 0.1):Play()
+            end)
         end
     end
     
-    DropdownButton.MouseButton1Click:Connect(toggleDropdown)
+    DropdownButton.MouseButton1Click:Connect(function()
+        if DropdownList.Visible then
+            CreateTween(DropdownList, {Size = UDim2.new(1, 0, 0, 0)}, 0.2):Play()
+            task.wait(0.2)
+            DropdownList.Visible = false
+        else
+            populateDropdown()
+            DropdownList.Visible = true
+            local newSizeY = math.min(#options * 35, 150)
+            CreateTween(DropdownList, {Size = UDim2.new(1, 0, 0, newSizeY)}, 0.2):Play()
+        end
+    end)
     
-    -- Добавляем опции
-    local totalHeight = 0
-    for i, option in ipairs(options) do
-        local optionButton = Instance.new("TextButton")
-        optionButton.Parent = optionsList
-        optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-        optionButton.BorderSizePixel = 0
-        optionButton.Size = UDim2.new(1, 0, 0, 25)
-        optionButton.Font = Enum.Font.Gotham
-        optionButton.Text = option
-        optionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-        optionButton.TextSize = 12
-        optionButton.AutoButtonColor = false
-        optionButton.LayoutOrder = i
-        
-        optionButton.MouseEnter:Connect(function()
-            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
-        end)
-        
-        optionButton.MouseLeave:Connect(function()
-            optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-        end)
-        
-        optionButton.MouseButton1Click:Connect(function()
-            DropdownButton.Text = option
-            optionsList.Visible = false
-            DropdownFrame.Size = UDim2.new(1, 0, 0, 80)
-            if callback then
-                callback(option)
+    -- Скрываем список, если кликнули вне его
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not DropdownList.Visible then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local pos = input.Position
+            local listAbs = DropdownList.AbsolutePosition
+            local listSize = DropdownList.AbsoluteSize
+            local buttonAbs = DropdownButton.AbsolutePosition
+            local buttonSize = DropdownButton.AbsoluteSize
+            
+            local inList = pos.X > listAbs.X and pos.X < (listAbs.X + listSize.X) and
+                           pos.Y > listAbs.Y and pos.Y < (listAbs.Y + listSize.Y)
+            local inButton = pos.X > buttonAbs.X and pos.X < (buttonAbs.X + buttonSize.X) and
+                             pos.Y > buttonAbs.Y and pos.Y < (buttonAbs.Y + buttonSize.Y)
+            
+            if not inList and not inButton then
+                DropdownList.Visible = false
             end
-        end)
-        
-        totalHeight = totalHeight + 25
-    end
-    
-    -- Устанавливаем размер списка
-    local maxHeight = math.min(totalHeight, 150)
-    optionsList.Size = UDim2.new(1, -30, 0, maxHeight)
-    optionsList.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+        end
+    end)
     
     return DropdownFrame
 end
 
--- Функция для обновления списка конфигов в выпадающем списке
-local function RefreshConfigsDropdown()
-    -- Очищаем старые опции
-    for _, child in ipairs(configOptionsList:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-    
-    -- Добавляем новые опции
-    local configNames = getPersistentConfigNames()
-    local totalHeight = 0
-    
-    for i, configName in ipairs(configNames) do
-        local optionButton = Instance.new("TextButton")
-        optionButton.Parent = configOptionsList
-        optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-        optionButton.BorderSizePixel = 0
-        optionButton.Size = UDim2.new(1, 0, 0, 25)
-        optionButton.Font = Enum.Font.Gotham
-        optionButton.Text = configName
-        optionButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-        optionButton.TextSize = 12
-        optionButton.AutoButtonColor = false
-        optionButton.LayoutOrder = i
-        
-        optionButton.MouseEnter:Connect(function()
-            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 70)
-        end)
-        
-        optionButton.MouseLeave:Connect(function()
-            optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-        end)
-        
-        optionButton.MouseButton1Click:Connect(function()
-            selectedConfigName = configName
-            configDropdownButton.Text = configName
-            configOptionsList.Visible = false
-            configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
-            
-            -- Загружаем конфиг
-            loadConfig(configName, true)
-        end)
-        
-        totalHeight = totalHeight + 25
-    end
-    
-    -- Устанавливаем размер списка
-    local maxHeight = math.min(totalHeight, 150)
-    configOptionsList.Size = UDim2.new(1, -30, 0, maxHeight)
-    configOptionsList.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
-end
+-- Основной код
 
--- Функции освещения
-local function toggleFullBright(state)
+local mainTab = CreateTab("Основные", "⚙️")
+local centauraTab = CreateTab("Centaura", "⚔️")
+local espTab = CreateTab("Визуальные", "👁️")
+local playerTab = CreateTab("Игроки", "🧑‍🤝‍🧑")
+local configTab = CreateTab("Конфиг", "💾")
+
+----------------------------------------------------------------------------------------------------
+-- Секция "Основные"
+----------------------------------------------------------------------------------------------------
+local mainSection = CreateSection(mainTab, "Общие функции")
+
+CreateToggle(mainSection, "Бесконечный прыжок", "Позволяет прыгать без остановки.", infiniteJumpEnabled, function(state)
+    infiniteJumpEnabled = state
+end)
+
+CreateToggle(mainSection, "Полный свет", "Убирает все тени и делает мир ярче.", fullBrightEnabled, function(state)
+    fullBrightEnabled = state
     if state then
         Lighting.Brightness = 2
         Lighting.ClockTime = 14
         Lighting.GlobalShadows = false
-        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(120, 120, 120)
     else
         Lighting.Brightness = originalLighting.Brightness
         Lighting.ClockTime = originalLighting.ClockTime
-        Lighting.FogEnd = originalLighting.FogEnd
         Lighting.GlobalShadows = originalLighting.GlobalShadows
         Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
     end
-end
+end)
 
-local function toggleNoFog(state)
+CreateToggle(mainSection, "Без тумана", "Убирает туман в игре.", noFogEnabled, function(state)
+    noFogEnabled = state
     if state then
-        Lighting.FogEnd = math.huge
+        Lighting.FogEnd = 99999
+        Lighting.FogStart = 99999
     else
         Lighting.FogEnd = originalLighting.FogEnd
-    end
-end
-
--- Функции ESP
-local function createESP(player)
-    if espObjects[player] then return end
-    
-    espObjects[player] = {}
-    
-    -- Создаем Drawing объекты
-    local box = Drawing.new("Square")
-    box.Visible = false
-    box.Thickness = 1
-    box.Filled = false
-    
-    local tracer = Drawing.new("Line")
-    tracer.Visible = false
-    tracer.Thickness = 1
-    
-    local nameText = Drawing.new("Text")
-    nameText.Visible = false
-    nameText.Size = 13
-    nameText.Center = true
-    nameText.Outline = true
-    
-    local distanceText = Drawing.new("Text")
-    distanceText.Visible = false
-    distanceText.Size = 13
-    distanceText.Center = true
-    distanceText.Outline = true
-    
-    local healthText = Drawing.new("Text")
-    healthText.Visible = false
-    healthText.Size = 13
-    healthText.Center = true
-    healthText.Outline = true
-    
-    -- HP бар (Drawing Quad для полоски)
-    local healthBarBack = Drawing.new("Quad")
-    healthBarBack.Visible = false
-    healthBarBack.Thickness = espSettings.healthBarThickness
-    healthBarBack.Filled = true
-    healthBarBack.Color = espSettings.healthBarBackground
-    
-    local healthBarFront = Drawing.new("Quad")
-    healthBarFront.Visible = false
-    healthBarFront.Thickness = espSettings.healthBarThickness
-    healthBarFront.Filled = true
-    
-    espObjects[player] = {
-        box = box,
-        tracer = tracer,
-        nameText = nameText,
-        distanceText = distanceText,
-        healthText = healthText,
-        healthBarBack = healthBarBack,
-        healthBarFront = healthBarFront
-    }
-end
-
-local function updatePlayerChams(player)
-    if not espSettings.chams then return end
-    
-    local character = player.Character
-    if not character then return end
-    
-    if not playerChams[player] then
-        local highlight = Instance.new("Highlight")
-        highlight.Parent = character
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.OutlineTransparency = 0
-        highlight.FillTransparency = 0.7
-        playerChams[player] = highlight
-    end
-    
-    local highlight = playerChams[player]
-    if highlight then
-        if espSettings.teamCheck then
-            highlight.FillColor = isPlayerEnemy(player) and espSettings.enemyColor or espSettings.allyColor
-            highlight.OutlineColor = isPlayerEnemy(player) and espSettings.enemyColor or espSettings.allyColor
-        else
-            highlight.FillColor = espSettings.enemyColor
-            highlight.OutlineColor = espSettings.enemyColor
-        end
-    end
-end
-
-local function isPlayerEnemy(player)
-    return player.Team ~= LocalPlayer.Team
-end
-
-local function updateESP()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            createESP(player)
-            updatePlayerChams(player)
-        end
-    end
-end
-
-local function updateDrawingESP()
-    for player, objs in pairs(espObjects) do
-        if espSettings.enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character.Humanoid
-            local rootPart = player.Character.HumanoidRootPart
-            local head = player.Character:FindFirstChild("Head")
-            local isEnemy = isPlayerEnemy(player)
-            
-            if espSettings.teamCheck and not isEnemy then continue end
-            
-            local vector3D, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
-            
-            if onScreen then
-                -- Квадрат
-                if espSettings.boxes then
-                    local height = (Camera:WorldToViewportPoint(head.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2.5, 0)).Y) / 2
-                    local width = height / 2
-                    
-                    objs.box.Size = Vector2.new(width, height)
-                    objs.box.Position = Vector2.new(vector3D.X - width / 2, vector3D.Y - height / 2)
-                    objs.box.Color = isEnemy and espSettings.enemyColor or espSettings.allyColor
-                    objs.box.Visible = true
-                else
-                    objs.box.Visible = false
-                end
-                
-                -- Трейсер
-                if espSettings.tracers then
-                    objs.tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                    objs.tracer.To = Vector2.new(vector3D.X, vector3D.Y)
-                    objs.tracer.Color = espSettings.tracerColor
-                    objs.tracer.Visible = true
-                else
-                    objs.tracer.Visible = false
-                end
-                
-                -- Имя
-                if espSettings.names and head then
-                    objs.nameText.Text = player.Name
-                    objs.nameText.Color = espSettings.nameColor
-                    objs.nameText.Position = Vector2.new(vector3D.X, vector3D.Y - (height / 2) - 16)
-                    objs.nameText.Visible = true
-                else
-                    objs.nameText.Visible = false
-                end
-                
-                -- Дистанция
-                if espSettings.distance then
-                    local distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude)
-                    objs.distanceText.Text = tostring(distance) .. " studs"
-                    objs.distanceText.Color = Color3.fromRGB(255, 255, 255)
-                    objs.distanceText.Position = Vector2.new(vector3D.X, vector3D.Y + (height / 2) + 2)
-                    objs.distanceText.Visible = true
-                else
-                    objs.distanceText.Visible = false
-                end
-                
-                -- Здоровье текст
-                if espSettings.health then
-                    objs.healthText.Text = math.floor(humanoid.Health) .. "/" .. humanoid.MaxHealth
-                    objs.healthText.Color = Color3.fromRGB(255, 255, 255)
-                    objs.healthText.Position = Vector2.new(vector3D.X - width / 2 - 20, vector3D.Y - height / 2)
-                    objs.healthText.Visible = true
-                else
-                    objs.healthText.Visible = false
-                end
-                
-                -- HP бар
-                if espSettings.healthBar then
-                    local healthPercent = humanoid.Health / humanoid.MaxHealth
-                    local barColor = espSettings.healthBarForeground
-                    if healthPercent < 0.5 then
-                        barColor = espSettings.healthBarLowHealth
-                    end
-                    if healthPercent < 0.25 then
-                        barColor = espSettings.healthBarCriticalHealth
-                    end
-                    
-                    local barSize = (espSettings.healthBarSize / 100) * height
-                    local barFilledSize = barSize * healthPercent
-                    
-                    local barPosition = Vector2.new(0, 0)
-                    local barOffset = 5
-                    
-                    if espSettings.healthBarPosition == "Left" then
-                        barPosition = Vector2.new(vector3D.X - width / 2 - barOffset - espSettings.healthBarThickness, vector3D.Y - height / 2)
-                        objs.healthBarBack.PointA = barPosition + Vector2.new(0, height)
-                        objs.healthBarBack.PointB = barPosition
-                        objs.healthBarBack.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
-                        objs.healthBarBack.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height)
-                        
-                        objs.healthBarFront.PointA = barPosition + Vector2.new(0, height - barFilledSize)
-                        objs.healthBarFront.PointB = barPosition
-                        objs.healthBarFront.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
-                        objs.healthBarFront.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height - barFilledSize)
-                    elseif espSettings.healthBarPosition == "Right" then
-                        barPosition = Vector2.new(vector3D.X + width / 2 + barOffset, vector3D.Y - height / 2)
-                        objs.healthBarBack.PointA = barPosition + Vector2.new(0, height)
-                        objs.healthBarBack.PointB = barPosition
-                        objs.healthBarBack.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
-                        objs.healthBarBack.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height)
-                        
-                        objs.healthBarFront.PointA = barPosition + Vector2.new(0, height - barFilledSize)
-                        objs.healthBarFront.PointB = barPosition
-                        objs.healthBarFront.PointC = barPosition + Vector2.new(espSettings.healthBarThickness, 0)
-                        objs.healthBarFront.PointD = barPosition + Vector2.new(espSettings.healthBarThickness, height - barFilledSize)
-                    elseif espSettings.healthBarPosition == "Bottom" then
-                        barPosition = Vector2.new(vector3D.X - width / 2, vector3D.Y + height / 2 + barOffset)
-                        objs.healthBarBack.PointA = barPosition
-                        objs.healthBarBack.PointB = barPosition + Vector2.new(width, 0)
-                        objs.healthBarBack.PointC = barPosition + Vector2.new(width, espSettings.healthBarThickness)
-                        objs.healthBarBack.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
-                        
-                        objs.healthBarFront.PointA = barPosition
-                        objs.healthBarFront.PointB = barPosition + Vector2.new(width * healthPercent, 0)
-                        objs.healthBarFront.PointC = barPosition + Vector2.new(width * healthPercent, espSettings.healthBarThickness)
-                        objs.healthBarFront.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
-                    else -- Top by default
-                        barPosition = Vector2.new(vector3D.X - width / 2, vector3D.Y - height / 2 - barOffset - espSettings.healthBarThickness)
-                        objs.healthBarBack.PointA = barPosition
-                        objs.healthBarBack.PointB = barPosition + Vector2.new(width, 0)
-                        objs.healthBarBack.PointC = barPosition + Vector2.new(width, espSettings.healthBarThickness)
-                        objs.healthBarBack.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
-                        
-                        objs.healthBarFront.PointA = barPosition
-                        objs.healthBarFront.PointB = barPosition + Vector2.new(width * healthPercent, 0)
-                        objs.healthBarFront.PointC = barPosition + Vector2.new(width * healthPercent, espSettings.healthBarThickness)
-                        objs.healthBarFront.PointD = barPosition + Vector2.new(0, espSettings.healthBarThickness)
-                    end
-                    
-                    objs.healthBarFront.Color = barColor
-                    objs.healthBarBack.Visible = true
-                    objs.healthBarFront.Visible = true
-                else
-                    objs.healthBarBack.Visible = false
-                    objs.healthBarFront.Visible = false
-                end
-            else
-                -- Скрываем все если не на экране
-                objs.box.Visible = false
-                objs.tracer.Visible = false
-                objs.nameText.Visible = false
-                objs.distanceText.Visible = false
-                objs.healthText.Visible = false
-                objs.healthBarBack.Visible = false
-                objs.healthBarFront.Visible = false
-            end
-        else
-            -- Скрываем все если ESP выключен
-            objs.box.Visible = false
-            objs.tracer.Visible = false
-            objs.nameText.Visible = false
-            objs.distanceText.Visible = false
-            objs.healthText.Visible = false
-            objs.healthBarBack.Visible = false
-            objs.healthBarFront.Visible = false
-        end
-    end
-end
-
--- Обновление Drawing ESP в Heartbeat
-RunService.Heartbeat:Connect(updateDrawingESP)
-
--- Улучшенное постоянное обновление чамсов
-spawn(function()
-    while true do
-        if espSettings.enabled and espSettings.chams then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    updatePlayerChams(player)
-                end
-            end
-        else
-            -- Если чамсы выключены, очищаем все
-            for player, cham in pairs(playerChams) do
-                if cham and cham.Parent then
-                    pcall(function()
-                        cham:Destroy()
-                    end)
-                end
-            end
-            playerChams = {}
-        end
-        wait(0.5) -- Обновляем чамсы каждые 0.5 секунды для лучшей отзывчивости
+        Lighting.FogStart = originalLighting.FogStart
     end
 end)
 
--- Создание вкладок (включая Aimbot для Centaura)
-local MovementTab = CreateTab("Движение", "🏃", Color3.fromRGB(100, 200, 255))
-local GameTab = CreateTab("Игра", "🎮", Color3.fromRGB(255, 100, 100))
-local AimbotTab = CreateTab("Aimbot", "🎯", Color3.fromRGB(255, 200, 100)) -- Только для Centaura
-local VisualTab = CreateTab("Визуалы", "👁", Color3.fromRGB(150, 255, 150))
-local MiscTab = CreateTab("Разное", "⚙", Color3.fromRGB(200, 200, 200))
-local ConfigTab = CreateTab("Конфиги", "💾", Color3.fromRGB(100, 255, 200))
-
--- ВКЛАДКА ДВИЖЕНИЯ
-local MovementSection = CreateSection(MovementTab, "🏃 Основное движение")
-
--- Скорость ходьбы
-CreateToggle(MovementSection, "Скорость ходьбы", "Включить/выключить изменение скорости", false, function(state)
-    speedEnabled = state
-    
-    if state then
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+local flyToggle, _ = CreateToggle(mainSection, "Полет", "Включает свободный полет. (WASD, E, Q)", isFlying, function(state)
+    isFlying = state
+    local character = LocalPlayer.Character
+    if character and character.Humanoid then
+        if isFlying then
+            character.Humanoid.PlatformStand = true
+            character.Humanoid.Sit = true
+        else
+            character.Humanoid.PlatformStand = false
+            character.Humanoid.Sit = false
         end
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Скорость включена!",
-            Duration = 3
-        })
-    else
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+    end
+end)
+
+local noclipToggle, _ = CreateToggle(mainSection, "No-Clip", "Позволяет проходить сквозь стены.", isNoclipActive, function(state)
+    isNoclipActive = state
+    local character = LocalPlayer.Character
+    if character then
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = not state
+            end
+        end
+    end
+end)
+
+local speedSection = CreateSection(mainTab, "Скорость")
+
+local speedToggle, _ = CreateToggle(speedSection, "Скорость бега", "Изменяет скорость бега персонажа.", speedEnabled, function(state)
+    speedEnabled = state
+    if LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        if state then
+            LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+        else
             LocalPlayer.Character.Humanoid.WalkSpeed = 16
         end
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Скорость выключена!",
-            Duration = 3
-        })
     end
 end)
 
-CreateSlider(MovementSection, "Значение скорости", "От 16 до 100", 16, 100, 32, function(value)
+CreateSlider(speedSection, "Значение скорости", "Настраивает скорость бега.", 16, 100, walkSpeed, function(value)
     walkSpeed = value
     if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = walkSpeed
+        LocalPlayer.Character.Humanoid.WalkSpeed = value
     end
 end)
 
--- Высота прыжка
-CreateToggle(MovementSection, "Высота прыжка", "Включить/выключить изменение прыжка", false, function(state)
+local jumpSection = CreateSection(mainTab, "Прыжок")
+
+local jumpToggle, _ = CreateToggle(jumpSection, "Сила прыжка", "Изменяет силу прыжка.", jumpEnabled, function(state)
     jumpEnabled = state
-    
-    if state then
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+    if LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        if state then
+            LocalPlayer.Character.Humanoid.JumpPower = jumpPower
+        else
+            LocalPlayer.Character.Humanoid.JumpPower = 50
         end
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Прыжок включен!",
-            Duration = 3
-        })
-    else
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.JumpHeight = 7.2
-        end
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Прыжок выключен!",
-            Duration = 3
-        })
     end
 end)
 
-CreateSlider(MovementSection, "Значение прыжка", "От 7 до 100", 7, 100, 25, function(value)
+CreateSlider(jumpSection, "Значение силы прыжка", "Настраивает силу прыжка.", 50, 200, jumpPower, function(value)
     jumpPower = value
     if jumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.JumpHeight = jumpPower
+        LocalPlayer.Character.Humanoid.JumpPower = value
     end
 end)
 
--- ВКЛАДКА ИГРЫ
-local GameplaySection = CreateSection(GameTab, "🎯 Игровые функции")
+----------------------------------------------------------------------------------------------------
+-- Секция "Centaura"
+----------------------------------------------------------------------------------------------------
+local centauraSection = CreateSection(centauraTab, "Aimbot")
 
-CreateToggle(GameplaySection, "Бесконечные прыжки", "Позволяет прыгать в воздухе", false, function(state)
-    infiniteJumpEnabled = state
-    
-    if state then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Бесконечные прыжки включены!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Бесконечные прыжки выключены!",
-            Duration = 3
-        })
-    end
-end)
-
--- ВКЛАДКА AIMBOT (только для Centaura)
-local AimbotMainSection = CreateSection(AimbotTab, "🎯 Основные настройки")
-
-CreateToggle(AimbotMainSection, "Включить Aimbot", "Автоматическое прицеливание на врагов", false, function(state)
+local aimbotToggle, _ = CreateToggle(centauraSection, "Аимбот", "Автоматически наводит прицел на врагов.", aimbotEnabled, function(state)
     aimbotEnabled = state
-    
-    if state then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Aimbot активирован!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Aimbot деактивирован!",
-            Duration = 3
-        })
-    end
 end)
 
-CreateSlider(AimbotMainSection, "FOV (поле зрения)", "Радиус захвата цели в пикселях", 30, 300, 90, function(value)
-    aimbotFOV = value
-    if fovCircle then
-        fovCircle.Radius = value
-    end
-end)
-
-CreateSlider(AimbotMainSection, "Плавность", "Скорость наведения (чем больше, тем плавнее)", 1, 20, 5, function(value)
-    aimbotSmoothness = value
-end)
-
-CreateToggle(AimbotMainSection, "Показать FOV круг", "Отображение круга прицеливания", false, function(state)
+local showFovCircleToggle, _ = CreateToggle(centauraSection, "Показать FOV", "Отображает FOV-круг на экране.", showFOVCircle, function(state)
     showFOVCircle = state
-    createFOVCircle()
 end)
 
-local AimbotTargetSection = CreateSection(AimbotTab, "🎯 Настройки прицеливания")
-
-CreateDropdown(AimbotTargetSection, "Часть тела", "Выберите часть тела для прицеливания", 
-    {"Head", "Neck", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}, "Head", function(option)
-    if option == "Neck" then
-        aimbotTargetPart = "Head" -- Шея это часть головы в Roblox
-    elseif option == "Torso" then
-        aimbotTargetPart = "Torso"
-    elseif option == "Left Arm" then
-        aimbotTargetPart = "Left Arm"
-    elseif option == "Right Arm" then
-        aimbotTargetPart = "Right Arm"
-    elseif option == "Left Leg" then
-        aimbotTargetPart = "Left Leg"
-    elseif option == "Right Leg" then
-        aimbotTargetPart = "Right Leg"
-    else
-        aimbotTargetPart = "Head"
-    end
-    print("Выбрана часть тела для аимбота:", aimbotTargetPart) -- Для отладки
-end)
-
-CreateToggle(AimbotTargetSection, "Только видимые цели", "Прицеливаться только на видимых врагов", true, function(state)
-    aimbotVisibleOnly = state
-end)
-
-CreateToggle(AimbotTargetSection, "Проверка команды", "Не прицеливаться на союзников", true, function(state)
+local aimbotTeamCheckToggle, _ = CreateToggle(centauraSection, "Проверка команды", "Не целится в союзников.", aimbotTeamCheck, function(state)
     aimbotTeamCheck = state
 end)
 
-local AimbotPredictionSection = CreateSection(AimbotTab, "🚀 Предикт движения")
-
-CreateToggle(AimbotPredictionSection, "Предикт движения", "Прицеливание с упреждением по движущимся целям", false, function(state)
-    aimbotPrediction = state
-    print("Предикт движения:", state and "включен" or "выключен") -- Для отладки
+CreateSlider(centauraSection, "FOV", "Радиус поиска цели.", 1, 360, aimbotFOV, function(value)
+    aimbotFOV = value
 end)
 
-CreateSlider(AimbotPredictionSection, "Сила предикта", "Насколько сильно упреждать движение (0.1-3.0)", 0.1, 3.0, 1.0, function(value)
-    aimbotPredictionStrength = value
+CreateSlider(centauraSection, "Плавность", "Скорость наведения.", 1, 20, aimbotSmoothness, function(value)
+    aimbotSmoothness = value
 end)
 
--- Функция создания FOV круга
-local function createFOVCircle()
-    if fovCircle then fovCircle:Remove() end
-    
-    if showFOVCircle then
-        fovCircle = Drawing.new("Circle")
-        fovCircle.Thickness = 1
-        fovCircle.NumSides = 100
-        fovCircle.Radius = aimbotFOV
-        fovCircle.Filled = false
-        fovCircle.Visible = true
-        fovCircle.ZIndex = 999
-        fovCircle.Transparency = 1
-        fovCircle.Color = Color3.fromRGB(255, 255, 255)
-        
-        RunService.RenderStepped:Connect(function()
-            if showFOVCircle then
-                fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-            else
-                if fovCircle then fovCircle:Remove() end
-                fovCircle = nil
-            end
-        end)
-    end
-end
-
--- Aimbot логика для Centaura
-local lastTargetCheck = 0
-local currentTarget = nil
-local targetCheckInterval = 0.08 -- Проверяем цели каждые 80мс для лучшей отзывчивости
-local playerVelocities = {} -- Отслеживание скорости игроков для предикта
-
-local function getClosestEnemy()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            -- Проверяем что у игрока есть нужная часть тела
-            local targetPart = nil
-            if aimbotTargetPart == "Head" then
-                targetPart = player.Character:FindFirstChild("Head")
-            elseif aimbotTargetPart == "Torso" then
-                targetPart = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
-            elseif aimbotTargetPart == "Left Arm" then
-                targetPart = player.Character:FindFirstChild("Left Arm") or player.Character:FindFirstChild("LeftUpperArm")
-            elseif aimbotTargetPart == "Right Arm" then
-                targetPart = player.Character:FindFirstChild("Right Arm") or player.Character:FindFirstChild("RightUpperArm")
-            elseif aimbotTargetPart == "Left Leg" then
-                targetPart = player.Character:FindFirstChild("Left Leg") or player.Character:FindFirstChild("LeftUpperLeg")
-            elseif aimbotTargetPart == "Right Leg" then
-                targetPart = player.Character:FindFirstChild("Right Leg") or player.Character:FindFirstChild("RightUpperLeg")
-            end
-            
-            if not targetPart then
-                continue -- Пропускаем игрока если нет нужной части тела
-            end
-            
-            if aimbotTeamCheck and not isPlayerEnemy(player) then
-                continue
-            end
-            
-            local vector, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-            
-            if onScreen then
-                local distance = (Vector2.new(vector.X, vector.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
-                
-                if distance < aimbotFOV and distance < shortestDistance then
-                    if aimbotVisibleOnly then
-                        -- Улучшенный raycast с большей точностью
-                        local raycastParams = RaycastParams.new()
-                        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-                        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
-                        
-                        local direction = (targetPart.Position - Camera.CFrame.Position).Unit
-                        local raycastResult = Workspace:Raycast(Camera.CFrame.Position, direction * 1000, raycastParams)
-                        
-                        if not raycastResult then
-                            closestPlayer = player
-                            shortestDistance = distance
-                        end
-                    else
-                        closestPlayer = player
-                        shortestDistance = distance
-                    end
-                end
-            end
-        end
-    end
-    
-    return closestPlayer
-end
-
--- Функция для предикта движения
-local function predictTargetPosition(player, targetPart)
-    if not aimbotPrediction or not playerVelocities[player] or not playerVelocities[player].velocity then
-        return targetPart.Position
-    end
-    
-    local velocity = playerVelocities[player].velocity
-    local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
-    local bulletTime = distance / 400 -- Примерная скорость пули в Centaura
-    
-    -- Проверяем что скорость не слишком большая (избегаем глюков)
-    if velocity.Magnitude > 100 then
-        return targetPart.Position -- Если скорость слишком большая, не используем предикт
-    end
-    
-    -- Предиктим позицию с учетом скорости и силы предикта
-    local predictedPosition = targetPart.Position + (velocity * bulletTime * aimbotPredictionStrength)
-    return predictedPosition
-end
-
--- Отслеживание скорости игроков
-spawn(function()
-    while true do
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local currentPos = player.Character.HumanoidRootPart.Position
-                if playerVelocities[player] and playerVelocities[player].lastPos then
-                    local deltaTime = 0.1
-                    local velocity = (currentPos - playerVelocities[player].lastPos) / deltaTime
-                    playerVelocities[player] = {
-                        velocity = velocity,
-                        lastPos = currentPos
-                    }
-                else
-                    playerVelocities[player] = {
-                        velocity = Vector3.new(0, 0, 0),
-                        lastPos = currentPos
-                    }
-                end
-            else
-                playerVelocities[player] = nil
-            end
-        end
-        wait(0.1)
-    end
+CreateButton(centauraSection, "Цель: Голова", "Аимбот целится в голову.", function()
+    aimbotTargetPart = "Head"
+    game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Аимбот: цель - Голова", Duration=2})
 end)
 
--- Оптимизированная система аимбота
-RunService.Heartbeat:Connect(function()
-    if not aimbotEnabled then
-        currentTarget = nil
+CreateButton(centauraSection, "Цель: Торс", "Аимбот целится в торс.", function()
+    aimbotTargetPart = "Torso"
+    game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Аимбот: цель - Торс", Duration=2})
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Секция "Визуальные"
+----------------------------------------------------------------------------------------------------
+local espSection = CreateSection(espTab, "ESP")
+
+local espToggle, _ = CreateToggle(espSection, "Включить ESP", "Включает все визуальные эффекты ESP.", espEnabled, function(state)
+    espEnabled = state
+end)
+
+local espBoxToggle, _ = CreateToggle(espSection, "Квадраты", "Отображает квадраты вокруг игроков.", espSettings.boxes, function(state)
+    espSettings.boxes = state
+end)
+
+local espNamesToggle, _ = CreateToggle(espSection, "Имена", "Отображает имена игроков.", espSettings.names, function(state)
+    espSettings.names = state
+end)
+
+local espDistanceToggle, _ = CreateToggle(espSection, "Дистанция", "Отображает расстояние до игроков.", espSettings.distance, function(state)
+    espSettings.distance = state
+end)
+
+local espHealthToggle, _ = CreateToggle(espSection, "Здоровье", "Отображает здоровье игроков.", espSettings.health, function(state)
+    espSettings.health = state
+end)
+
+local espHealthBarToggle, _ = CreateToggle(espSection, "Полоска здоровья", "Отображает полоску здоровья.", espSettings.healthBar, function(state)
+    espSettings.healthBar = state
+end)
+
+local espTracersToggle, _ = CreateToggle(espSection, "Трассеры", "Отображает линии к игрокам.", espSettings.tracers, function(state)
+    espSettings.tracers = state
+end)
+
+local espChamsToggle, _ = CreateToggle(espSection, "Чамсы", "Отображает игроков сквозь стены.", espSettings.chams, function(state)
+    espSettings.chams = state
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Секция "Конфиг"
+----------------------------------------------------------------------------------------------------
+local configSection = CreateSection(configTab, "Настройки")
+
+local saveConfigNameBox = Instance.new("TextBox")
+saveConfigNameBox.Parent = configSection
+saveConfigNameBox.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+saveConfigNameBox.PlaceholderText = "Имя конфига..."
+saveConfigNameBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+saveConfigNameBox.Font = Enum.Font.Gotham
+saveConfigNameBox.TextSize = 14
+saveConfigNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveConfigNameBox.Size = UDim2.new(1, 0, 0, 40)
+saveConfigNameBox.TextXAlignment = Enum.TextXAlignment.Left
+
+local namePadding = Instance.new("UIPadding")
+namePadding.Parent = saveConfigNameBox
+namePadding.PaddingLeft = UDim.new(0, 10)
+
+CreateButton(configSection, "Сохранить", "Сохраняет текущие настройки в конфиг.", function()
+    local name = saveConfigNameBox.Text
+    if name == "" then
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Введите имя конфига!", Duration=3})
         return
     end
     
-    local currentTime = tick()
-    
-    -- Обновляем цель только периодически
-    if currentTime - lastTargetCheck >= targetCheckInterval then
-        currentTarget = getClosestEnemy()
-        lastTargetCheck = currentTime
-    end
-    
-    -- Применяем прицеливание к текущей цели
-    if currentTarget and currentTarget.Character then
-        local targetPart = nil
-        if aimbotTargetPart == "Head" then
-            targetPart = currentTarget.Character:FindFirstChild("Head")
-        elseif aimbotTargetPart == "Torso" then
-            targetPart = currentTarget.Character:FindFirstChild("Torso") or currentTarget.Character:FindFirstChild("UpperTorso")
-        elseif aimbotTargetPart == "Left Arm" then
-            targetPart = currentTarget.Character:FindFirstChild("Left Arm") or currentTarget.Character:FindFirstChild("LeftUpperArm")
-        elseif aimbotTargetPart == "Right Arm" then
-            targetPart = currentTarget.Character:FindFirstChild("Right Arm") or currentTarget.Character:FindFirstChild("RightUpperArm")
-        elseif aimbotTargetPart == "Left Leg" then
-            targetPart = currentTarget.Character:FindFirstChild("Left Leg") or currentTarget.Character:FindFirstChild("LeftUpperLeg")
-        elseif aimbotTargetPart == "Right Leg" then
-            targetPart = currentTarget.Character:FindFirstChild("Right Leg") or currentTarget.Character:FindFirstChild("RightUpperLeg")
-        end
-        
-        if targetPart then
-            local targetPosition = predictTargetPosition(currentTarget, targetPart)
-            local camera = Camera
-            local currentCFrame = camera.CFrame
-            
-            -- Проверяем что цель в разумных пределах
-            local distance = (currentCFrame.Position - targetPosition).Magnitude
-            if distance > 5 and distance < 1500 then
-                local targetCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
-                
-                -- Проверяем угол поворота чтобы избежать резких движений
-                local angle = math.acos(math.clamp(currentCFrame.LookVector:Dot(targetCFrame.LookVector), -1, 1))
-                
-                if angle < math.rad(120) then -- Увеличили до 120 градусов для лучшего захвата
-                    local lerpFactor = math.min(1 / aimbotSmoothness, 0.3) -- Немного увеличили максимальную скорость
-                    local newCFrame = currentCFrame:Lerp(targetCFrame, lerpFactor)
-                    
-                    -- Дополнительная проверка валидности
-                    if newCFrame.Position.Y > currentCFrame.Position.Y - 100 then
-                        camera.CFrame = newCFrame
-                    end
-                else
-                    currentTarget = nil -- Цель слишком далеко по углу
-                end
-            else
-                currentTarget = nil -- Цель слишком далеко или близко
-            end
-        else
-            currentTarget = nil -- Часть тела не найдена
-        end
-    end
-end)
-
--- Очистка скоростей при выходе игроков
-Players.PlayerRemoving:Connect(function(player)
-    playerVelocities[player] = nil
-end)
-
--- ВКЛАДКА ВИЗУАЛОВ
-local LightingSection = CreateSection(VisualTab, "💡 Освещение")
-
-CreateToggle(LightingSection, "Полная яркость", "Убирает тени и делает всё ярким", false, function(state)
-    fullBrightEnabled = state
-    toggleFullBright(state)
-    
-    if state then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Полная яркость включена!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Полная яркость выключена!",
-            Duration = 3
-        })
-    end
-end)
-
-CreateToggle(LightingSection, "Убрать туман", "Увеличивает дальность видимости", false, function(state)
-    noFogEnabled = state
-    toggleNoFog(state)
-    
-    if state then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Туман убран!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Туман восстановлен!",
-            Duration = 3
-        })
-    end
-end)
-
-local ESPSection = CreateSection(VisualTab, "👁 ESP Настройки")
-
-CreateToggle(ESPSection, "Включить ESP", "Основной переключатель ESP", false, function(state)
-    espSettings.enabled = state
-    updateESP()
-    
-    if state then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "ESP активирован!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "ESP деактивирован!",
-            Duration = 3
-        })
-    end
-end)
-
-CreateToggle(ESPSection, "Квадраты", "Показывает квадраты вокруг игроков", true, function(state)
-    espSettings.boxes = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Чамсы (обводка)", "Показывает обводку через стены", false, function(state)
-    espSettings.chams = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Имена игроков", "Показывает имена игроков", false, function(state)
-    espSettings.names = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Дистанция", "Показывает расстояние до игроков", false, function(state)
-    espSettings.distance = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Здоровье", "Показывает здоровье игроков", false, function(state)
-    espSettings.health = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "HP полоска", "Показывает здоровье в виде полоски", false, function(state)
-    espSettings.healthBar = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Трейсеры", "Линии к игрокам", false, function(state)
-    espSettings.tracers = state
-    updateESP()
-end)
-
-CreateToggle(ESPSection, "Проверка команды", "Разные цвета для союзников и врагов", true, function(state)
-    espSettings.teamCheck = state
-    updateESP()
-end)
-
-local HealthBarSection = CreateSection(VisualTab, "💖 Настройки HP полоски")
-
-CreateDropdown(HealthBarSection, "Позиция HP бара", "Где отображать полоску здоровья", 
-    {"Top", "Bottom", "Left", "Right"}, "Top", function(option)
-    espSettings.healthBarPosition = option
-    print("HP Bar позиция изменена на:", option) -- Для отладки
-    updateESP()
-end)
-
-CreateSlider(HealthBarSection, "Размер HP бара", "Размер в процентах от игрока", 60, 150, 120, function(value)
-    espSettings.healthBarSize = value
-    updateESP()
-end)
-
-CreateSlider(HealthBarSection, "Толщина HP бара", "Толщина полоски в пикселях", 1, 8, 2, function(value)
-    espSettings.healthBarThickness = value
-    updateESP()
-end)
-
--- Функции для работы с JSON
-local function encodeJSON(data)
-    local function encode(val)
-        local type_val = type(val)
-        if type_val == "string" then
-            return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
-        elseif type_val == "number" or type_val == "boolean" then
-            return tostring(val)
-        elseif type_val == "table" then
-            local result = {}
-            local is_array = true
-            local count = 0
-            
-            for k, v in pairs(val) do
-                count = count + 1
-                if type(k) ~= "number" or k ~= count then
-                    is_array = false
-                    break
-                end
-            end
-            
-            if is_array then
-                for i, v in ipairs(val) do
-                    table.insert(result, encode(v))
-                end
-                return "[" .. table.concat(result, ",") .. "]"
-            else
-                for k, v in pairs(val) do
-                    table.insert(result, encode(tostring(k)) .. ":" .. encode(v))
-                end
-                return "{" .. table.concat(result, ",") .. "}"
-            end
-        else
-            return "null"
-        end
-    end
-    return encode(data)
-end
-
-local function decodeJSON(str)
-    local function decode(str, pos)
-        pos = pos or 1
-        if pos > #str then return nil, pos end
-        
-        local char = str:sub(pos, pos)
-        if char == '"' then
-            local endPos = pos + 1
-            while endPos <= #str and str:sub(endPos, endPos) ~= '"' do
-                if str:sub(endPos, endPos) == '\\' then
-                    endPos = endPos + 1
-                end
-                endPos = endPos + 1
-            end
-            return str:sub(pos + 1, endPos - 1):gsub('\\"', '"'):gsub('\\\\', '\\'), endPos + 1
-        elseif char == '{' then
-            local obj = {}
-            pos = pos + 1
-            while pos <= #str and str:sub(pos, pos) ~= '}' do
-                if str:sub(pos, pos) == ',' then pos = pos + 1 end
-                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
-                if str:sub(pos, pos) == '}' then break end
-                
-                local key, newPos = decode(str, pos)
-                pos = newPos
-                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
-                if str:sub(pos, pos) == ':' then pos = pos + 1 end
-                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
-                
-                local value
-                value, pos = decode(str, pos)
-                obj[key] = value
-            end
-            return obj, pos + 1
-        elseif char == '[' then
-            local arr = {}
-            pos = pos + 1
-            while pos <= #str and str:sub(pos, pos) ~= ']' do
-                if str:sub(pos, pos) == ',' then pos = pos + 1 end
-                while pos <= #str and str:sub(pos, pos):match('%s') do pos = pos + 1 end
-                if str:sub(pos, pos) == ']' then break end
-                
-                local value
-                value, pos = decode(str, pos)
-                table.insert(arr, value)
-            end
-            return arr, pos + 1
-        elseif char:match('[%d%-]') then
-            local endPos = pos
-            while endPos <= #str and str:sub(endPos, endPos):match('[%d%.-]') do
-                endPos = endPos + 1
-            end
-            return tonumber(str:sub(pos, endPos - 1)), endPos
-        elseif str:sub(pos, pos + 3) == "true" then
-            return true, pos + 4
-        elseif str:sub(pos, pos + 4) == "false" then
-            return false, pos + 5
-        elseif str:sub(pos, pos + 3) == "null" then
-            return nil, pos + 4
-        end
-        return nil, pos + 1
-    end
-    
-    local result = decode(str:gsub('%s', ''))
-    return result
-end
-
--- Система конфигов
-local function saveConfig(configName, saveToFile)
-    local configData = {
-        -- Движение
-        speedEnabled = speedEnabled,
-        walkSpeed = walkSpeed,
-        jumpEnabled = jumpEnabled,
-        jumpPower = jumpPower,
+    local dataToSave = {
+        isFlying = isFlying,
+        flySpeed = flySpeed,
+        isNoclipActive = isNoclipActive,
+        espEnabled = espEnabled,
         infiniteJumpEnabled = infiniteJumpEnabled,
-        
-        -- Визуалы
+        speedEnabled = speedEnabled,
+        jumpEnabled = jumpEnabled,
+        walkSpeed = walkSpeed,
+        jumpPower = jumpPower,
         fullBrightEnabled = fullBrightEnabled,
         noFogEnabled = noFogEnabled,
-        
-        -- ESP
-        espSettings = {
-            enabled = espSettings.enabled,
-            boxes = espSettings.boxes,
-            chams = espSettings.chams,
-            names = espSettings.names,
-            distance = espSettings.distance,
-            health = espSettings.health,
-            healthBar = espSettings.healthBar,
-            tracers = espSettings.tracers,
-            teamCheck = espSettings.teamCheck,
-            healthBarPosition = espSettings.healthBarPosition,
-            healthBarSize = espSettings.healthBarSize,
-            healthBarThickness = espSettings.healthBarThickness
-        },
-        
-        -- Aimbot для Centaura
         aimbotEnabled = aimbotEnabled,
         aimbotFOV = aimbotFOV,
         aimbotSmoothness = aimbotSmoothness,
@@ -2185,359 +1374,349 @@ local function saveConfig(configName, saveToFile)
         aimbotTeamCheck = aimbotTeamCheck,
         showFOVCircle = showFOVCircle,
         aimbotPrediction = aimbotPrediction,
-        aimbotPredictionStrength = aimbotPredictionStrength
+        aimbotPredictionStrength = aimbotPredictionStrength,
+        espSettings = espSettings
     }
     
-    -- Сохраняем в память
-    configs[configName] = configData
+    if saveConfigPersistent(name, dataToSave) then
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Конфиг '" .. name .. "' сохранен!", Duration=3})
+    else
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Ошибка сохранения конфига!", Duration=3})
+    end
+end)
+
+local loadConfigSection = CreateSection(configTab, "Загрузка конфига")
+
+local savedConfigNames = getPersistentConfigNames()
+local configDropdown = CreateDropdown(loadConfigSection, "Загрузить конфиг", savedConfigNames, "Выберите...", function(selectedName)
+    local loadedData = loadConfigPersistent(selectedName)
+    if loadedData then
+        -- Применяем настройки
+        isFlying = loadedData.isFlying
+        flySpeed = loadedData.flySpeed
+        isNoclipActive = loadedData.isNoclipActive
+        espEnabled = loadedData.espEnabled
+        infiniteJumpEnabled = loadedData.infiniteJumpEnabled
+        speedEnabled = loadedData.speedEnabled
+        jumpEnabled = loadedData.jumpEnabled
+        walkSpeed = loadedData.walkSpeed
+        jumpPower = loadedData.jumpPower
+        fullBrightEnabled = loadedData.fullBrightEnabled
+        noFogEnabled = loadedData.noFogEnabled
+        aimbotEnabled = loadedData.aimbotEnabled
+        aimbotFOV = loadedData.aimbotFOV
+        aimbotSmoothness = loadedData.aimbotSmoothness
+        aimbotTargetPart = loadedData.aimbotTargetPart
+        aimbotVisibleOnly = loadedData.aimbotVisibleOnly
+        aimbotTeamCheck = loadedData.aimbotTeamCheck
+        showFOVCircle = loadedData.showFOVCircle
+        aimbotPrediction = loadedData.aimbotPrediction
+        aimbotPredictionStrength = loadedData.aimbotPredictionStrength
+        espSettings = loadedData.espSettings
+        
+        -- Обновляем UI
+        for _, tab in pairs(tabs) do
+            if tab.name == "Основные" then tab.button.MouseButton1Click() end
+        end
+        
+        flyToggle:GetChildren()[1].MouseButton1Click()
+        flyToggle:GetChildren()[1].MouseButton1Click()
+        
+        noclipToggle:GetChildren()[1].MouseButton1Click()
+        noclipToggle:GetChildren()[1].MouseButton1Click()
+        
+        speedToggle:GetChildren()[1].MouseButton1Click()
+        speedToggle:GetChildren()[1].MouseButton1Click()
+        
+        jumpToggle:GetChildren()[1].MouseButton1Click()
+        jumpToggle:GetChildren()[1].MouseButton1Click()
+        
+        fullBrightToggle:GetChildren()[1].MouseButton1Click()
+        fullBrightToggle:GetChildren()[1].MouseButton1Click()
+        
+        noFogToggle:GetChildren()[1].MouseButton1Click()
+        noFogToggle:GetChildren()[1].MouseButton1Click()
+        
+        for _, tab in pairs(tabs) do
+            if tab.name == "Centaura" then tab.button.MouseButton1Click() end
+        end
+        
+        aimbotToggle:GetChildren()[1].MouseButton1Click()
+        aimbotToggle:GetChildren()[1].MouseButton1Click()
+        
+        showFovCircleToggle:GetChildren()[1].MouseButton1Click()
+        showFovCircleToggle:GetChildren()[1].MouseButton1Click()
+        
+        aimbotTeamCheckToggle:GetChildren()[1].MouseButton1Click()
+        aimbotTeamCheckToggle:GetChildren()[1].MouseButton1Click()
+        
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Конфиг '" .. selectedName .. "' загружен!", Duration=3})
+    else
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Ошибка загрузки конфига!", Duration=3})
+    end
+end)
+
+CreateButton(loadConfigSection, "Удалить конфиг", "Удаляет выбранный конфиг.", function()
+    local selectedName = configDropdown.DropdownValue.Text
+    if selectedName == "Выберите..." or selectedName == "" then
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Сначала выберите конфиг для удаления!", Duration=3})
+        return
+    end
     
-    local message = "Конфиг '" .. configName .. "' сохранен в память!"
-    
-    -- Сохраняем постоянно если требуется
-    if saveToFile then
-        local persistentSaved = saveConfigPersistent(configName, configData)
-        if persistentSaved then
-            if storageMethod == "files" then
-                message = "Конфиг '" .. configName .. "' сохранен в файл! 💾"
-            elseif storageMethod == "global" then
-                message = "Конфиг '" .. configName .. "' сохранен в эксплойт! 🔧\n(Останется после перезапуска скрипта)"
-            elseif storageMethod == "clipboard" then
-                message = "Конфиг '" .. configName .. "' скопирован в буфер! 📋\nВставь в блокнот и сохрани!"
+    if deleteConfigPersistent(selectedName) then
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Конфиг '" .. selectedName .. "' удален!", Duration=3})
+        -- Обновляем список
+        local newConfigNames = getPersistentConfigNames()
+        configDropdown.DropdownValue.Text = "Выберите..."
+        configDropdown.populateDropdown(newConfigNames)
+    else
+        game.StarterGui:SetCore("SendNotification", {Title="SSLKin Uni", Text="Ошибка удаления конфига!", Duration=3})
+    end
+end)
+
+
+-- Системные функции
+local function getVisibleTargets()
+    local targets = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character.Humanoid and player.Character.Humanoid.Health > 0 then
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local vector, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+                local isVisible = onScreen
+                if isVisible then
+                    local isBehindWall = false
+                    local raycastParams = RaycastParams.new()
+                    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
+                    
+                    local result = Workspace:Raycast(Camera.CFrame.Position, (rootPart.Position - Camera.CFrame.Position).unit * (rootPart.Position - Camera.CFrame.Position).magnitude, raycastParams)
+                    if result and result.Instance and result.Instance.Parent then
+                        if result.Instance.Parent ~= player.Character then
+                            isVisible = false
+                        end
+                    end
+                end
+                
+                local isTeamMate = (aimbotTeamCheck and player.TeamColor == LocalPlayer.TeamColor)
+                if not isTeamMate and isVisible then
+                    table.insert(targets, player)
+                end
             end
-        else
-            message = "Ошибка сохранения! Конфиг в памяти: " .. storageMethod
         end
     end
-    
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = message,
-        Duration = 4
-    })
+    return targets
 end
 
-local function loadConfig(configName, loadFromStorage)
-    local configData = configs[configName]
+local function getClosestTarget()
+    local bestTarget = nil
+    local closestDistance = math.huge
+    local targets = getVisibleTargets()
     
-    -- Попытка загрузить из постоянного хранилища если не найден в памяти
-    if not configData and loadFromStorage then
-        configData = loadConfigPersistent(configName)
-        if configData then
-            configs[configName] = configData -- Сохраняем в память
+    for _, player in ipairs(targets) do
+        local character = player.Character
+        if character and character.Humanoid then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local screenPoint, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+                if onScreen then
+                    local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if distance < closestDistance and distance < aimbotFOV then
+                        closestDistance = distance
+                        bestTarget = player
+                    end
+                end
+            end
         end
     end
-    
-    if not configData then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Конфиг '" .. configName .. "' не найден!",
-            Duration = 3
-        })
-        return
-    end
-    
-    -- Загружаем движение
-    speedEnabled = configData.speedEnabled or false
-    walkSpeed = configData.walkSpeed or 16
-    jumpEnabled = configData.jumpEnabled or false
-    jumpPower = configData.jumpPower or 7.2
-    infiniteJumpEnabled = configData.infiniteJumpEnabled or false
-    
-    -- Загружаем визуалы
-    fullBrightEnabled = configData.fullBrightEnabled or false
-    noFogEnabled = configData.noFogEnabled or false
-    toggleFullBright(fullBrightEnabled)
-    toggleNoFog(noFogEnabled)
-    
-    -- Загружаем ESP
-    if configData.espSettings then
-        espSettings.enabled = configData.espSettings.enabled or false
-        espSettings.boxes = configData.espSettings.boxes or false
-        espSettings.chams = configData.espSettings.chams or false
-        espSettings.names = configData.espSettings.names or false
-        espSettings.distance = configData.espSettings.distance or false
-        espSettings.health = configData.espSettings.health or false
-        espSettings.healthBar = configData.espSettings.healthBar or false
-        espSettings.tracers = configData.espSettings.tracers or false
-        espSettings.teamCheck = configData.espSettings.teamCheck or true
-        espSettings.healthBarPosition = configData.espSettings.healthBarPosition or "Top"
-        espSettings.healthBarSize = configData.espSettings.healthBarSize or 120
-        espSettings.healthBarThickness = configData.espSettings.healthBarThickness or 2
-        updateESP()
-    end
-    
-    -- Загружаем aimbot для Centaura
-    aimbotEnabled = configData.aimbotEnabled or false
-    aimbotFOV = configData.aimbotFOV or 90
-    aimbotSmoothness = configData.aimbotSmoothness or 5
-    aimbotTargetPart = configData.aimbotTargetPart or "Head"
-    aimbotVisibleOnly = configData.aimbotVisibleOnly or true
-    aimbotTeamCheck = configData.aimbotTeamCheck or true
-    showFOVCircle = configData.showFOVCircle or false
-    aimbotPrediction = configData.aimbotPrediction or false
-    aimbotPredictionStrength = configData.aimbotPredictionStrength or 1.0
-    createFOVCircle()
-    
-    -- Применяем настройки к персонажу
-    restorePlayerSettings()
-    
-    currentConfig = configName
-    
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Конфиг '" .. configName .. "' загружен!",
-        Duration = 3
-    })
+    return bestTarget
 end
 
-local function deleteConfig(configName)
-    if configName == "Default" then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Нельзя удалить конфиг по умолчанию!",
-            Duration = 3
-        })
-        return
+local function updateDrawingObjects()
+    for _, obj in pairs(drawingObjects) do
+        obj:Remove()
     end
+    drawingObjects = {}
+    if fovCircle then fovCircle:Remove() end
+    fovCircle = nil
     
-    if configs[configName] then
-        configs[configName] = nil
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Конфиг '" .. configName .. "' удален из памяти!",
-            Duration = 3
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Конфиг '" .. configName .. "' не найден!",
-            Duration = 3
-        })
-    end
-end
-
-local function getConfigNames(excludeDefault)
-    local names = {}
+    if not espEnabled then return end
     
-    for name, _ in pairs(configs) do
-        if not (excludeDefault and name == "Default") then
-            table.insert(names, name)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local rootPart = char:FindFirstChild("HumanoidRootPart")
+            
+            if not rootPart then continue end
+            
+            local onScreen, screenPoint = Camera:WorldToScreenPoint(rootPart.Position)
+            if not onScreen then continue end
+            
+            local head = char:FindFirstChild("Head")
+            local torso = char:FindFirstChild("Torso")
+            
+            local headPosition, onScreenHead = Camera:WorldToScreenPoint(head.Position)
+            local torsoPosition, onScreenTorso = Camera:WorldToScreenPoint(torso.Position)
+            
+            local color = (espSettings.teamCheck and player.TeamColor == LocalPlayer.TeamColor) and espSettings.allyColor or espSettings.enemyColor
+            
+            -- Box ESP
+            if espSettings.boxes then
+                local boxWidth = (headPosition.Y - torsoPosition.Y) * 0.7
+                local boxHeight = headPosition.Y - torsoPosition.Y
+                
+                local boxDrawing = Drawing.new("Square")
+                boxDrawing.Color = color
+                boxDrawing.Thickness = 1
+                boxDrawing.Transparency = 1
+                boxDrawing.Filled = false
+                boxDrawing.Visible = true
+                boxDrawing.Size = Vector2.new(boxWidth, boxHeight)
+                boxDrawing.Position = Vector2.new(torsoPosition.X, torsoPosition.Y - boxHeight/2)
+                
+                table.insert(drawingObjects, boxDrawing)
+            end
+            
+            -- Name ESP
+            if espSettings.names then
+                local nameDrawing = Drawing.new("Text")
+                nameDrawing.Color = espSettings.nameColor
+                nameDrawing.Text = player.Name
+                nameDrawing.Size = 12
+                nameDrawing.Position = Vector2.new(screenPoint.X, screenPoint.Y + 20)
+                table.insert(drawingObjects, nameDrawing)
+            end
+            
+            -- Distance ESP
+            if espSettings.distance then
+                local distance = math.floor((rootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude)
+                local distDrawing = Drawing.new("Text")
+                distDrawing.Color = espSettings.nameColor
+                distDrawing.Text = tostring(distance) .. "м"
+                distDrawing.Size = 10
+                distDrawing.Position = Vector2.new(screenPoint.X, screenPoint.Y + 30)
+                table.insert(drawingObjects, distDrawing)
+            end
+            
+            -- Health Bar ESP
+            if espSettings.healthBar and char:FindFirstChild("Humanoid") then
+                local humanoid = char.Humanoid
+                local healthRatio = humanoid.Health / humanoid.MaxHealth
+                local healthBarColor = espSettings.healthBarForeground
+                if healthRatio < 0.3 then
+                    healthBarColor = espSettings.healthBarCriticalHealth
+                elseif healthRatio < 0.6 then
+                    healthBarColor = espSettings.healthBarLowHealth
+                end
+                
+                local healthBar = Drawing.new("Square")
+                healthBar.Color = healthBarColor
+                healthBar.Thickness = 1
+                healthBar.Filled = true
+                healthBar.Transparency = 0
+                
+                local bgBar = Drawing.new("Square")
+                bgBar.Color = espSettings.healthBarBackground
+                bgBar.Thickness = 1
+                bgBar.Filled = true
+                bgBar.Transparency = 0
+                
+                local barWidth = (headPosition.Y - torsoPosition.Y) * 0.7
+                local barHeight = 4
+                
+                bgBar.Size = Vector2.new(barWidth, barHeight)
+                bgBar.Position = Vector2.new(torsoPosition.X, torsoPosition.Y + (headPosition.Y - torsoPosition.Y) * 0.5 + 5)
+                
+                healthBar.Size = Vector2.new(barWidth * healthRatio, barHeight)
+                healthBar.Position = Vector2.new(torsoPosition.X - (barWidth - barWidth * healthRatio)/2, torsoPosition.Y + (headPosition.Y - torsoPosition.Y) * 0.5 + 5)
+                
+                table.insert(drawingObjects, bgBar)
+                table.insert(drawingObjects, healthBar)
+            end
+            
+            -- Tracers
+            if espSettings.tracers then
+                local tracer = Drawing.new("Line")
+                tracer.Color = espSettings.tracerColor
+                tracer.Thickness = 1
+                tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y) -- from bottom center
+                tracer.To = Vector2.new(screenPoint.X, screenPoint.Y)
+                table.insert(drawingObjects, tracer)
+            end
         end
     end
-    
-    if #names == 0 and not excludeDefault then
-        table.insert(names, "Default")
-    end
-    
-    return names
 end
 
--- Создаем конфиг по умолчанию
-saveConfig("Default")
-
--- ВКЛАДКА КОНФИГОВ
-local ConfigManagementSection = CreateSection(ConfigTab, "💾 Управление конфигами")
-
--- Поле ввода имени конфига
-local configNameInput = ""
-local configTextBoxFrame, configTextBox = CreateTextBox(ConfigManagementSection, "Имя конфига", "Введите имя для нового конфига", "Например: MyConfig", function(text)
-    configNameInput = text
-end)
-
--- Переменная для хранения выбранного конфига
-local selectedConfigName = ""
-
--- Выпадающий список для конфигов
-local configDropdownFrame = Instance.new("Frame")
-configDropdownFrame.Parent = ConfigManagementSection
-configDropdownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-configDropdownFrame.BorderSizePixel = 0
-configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
-configDropdownFrame.LayoutOrder = 1
-
-local configDropdownCorner = Instance.new("UICorner")
-configDropdownCorner.CornerRadius = UDim.new(0, 8)
-configDropdownCorner.Parent = configDropdownFrame
-
-local configDropdownText = Instance.new("TextLabel")
-configDropdownText.Parent = configDropdownFrame
-configDropdownText.BackgroundTransparency = 1
-configDropdownText.Position = UDim2.new(0, 15, 0, 8)
-configDropdownText.Size = UDim2.new(1, -30, 0, 20)
-configDropdownText.Font = Enum.Font.GothamBold
-configDropdownText.Text = "Выбрать конфиг"
-configDropdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
-configDropdownText.TextSize = 14
-configDropdownText.TextXAlignment = Enum.TextXAlignment.Left
-
-local configDropdownDesc = Instance.new("TextLabel")
-configDropdownDesc.Parent = configDropdownFrame
-configDropdownDesc.BackgroundTransparency = 1
-configDropdownDesc.Position = UDim2.new(0, 15, 0, 28)
-configDropdownDesc.Size = UDim2.new(1, -30, 0, 16)
-configDropdownDesc.Font = Enum.Font.Gotham
-configDropdownDesc.Text = "Выберите конфиг для загрузки"
-configDropdownDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
-configDropdownDesc.TextSize = 11
-configDropdownDesc.TextXAlignment = Enum.TextXAlignment.Left
-
--- Кнопка выпадающего списка
-local configDropdownButton = Instance.new("TextButton")
-configDropdownButton.Parent = configDropdownFrame
-configDropdownButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
-configDropdownButton.BorderSizePixel = 0
-configDropdownButton.Position = UDim2.new(0, 15, 0, 50)
-configDropdownButton.Size = UDim2.new(1, -30, 0, 25)
-configDropdownButton.Font = Enum.Font.Gotham
-configDropdownButton.Text = "Нажмите для выбора"
-configDropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-configDropdownButton.TextSize = 12
-configDropdownButton.AutoButtonColor = false
-
-local configDropdownButtonCorner = Instance.new("UICorner")
-configDropdownButtonCorner.CornerRadius = UDim.new(0, 6)
-configDropdownButtonCorner.Parent = configDropdownButton
-
--- Список опций (скрыт по умолчанию)
-local configOptionsList = Instance.new("ScrollingFrame")
-configOptionsList.Parent = configDropdownFrame
-configOptionsList.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-configOptionsList.BorderSizePixel = 0
-configOptionsList.Position = UDim2.new(0, 15, 0, 76)
-configOptionsList.Size = UDim2.new(1, -30, 0, 0)
-configOptionsList.Visible = false
-configOptionsList.ZIndex = 10
-configOptionsList.CanvasSize = UDim2.new(0, 0, 0, 0)
-configOptionsList.ScrollBarThickness = 6
-
-local configOptionsCorner = Instance.new("UICorner")
-configOptionsCorner.CornerRadius = UDim.new(0, 6)
-configOptionsCorner.Parent = configOptionsList
-
-local configOptionsLayout = Instance.new("UIListLayout")
-configOptionsLayout.Parent = configOptionsList
-configOptionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function toggleConfigDropdown()
-    local isOpen = configOptionsList.Visible
-    
-    if isOpen then
-        configOptionsList.Visible = false
-        configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
-    else
-        RefreshConfigsDropdown()  -- Обновляем список при открытии
-        configOptionsList.Visible = true
-        configDropdownFrame.Size = UDim2.new(1, 0, 0, 80 + configOptionsList.Size.Y.Offset)
-    end
-end
-
--- Обработчик клика по кнопке
-configDropdownButton.MouseButton1Click:Connect(toggleConfigDropdown)
-
--- Закрытие dropdown при клике вне его области
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and configOptionsList.Visible then
-        local mousePosition = UserInputService:GetMouseLocation()
-        local framePosition = configDropdownFrame.AbsolutePosition
-        local frameSize = configDropdownFrame.AbsoluteSize
+-- Fly & Noclip logic
+RunService.Stepped:Connect(function()
+    if isFlying and LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart then
+        local HRP = LocalPlayer.Character.HumanoidRootPart
+        local camCFrame = Camera.CFrame
+        local velocity = Vector3.new(0,0,0)
         
-        -- Проверяем, находится ли клик вне dropdown
-        if mousePosition.X < framePosition.X or mousePosition.X > framePosition.X + frameSize.X or
-           mousePosition.Y < framePosition.Y or mousePosition.Y > framePosition.Y + frameSize.Y then
-            configOptionsList.Visible = false
-            configDropdownFrame.Size = UDim2.new(1, 0, 0, 80)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            velocity = velocity + camCFrame.LookVector * flySpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            velocity = velocity - camCFrame.LookVector * flySpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            velocity = velocity - camCFrame.RightVector * flySpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            velocity = velocity + camCFrame.RightVector * flySpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.E) then
+            velocity = velocity + Vector3.new(0, 1, 0) * flySpeed
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+            velocity = velocity - Vector3.new(0, 1, 0) * flySpeed
+        end
+        
+        HRP.CFrame = HRP.CFrame + velocity * RunService.Heartbeat:Wait()
+    end
+end)
+
+-- Aimbot & ESP logic
+RunService.Stepped:Connect(function()
+    -- Aimbot
+    if aimbotEnabled then
+        local target = getClosestTarget()
+        if target and target.Character then
+            local targetPart = target.Character:FindFirstChild(aimbotTargetPart)
+            if targetPart then
+                local targetCFrame = targetPart.CFrame
+                local aimCFrame = CFrame.new(Camera.CFrame.Position, targetCFrame.Position)
+                local rotation = CFrame.new(Camera.CFrame.Position, aimCFrame.Position)
+                
+                local smoothAmount = aimbotSmoothness/1000
+                Camera.CFrame = Camera.CFrame:lerp(aimCFrame, smoothAmount)
+            end
         end
     end
-end)
-
--- Кнопки управления конфигами
-CreateButton(ConfigManagementSection, "Сохранить конфиг", "Сохранить текущие настройки с введенным именем", function()
-    local configName = configTextBox.Text
-    if configName == "" then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Введите имя конфига!",
-            Duration = 3
-        })
-        return
+    
+    -- Draw FOV Circle
+    if showFOVCircle and not fovCircle then
+        fovCircle = Drawing.new("Circle")
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Radius = aimbotFOV
+        fovCircle.Thickness = 1
+        fovCircle.Filled = false
+        fovCircle.Visible = true
+        fovCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
     end
     
-    saveConfig(configName, false)
-    configTextBox.Text = ""
-    
-    -- Обновляем список конфигов
-    toggleConfigDropdown()
-    toggleConfigDropdown()
-end)
-
-CreateButton(ConfigManagementSection, "Загрузить выбранный конфиг", "Загрузить конфиг выбранный выше", function()
-    if selectedConfigName == "" or selectedConfigName == "Нет конфигов" then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Сначала выберите конфиг!",
-            Duration = 3
-        })
-        return
+    if showFOVCircle and fovCircle then
+        fovCircle.Position = Vector2.new(Mouse.X, Mouse.Y)
     end
     
-    loadConfig(selectedConfigName, false)
-end)
-
-CreateButton(ConfigManagementSection, "Удалить конфиг", "Удалить выбранный конфиг", function()
-    if selectedConfigName == "" or selectedConfigName == "Нет конфигов" then
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "SSLKin Uni Script",
-            Text = "Сначала выберите конфиг!",
-            Duration = 3
-        })
-        return
+    if not showFOVCircle and fovCircle then
+        fovCircle:Remove()
+        fovCircle = nil
     end
     
-    deleteConfig(selectedConfigName)
-    selectedConfigName = ""
-    configDropdownButton.Text = "Нажмите для выбора"
-    
-    -- Обновляем список конфигов
-    toggleConfigDropdown()
-    toggleConfigDropdown()
-    
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SSLKin Uni Script",
-        Text = "Конфиг '" .. selectedConfigName .. "' удален!",
-        Duration = 3
-    })
-end)
-
--- ВКЛАДКА РАЗНОЕ
-local UtilitySection = CreateSection(MiscTab, "🔧 Утилиты")
-
-CreateButton(UtilitySection, "Информация об игре", "Показывает данные о текущей игре", function()
-    local success, gameInfo = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-    end)
-    
-    if success then
-        local info = string.format(
-            "Игра: %s\nРежим: %s\nИгроков: %d\nВаш пинг: %d мс\nPlace ID: %d",
-            gameInfo.Name,
-            currentGame,
-            #Players:GetPlayers(),
-            math.floor(LocalPlayer:GetNetworkPing() * 1000),
-            game.PlaceId
-        )
-        
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "Информация об игре",
-            Text = info,
-            Duration = 10
-        })
-    else
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "Ошибка",
-            Text = "Не удалось получить информацию об игре",
-            Duration = 3
-        })
-    end
+    -- ESP
+    updateDrawingObjects()
 end)
 
 -- Системные функции
@@ -2584,9 +1763,6 @@ ShowGUI()
 -- Уведомление о загрузке
 game.StarterGui:SetCore("SendNotification", {
     Title = "SSLKin Uni Script",
-    Text = "Centaura Mode v3.1 загружен! Insert для открытия/закрытия",
+    Text = "Centaura Script загружен! Нажмите INSERT, чтобы открыть меню.",
     Duration = 5
 })
-
-print("SSLKin Uni Script v3.1 загружен в режиме Centaura!")
-print("Создано by SSLKin | Нажмите Insert для открытия/закрытия")
