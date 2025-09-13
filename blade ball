@@ -3,12 +3,15 @@
 -- Загружаем библиотеку Soluna
 local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
--- Создаем окно с помощью Soluna
-local Window = Soluna:CreateWindow({
-    Name = "Blade Ball Utilities",
-    Position = UDim2.new(0.5, -200, 0.5, -150),
-    Size = UDim2.new(0, 400, 0, 300),
-    Theme = "Dark"
+local Window = MacLib:Window({
+    Title = "Blade Ball",
+    Subtitle = "Free V1",
+    Size = UDim2.fromOffset(868, 650),
+    DragStyle = 1,
+    DisabledWindowControls = {},
+    ShowUserInfo = true,
+    Keybind = Enum.KeyCode.RightControl,
+    AcrylicBlur = true,
 })
 
 -- Создаем вкладки
