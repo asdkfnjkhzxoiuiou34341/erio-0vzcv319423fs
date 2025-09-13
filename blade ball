@@ -1,71 +1,56 @@
--- blade_ball_script.lua
-local Library = loadstring(game:HttpGet("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+-- Проверяем, доступна ли глобальная библиотека
+if _G.FluentLibrary then
+    local Library = _G.FluentLibrary
 
--- Создаем отдельное окно для Blade Ball
-local BladeBallWindow = Library:CreateWindow({
-    Title = "Blade Ball Utilities",
-    SubTitle = "Advanced Features",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(450, 350),
-    Acrylic = true,
-    Theme = "Darker"
-})
+    -- Создаем отдельное окно для Blade Ball
+    local BladeBallWindow = Library:CreateWindow({
+        Title = "Blade Ball Utilities",
+        SubTitle = "Advanced Features",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(450, 350),
+        Acrylic = true,
+        Theme = "Darker"
+    })
 
--- Основные функции
-local MainTab = BladeBallWindow:CreateTab({
-    Title = "Main",
-    Icon = "settings"
-})
+    -- Основные функции
+    local MainTab = BladeBallWindow:CreateTab({
+        Title = "Main",
+        Icon = "settings"
+    })
 
--- Авто-блокировка
-local AutoParry = false
-MainTab:CreateToggle("Auto Parry", {
-    Title = "Auto Parry",
-    Description = "Автоматически блокировать атаки",
-    Default = AutoParry,
-    Callback = function(Value)
-        AutoParry = Value
-        if Value then
-            Library:Notify({
-                Title = "Blade Ball",
-                Content = "Auto Parry включен",
-                Duration = 3
-            })
-            -- Здесь код для авто-блокировки
-        else
-            Library:Notify({
-                Title = "Blade Ball",
-                Content = "Auto Parry выключен",
-                Duration = 3
-            })
+    -- Авто-блокировка
+    local AutoParry = false
+    MainTab:CreateToggle("Auto Parry", {
+        Title = "Auto Parry",
+        Description = "Автоматически блокировать атаки",
+        Default = AutoParry,
+        Callback = function(Value)
+            AutoParry = Value
+            if Value then
+                Library:Notify({
+                    Title = "Blade Ball",
+                    Content = "Auto Parry включен",
+                    Duration = 3
+                })
+                -- Здесь код для авто-блокировки
+            else
+                Library:Notify({
+                    Title = "Blade Ball",
+                    Content = "Auto Parry выключен",
+                    Duration = 3
+                })
+            end
         end
-    end
-})
+    })
 
--- Визуальные функции
-local VisualsTab = BladeBallWindow:CreateTab({
-    Title = "Visuals",
-    Icon = "eye"
-})
+    -- Уведомление о загрузке
+    Library:Notify({
+        Title = "Blade Ball Utilities",
+        Content = "Меню загружено успешно!",
+        Duration = 5
+    })
 
-VisualsTab:CreateToggle("Ball ESP", {
-    Title = "Ball ESP",
-    Description = "Показывать позицию мяча",
-    Default = false,
-    Callback = function(Value)
-        if Value then
-            -- Включить ESP
-        else
-            -- Выключить ESP
-        end
-    end
-})
-
--- Уведомление о загрузке
-Library:Notify({
-    Title = "Blade Ball Utilities",
-    Content = "Меню загружено успешно!",
-    Duration = 5
-})
-
-return "Blade Ball script loaded successfully!"
+else
+    -- Если глобальной библиотеки нет, выводим ошибку
+    warn("Fluent Library not found! Make sure main hub is loaded.")
+end
