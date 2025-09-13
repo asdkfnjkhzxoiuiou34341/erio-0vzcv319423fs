@@ -1,56 +1,154 @@
--- Проверяем, доступна ли глобальная библиотека
-if _G.FluentLibrary then
-    local Library = _G.FluentLibrary
+-- blade_ball_script.lua
 
-    -- Создаем отдельное окно для Blade Ball
-    local BladeBallWindow = Library:CreateWindow({
-        Title = "Blade Ball Utilities",
-        SubTitle = "Advanced Features",
-        TabWidth = 160,
-        Size = UDim2.fromOffset(450, 350),
-        Acrylic = true,
-        Theme = "Darker"
-    })
+-- Загружаем библиотеку Soluna
+local Soluna = loadstring(game:HttpGet("https://raw.githubusercontent.com/EndOverdosing/Soluna-API/refs/heads/main/maclib.lua"))()
 
-    -- Основные функции
-    local MainTab = BladeBallWindow:CreateTab({
-        Title = "Main",
-        Icon = "settings"
-    })
+-- Создаем окно с помощью Soluna
+local Window = Soluna:CreateWindow({
+    Name = "Blade Ball Utilities",
+    Position = UDim2.new(0.5, -200, 0.5, -150),
+    Size = UDim2.new(0, 400, 0, 300),
+    Theme = "Dark"
+})
 
-    -- Авто-блокировка
-    local AutoParry = false
-    MainTab:CreateToggle("Auto Parry", {
-        Title = "Auto Parry",
-        Description = "Автоматически блокировать атаки",
-        Default = AutoParry,
-        Callback = function(Value)
-            AutoParry = Value
-            if Value then
-                Library:Notify({
-                    Title = "Blade Ball",
-                    Content = "Auto Parry включен",
-                    Duration = 3
-                })
-                -- Здесь код для авто-блокировки
-            else
-                Library:Notify({
-                    Title = "Blade Ball",
-                    Content = "Auto Parry выключен",
-                    Duration = 3
-                })
-            end
+-- Создаем вкладки
+local MainTab = Window:CreateTab("Main")
+local VisualsTab = Window:CreateTab("Visuals")
+local SettingsTab = Window:CreateTab("Settings")
+
+-- Основные функции
+MainTab:CreateSection("Combat")
+
+local AutoParry = false
+MainTab:CreateToggle({
+    Name = "Auto Parry",
+    Default = false,
+    Callback = function(Value)
+        AutoParry = Value
+        if Value then
+            Soluna:Notify("Auto Parry", "Авто-блокировка включена", 3)
+            -- Код для авто-блокировки
+        else
+            Soluna:Notify("Auto Parry", "Авто-блокировка выключена", 3)
         end
-    })
+    end
+})
 
-    -- Уведомление о загрузке
-    Library:Notify({
-        Title = "Blade Ball Utilities",
-        Content = "Меню загружено успешно!",
-        Duration = 5
-    })
+local PredictionEnabled = false
+MainTab:CreateToggle({
+    Name = "Ball Prediction",
+    Default = false,
+    Callback = function(Value)
+        PredictionEnabled = Value
+        -- Код для предсказания траектории мяча
+    end
+})
 
-else
-    -- Если глобальной библиотеки нет, выводим ошибку
-    warn("Fluent Library not found! Make sure main hub is loaded.")
+-- Настройки
+MainTab:CreateSection("Settings")
+
+local ParryTiming = 0.2
+MainTab:CreateSlider({
+    Name = "Parry Timing",
+    Default = 0.2,
+    Min = 0.1,
+    Max = 1.0,
+    Decimals = 2,
+    Callback = function(Value)
+        ParryTiming = Value
+    end
+})
+
+-- Визуальные функции
+VisualsTab:CreateSection("ESP")
+
+VisualsTab:CreateToggle({
+    Name = "Ball ESP",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            -- Включить ESP мяча
+        else
+            -- Выключить ESP мяча
+        end
+    end
+})
+
+VisualsTab:CreateToggle({
+    Name = "Player ESP",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            -- Включить ESP игроков
+        else
+            -- Выключить ESP игроков
+        end
+    end
+})
+
+-- Настройки интерфейса
+SettingsTab:CreateSection("UI Settings")
+
+SettingsTab:CreateKeybind({
+    Name = "Toggle UI Keybind",
+    Default = "RightShift",
+    Callback = function(Key)
+        Window:SetKeybind(Key)
+    end
+})
+
+SettingsTab:CreateButton({
+    Name = "Destroy UI",
+    Callback = function()
+        Window:Destroy()
+    end
+})
+
+-- Утилиты
+MainTab:CreateSection("Utilities")
+
+MainTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end
+})
+
+-- Функция для поиска мяча
+local function findBall()
+    -- Реализация поиска мяча в игре
+    -- Нужно адаптировать под конкретную игру
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj.Name:find("Ball") or obj.Name:find("Sphere") then
+            return obj
+        end
+    end
+    return nil
 end
+
+-- Основной цикл для авто-блокировки
+if AutoParry then
+    task.spawn(function()
+        while AutoParry and task.wait() do
+            pcall(function()
+                local ball = findBall()
+                local character = game.Players.LocalPlayer.Character
+                
+                if ball and character and character:FindFirstChild("HumanoidRootPart") then
+                    local distance = (ball.Position - character.HumanoidRootPart.Position).Magnitude
+                    
+                    if distance < 20 then -- Настрой расстояние срабатывания
+                        -- Код для блокировки (нажатие клавиши E)
+                        keypress(0x46) -- E key
+                        task.wait(ParryTiming)
+                        keyrelease(0x46)
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+Soluna:Notify("Blade Ball Utilities", "Меню загружено успешно!", 5)
+
+return "Blade Ball script loaded successfully!"
