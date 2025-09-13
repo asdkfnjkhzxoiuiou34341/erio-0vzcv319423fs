@@ -1,3 +1,6 @@
+-- blade_ball_script.lua
+local Library = loadstring(game:HttpGet("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+
 -- Создаем отдельное окно для Blade Ball
 local BladeBallWindow = Library:CreateWindow({
     Title = "Blade Ball Utilities",
