@@ -3,11 +3,11 @@
 -- Загружаем библиотеку MacLib
 local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
--- Создаем главное окно
+-- Создаем главное окно с увеличенным размером
 local Window = MacLib:Window({
     Title = "Blade Ball",
     Subtitle = "Free V1",
-    Size = UDim2.fromOffset(600, 400),
+    Size = UDim2.fromOffset(800, 550), -- Увеличили размер окна
     DragStyle = 1,
     DisabledWindowControls = {},
     ShowUserInfo = true,
@@ -18,20 +18,20 @@ local Window = MacLib:Window({
 -- Создаем группу вкладок
 local TabGroup = Window:TabGroup()
 
--- Создаем вкладки с правильным синтаксисом
+-- Создаем вкладки
 local CombatTab = TabGroup:Tab({
     Name = "Combat",
-    Image = "rbxassetid://6034818372" -- Используем правильный формат для изображения
+    Image = "rbxassetid://6034818372"
 })
 
 local VisualsTab = TabGroup:Tab({
     Name = "Visuals", 
-    Image = "rbxassetid://6034818398" -- Используем правильный формат для изображения
+    Image = "rbxassetid://6034818398"
 })
 
 local SettingsTab = TabGroup:Tab({
     Name = "Settings",
-    Image = "rbxassetid://6034818378" -- Используем правильный формат для изображения
+    Image = "rbxassetid://6034818378"
 })
 
 -- Создаем секции для вкладки Combat
@@ -68,21 +68,45 @@ local PredictionToggle = CombatSection:Toggle({
     Default = false,
     Callback = function(Value)
         PredictionEnabled = Value
+        if Value then
+            Window:Notify({
+                Title = "Ball Prediction",
+                Description = "Предсказание траектории включено",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Ball Prediction", 
+                Description = "Предсказание траектории выключено",
+                Style = "Cancel"
+            })
+        end
     end
 })
 
--- Слайдер для настройки времени блокировки
-local ParryTiming = 0.2
-local TimingSlider = CombatSection:Slider({
-    Name = "Parry Timing",
-    Default = 0.2,
-    Minimum = 0.1,
-    Maximum = 1.0,
-    Precision = 2,
+-- Слайдер для настройки силы предсказания
+local PredictionStrength = 50
+local PredictionSlider = CombatSection:Slider({
+    Name = "Prediction Strength",
+    Default = 50,
+    Minimum = 0,
+    Maximum = 100,
+    Precision = 0,
     Callback = function(Value)
-        ParryTiming = Value
+        PredictionStrength = Value
     end
 })
+
+-- Улучшаем внешний вид слайдера
+task.spawn(function()
+    wait(0.5) -- Даем время для инициализации
+    if PredictionSlider then
+        -- Увеличиваем ширину слайдера через изменение его свойств
+        PredictionSlider:SetStyle({
+            Size = UDim2.new(0.9, 0, 0, 30) -- Ширина 90% от родителя, высота 30px
+        })
+    end
+end)
 
 -- Создаем секции для вкладки Visuals
 local VisualsSection = VisualsTab:Section({
@@ -93,7 +117,19 @@ local BallESPToggle = VisualsSection:Toggle({
     Name = "Ball ESP",
     Default = false,
     Callback = function(Value)
-        -- Включить/выключить ESP мяча
+        if Value then
+            Window:Notify({
+                Title = "Ball ESP",
+                Description = "ESP мяча включено",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Ball ESP", 
+                Description = "ESP мяча выключено",
+                Style = "Cancel"
+            })
+        end
     end
 })
 
@@ -101,7 +137,19 @@ local PlayerESPToggle = VisualsSection:Toggle({
     Name = "Player ESP",
     Default = false,
     Callback = function(Value)
-        -- Включить/выключить ESP игроков
+        if Value then
+            Window:Notify({
+                Title = "Player ESP",
+                Description = "ESP игроков включено",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Player ESP", 
+                Description = "ESP игроков выключено",
+                Style = "Cancel"
+            })
+        end
     end
 })
 
@@ -112,7 +160,7 @@ local SettingsSection = SettingsTab:Section({
 
 local KeybindButton = SettingsSection:Keybind({
     Name = "Toggle UI Keybind",
-    Default = Enum.KeyCode.RightShift, -- Используем Enum вместо строки
+    Default = Enum.KeyCode.RightShift,
     Callback = function(Key)
         Window:SetKeybind(Key)
     end
@@ -142,21 +190,48 @@ local function findBall()
     return nil
 end
 
+-- Функция для предсказания движения мяча
+local function predictBallMovement(ball, strength)
+    if not ball or not ball:FindFirstChild("Velocity") then
+        return nil
+    end
+    
+    -- Простое предсказание на основе текущей скорости
+    -- Сила предсказания (strength) влияет на "агрессивность" предсказания
+    local predictionFactor = strength / 100 -- Преобразуем 0-100 в 0.0-1.0
+    
+    -- Возвращаем предсказанную позицию
+    if ball.Velocity.Magnitude > 0 then
+        local direction = ball.Velocity.Unit
+        local speed = ball.Velocity.Magnitude
+        local prediction = ball.Position + (direction * speed * predictionFactor * 0.5)
+        return prediction
+    end
+    
+    return ball.Position
+end
+
 -- Основной цикл для авто-блокировки
 task.spawn(function()
-    while task.wait() do
+    while task.wait(0.1) do
         if AutoParry then
             pcall(function()
                 local ball = findBall()
                 local character = game.Players.LocalPlayer.Character
                 
                 if ball and character and character:FindFirstChild("HumanoidRootPart") then
-                    local distance = (ball.Position - character.HumanoidRootPart.Position).Magnitude
+                    -- Используем предсказание, если включено
+                    local targetPosition = ball.Position
+                    if PredictionEnabled then
+                        targetPosition = predictBallMovement(ball, PredictionStrength) or ball.Position
+                    end
                     
-                    if distance < 20 then
+                    local distance = (targetPosition - character.HumanoidRootPart.Position).Magnitude
+                    
+                    if distance < 25 then -- Настройка дистанции срабатывания
                         -- Код для блокировки
                         keypress(0x45) -- E key
-                        task.wait(ParryTiming)
+                        task.wait(0.2) -- Фиксированное время блокировки
                         keyrelease(0x45)
                     end
                 end
