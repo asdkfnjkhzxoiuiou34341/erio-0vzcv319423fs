@@ -1,7 +1,7 @@
 -- blade_ball_script.lua
 
 -- Загружаем библиотеку Soluna
-local Soluna = loadstring(game:HttpGet("https://raw.githubusercontent.com/EndOverdosing/Soluna-API/refs/heads/main/maclib.lua"))()
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
 
 -- Создаем окно с помощью Soluna
 local Window = Soluna:CreateWindow({
