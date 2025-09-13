@@ -7,7 +7,7 @@ local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/re
 local Window = MacLib:Window({
     Title = "Blade Ball",
     Subtitle = "Free V1",
-    Size = UDim2.fromOffset(868, 650),
+    Size = UDim2.fromOffset(600, 400),
     DragStyle = 1,
     DisabledWindowControls = {},
     ShowUserInfo = true,
@@ -18,20 +18,20 @@ local Window = MacLib:Window({
 -- Создаем группу вкладок
 local TabGroup = Window:TabGroup()
 
--- Создаем вкладки согласно инструкции
+-- Создаем вкладки с правильным синтаксисом
 local CombatTab = TabGroup:Tab({
     Name = "Combat",
-    Image = "swords"
+    Image = "rbxassetid://6034818372" -- Используем правильный формат для изображения
 })
 
 local VisualsTab = TabGroup:Tab({
-    Name = "Visuals",
-    Image = "eye"
+    Name = "Visuals", 
+    Image = "rbxassetid://6034818398" -- Используем правильный формат для изображения
 })
 
 local SettingsTab = TabGroup:Tab({
     Name = "Settings",
-    Image = "settings"
+    Image = "rbxassetid://6034818378" -- Используем правильный формат для изображения
 })
 
 -- Создаем секции для вкладки Combat
@@ -41,7 +41,7 @@ local CombatSection = CombatTab:Section({
 
 -- Добавляем элементы в секцию Combat
 local AutoParry = false
-CombatSection:Toggle({
+local AutoParryToggle = CombatSection:Toggle({
     Name = "Auto Parry",
     Default = false,
     Callback = function(Value)
@@ -49,29 +49,31 @@ CombatSection:Toggle({
         if Value then
             Window:Notify({
                 Title = "Auto Parry",
-                Description = "Авто-блокировка включена"
+                Description = "Авто-блокировка включена",
+                Style = "Confirm"
             })
         else
             Window:Notify({
-                Title = "Auto Parry",
-                Description = "Авто-блокировка выключена"
+                Title = "Auto Parry", 
+                Description = "Авто-блокировка выключена",
+                Style = "Cancel"
             })
         end
     end
 })
 
 local PredictionEnabled = false
-CombatSection:Toggle({
+local PredictionToggle = CombatSection:Toggle({
     Name = "Ball Prediction",
     Default = false,
     Callback = function(Value)
         PredictionEnabled = Value
-        -- Код для предсказания траектории мяча
     end
 })
 
 -- Слайдер для настройки времени блокировки
-CombatSection:Slider({
+local ParryTiming = 0.2
+local TimingSlider = CombatSection:Slider({
     Name = "Parry Timing",
     Default = 0.2,
     Minimum = 0.1,
@@ -82,57 +84,48 @@ CombatSection:Slider({
     end
 })
 
--- Секция для визуальных эффектов
+-- Создаем секции для вкладки Visuals
 local VisualsSection = VisualsTab:Section({
     Side = "Left"
 })
 
-VisualsSection:Toggle({
+local BallESPToggle = VisualsSection:Toggle({
     Name = "Ball ESP",
     Default = false,
     Callback = function(Value)
-        if Value then
-            -- Включить ESP мяча
-        else
-            -- Выключить ESP мяча
-        end
+        -- Включить/выключить ESP мяча
     end
 })
 
-VisualsSection:Toggle({
+local PlayerESPToggle = VisualsSection:Toggle({
     Name = "Player ESP",
     Default = false,
     Callback = function(Value)
-        if Value then
-            -- Включить ESP игроков
-        else
-            -- Выключить ESP игроков
-        end
+        -- Включить/выключить ESP игроков
     end
 })
 
--- Секция для настроек
+-- Создаем секции для вкладки Settings
 local SettingsSection = SettingsTab:Section({
     Side = "Left"
 })
 
-SettingsSection:Keybind({
+local KeybindButton = SettingsSection:Keybind({
     Name = "Toggle UI Keybind",
-    Default = "RightShift",
+    Default = Enum.KeyCode.RightShift, -- Используем Enum вместо строки
     Callback = function(Key)
         Window:SetKeybind(Key)
     end
 })
 
-SettingsSection:Button({
+local DestroyButton = SettingsSection:Button({
     Name = "Destroy UI",
     Callback = function()
         Window:Destroy()
     end
 })
 
--- Утилиты
-SettingsSection:Button({
+local RejoinButton = SettingsSection:Button({
     Name = "Rejoin Server",
     Callback = function()
         game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
@@ -163,7 +156,7 @@ task.spawn(function()
                     if distance < 20 then
                         -- Код для блокировки
                         keypress(0x45) -- E key
-                        task.wait(ParryTiming or 0.2)
+                        task.wait(ParryTiming)
                         keyrelease(0x45)
                     end
                 end
@@ -174,5 +167,6 @@ end)
 
 Window:Notify({
     Title = "Blade Ball Utilities",
-    Description = "Меню загружено успешно!"
+    Description = "Меню загружено успешно!",
+    Style = "Confirm"
 })
