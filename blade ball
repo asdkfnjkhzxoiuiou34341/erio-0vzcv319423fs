@@ -14,10 +14,12 @@ local Window = MacLib:Window({
     AcrylicBlur = true,
 })
 
--- Создаем вкладки
-local MainTab = Window:CreateTab("Main")
-local VisualsTab = Window:CreateTab("Visuals")
-local SettingsTab = Window:CreateTab("Settings")
+local TabGroup = Window:TabGroup()
+
+local Tab = TabGroup:Tab1({
+  Name = "Combat"
+  Image = "swords"
+})
 
 -- Основные функции
 MainTab:CreateSection("Combat")
