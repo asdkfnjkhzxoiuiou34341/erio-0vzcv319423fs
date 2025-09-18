@@ -1,13 +1,1003 @@
 -- blade_ball_script.lua
 
--- Загружаем библиотеку MacLib
-local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+-- Загружаем библиотеку MacLiba
+local MacLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/asdkfnjkhzxoiuiou34341/erio-0vzcv319423fs/refs/heads/main/maclib"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/SaveManager.luau"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
+
+-- Логика обнаружения мяча
+local Debug = true
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local Player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 9e9)
+local Balls = workspace:WaitForChild("Balls", 9e9)
+
+-- Переменные для автопарри
+local AutoParry = false
+local ParryDistance = 10
+local HasParried = false
+
+-- Переменные для антиспам
+local AntiSpamEnabled = false
+local NormalHighlightTime = 0.5 -- Максимальное время highlight для включения спама (секунды)
+local IsSpamming = false
+local SpamConnection = nil
+local SpamStartTime = 0
+local SpamSensitivity = 1 -- Чувствительность спама - при превышении этого времени highlight спам останавливается (секунды)
+
+-- Переменные для Aerodynamic Slash Parry
+local AerodynamicSlashParry = false
+local AerodynamicSlashActive = {}
+local AerodynamicSlashDelay = 0.5 -- Дополнительная задержка при Aerodynamic Slash
+
+-- Переменные для отслеживания highlight
+local HighlightStartTime = 0
+local LastHighlightDuration = 0
+local IsHighlightActive = false
+local HighlightConnection = nil
+
+-- Переменные для Auto Curve
+local AutoCurve = false
+local CurveDirection = "Random"
+local OriginalCFrame = nil
+
+-- Переменные для Training Ball Focus
+local TrainingBallFocus = false
+
+-- Переменные для Auto Target
+local AutoTarget = false
+local TargetPlayer = nil
+local TargetPlayerDropdown = nil
+local PlayerDropdown = nil
+
+-- Переменные для Parry Zone
+local ParryZone = false
+local ParryZoneSphere = nil
+
+-- Переменные для Movement
+local PlayerSpeed = false
+local SpeedValue = 16
+local InfiniteJump = false
+local Spin = false
+local SpinSpeed = 10
+local SpinConnection = nil
+local StayInTheSky = false
+local SkyHeight = 50
+local SkyConnection = nil
+
+-- Переменные для Follow функций
+local FollowBall = false
+local FollowPlayer = false
+local FollowTarget = false
+local FollowDistance = 10
+local SelectedPlayer = nil
+local FollowConnection = nil
+local BallApproaching = false
+
+-- Переменные для Random Walk
+local RandomWalk = false
+local RandomWalkConnection = nil
+
+-- Функции обнаружения мяча
+local function debugPrint(...)
+    if Debug then
+        warn(...)
+    end
+end
+
+local function VerifyBall(Ball)
+    if typeof(Ball) == "Instance" and Ball:IsA("BasePart") and Ball:IsDescendantOf(Balls) and Ball:GetAttribute("realBall") == true then
+        return true
+    end
+    return false
+end
+
+local function IsTarget()
+    return (Player.Character and Player.Character:FindFirstChild("Highlight"))
+end
+
+local function Parry()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+end
+
+local function StartSpam()
+    if IsSpamming then return end
+    IsSpamming = true
+    SpamStartTime = tick()
+    debugPrint("Автоспам запущен!")
+    
+    SpamConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if IsSpamming then
+            Parry()
+        end
+    end)
+end
+
+local function StopSpam(reason)
+    debugPrint(`Попытка остановки спама. IsSpamming: {IsSpamming}, SpamConnection: {SpamConnection ~= nil}`)
+    
+    IsSpamming = false
+    if SpamConnection then
+        SpamConnection:Disconnect()
+        SpamConnection = nil
+    end
+    debugPrint(`Автоспам остановлен! Причина: {reason or "неизвестна"}`)
+end
+
+-- Функции для Aerodynamic Slash Parry
+local function CheckAerodynamicSlash(playerName)
+    if not AerodynamicSlashParry then return false end
+    
+    local aliveFolder = workspace:FindFirstChild("Alive")
+    if not aliveFolder then return false end
+    
+    local playerChar = aliveFolder:FindFirstChild(playerName)
+    if not playerChar then return false end
+    
+    local abilities = playerChar:FindFirstChild("Abilities")
+    if not abilities then return false end
+    
+    local aerodynamicSlash = abilities:FindFirstChild("Aerodynamic Slash")
+    if not aerodynamicSlash then return false end
+    
+    local behavior = aerodynamicSlash:FindFirstChild("Behavior")
+    if not behavior then return false end
+    
+    return behavior:GetAttribute("enabled") == true
+end
+
+local function MonitorAerodynamicSlash()
+    if not AerodynamicSlashParry then return end
+    
+    -- Мониторим анимации всех игроков
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                local animator = humanoid:FindFirstChild("Animator")
+                if animator then
+                    animator.AnimationPlayed:Connect(function(animationTrack)
+                        if animationTrack.Animation.AnimationId == "rbxassetid://14723187666" then
+                            -- Нажимаем кнопку Q при обнаружении Aerodynamic Slash
+                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+                            debugPrint(`Aerodynamic Slash обнаружен у {player.Name} - нажата кнопка Q`)
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end
+
+local function IsAerodynamicSlashActive(playerName)
+    if not AerodynamicSlashParry then return false end
+    local endTime = AerodynamicSlashActive[playerName]
+    if endTime and tick() < endTime then
+        return true
+    end
+    AerodynamicSlashActive[playerName] = nil
+    return false
+end
+
+-- Функция для мониторинга highlight
+local function StartHighlightMonitoring()
+    if not Player.Character then return end
+    
+    local function CheckHighlight()
+        local hasHighlight = IsTarget()
+        
+        if hasHighlight and not IsHighlightActive then
+            -- Highlight появился
+            IsHighlightActive = true
+            HighlightStartTime = tick()
+            debugPrint("Highlight появился")
+        elseif not hasHighlight and IsHighlightActive then
+            -- Highlight исчез
+            IsHighlightActive = false
+            if HighlightStartTime and HighlightStartTime > 0 then
+                LastHighlightDuration = tick() - HighlightStartTime
+                debugPrint(`Highlight исчез. Длительность: {LastHighlightDuration} сек`)
+            else
+                LastHighlightDuration = 0
+                debugPrint("Highlight исчез (нет времени начала)")
+                return
+            end
+            
+            -- Проверяем нужно ли включить анти-спам (время от 0.1 до 0.5 секунд)
+            if AntiSpamEnabled and LastHighlightDuration >= 0.1 and LastHighlightDuration <= NormalHighlightTime then
+                if not IsSpamming then
+                    StartSpam()
+                    debugPrint(`Быстрый цикл обнаружен! Время: {LastHighlightDuration} (0.1-{NormalHighlightTime})`)
+                else
+                    debugPrint(`Продолжаем спам - быстрый цикл: {LastHighlightDuration}`)
+                end
+            end
+            
+            -- Если highlight превысил SpamSensitivity - завершаем спам
+            if IsSpamming and LastHighlightDuration > SpamSensitivity then
+                StopSpam(`превышена чувствительность: {LastHighlightDuration} > {SpamSensitivity} сек`)
+            end
+        end
+    end
+    
+    -- Проверяем каждый кадр
+    if HighlightConnection then
+        HighlightConnection:Disconnect()
+    end
+    
+    HighlightConnection = game:GetService("RunService").Heartbeat:Connect(CheckHighlight)
+end
+
+-- Функция для остановки мониторинга highlight
+local function StopHighlightMonitoring()
+    if HighlightConnection then
+        HighlightConnection:Disconnect()
+        HighlightConnection = nil
+    end
+    IsHighlightActive = false
+end
+
+local function IsInLobby()
+    return workspace:FindFirstChild("Lobby") ~= nil
+end
+
+local function IsPlayerDead()
+    local deadFolder = workspace:FindFirstChild("Dead")
+    if not deadFolder then return false end
+    return deadFolder:FindFirstChild(Player.Name) ~= nil
+end
+
+local function StopPlayerMovement()
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") and Player.Character:FindFirstChild("HumanoidRootPart") then
+        Player.Character.Humanoid:MoveTo(Player.Character.HumanoidRootPart.Position)
+        Player.Character.Humanoid.PlatformStand = true
+        wait(0.1)
+        Player.Character.Humanoid.PlatformStand = false
+    end
+end
+
+-- Функции для работы с серверами
+local function RejoinCurrentServer()
+    game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+end
+
+local function ServerHop()
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService = game:GetService("HttpService")
+    
+    local success, servers = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+    end)
+    
+    if success and servers and servers.data then
+        local availableServers = {}
+        for _, server in pairs(servers.data) do
+            if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                table.insert(availableServers, server.id)
+            end
+        end
+        
+        if #availableServers > 0 then
+            local randomServer = availableServers[math.random(1, #availableServers)]
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, Player)
+        else
+            TeleportService:Teleport(game.PlaceId, Player)
+        end
+    else
+        TeleportService:Teleport(game.PlaceId, Player)
+    end
+end
+
+-- Настройки по умолчанию
+local DefaultSettings = {
+    AutoParry = false,
+    ParryDistance = 10,
+    AntiSpamEnabled = false,
+    NormalHighlightTime = 0.5,
+    AerodynamicSlashParry = false,
+    AutoCurve = false,
+    CurveDirection = "Random",
+    TrainingBallFocus = false,
+    AutoTarget = false,
+    TargetPlayer = nil,
+    ParryZone = false,
+    PlayerSpeed = false,
+    SpeedValue = 16,
+    InfiniteJump = false,
+    Spin = false,
+    SpinSpeed = 10,
+    StayInTheSky = false,
+    SkyHeight = 50,
+    FollowBall = false,
+    FollowPlayer = false,
+    FollowTarget = false,
+    FollowDistance = 10,
+    SelectedPlayer = nil,
+    RandomWalk = false
+}
+
+-- Загрузка сохраненных настроек
+local Settings = {}
+local function loadSettings()
+    local success, saved = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(readfile("BladeBall_Settings.json"))
+    end)
+    if success and saved then
+        for key, value in pairs(DefaultSettings) do
+            Settings[key] = saved[key] ~= nil and saved[key] or value
+        end
+    else
+        Settings = DefaultSettings
+    end
+end
+
+local function saveSettings()
+    writefile("BladeBall_Settings.json", game:GetService("HttpService"):JSONEncode(Settings))
+end
+
+pcall(loadSettings)
+
+-- Инициализация переменных из настроек
+AutoParry = Settings.AutoParry or DefaultSettings.AutoParry
+ParryDistance = Settings.ParryDistance or DefaultSettings.ParryDistance
+AntiSpamEnabled = Settings.AntiSpamEnabled or DefaultSettings.AntiSpamEnabled
+NormalHighlightTime = Settings.NormalHighlightTime or DefaultSettings.NormalHighlightTime
+AerodynamicSlashParry = Settings.AerodynamicSlashParry or DefaultSettings.AerodynamicSlashParry
+AutoCurve = Settings.AutoCurve or DefaultSettings.AutoCurve
+CurveDirection = Settings.CurveDirection or DefaultSettings.CurveDirection
+TrainingBallFocus = Settings.TrainingBallFocus or DefaultSettings.TrainingBallFocus
+AutoTarget = Settings.AutoTarget or DefaultSettings.AutoTarget
+TargetPlayer = Settings.TargetPlayer or DefaultSettings.TargetPlayer
+ParryZone = Settings.ParryZone or DefaultSettings.ParryZone
+PlayerSpeed = Settings.PlayerSpeed or DefaultSettings.PlayerSpeed
+SpeedValue = Settings.SpeedValue or DefaultSettings.SpeedValue
+InfiniteJump = Settings.InfiniteJump or DefaultSettings.InfiniteJump
+Spin = Settings.Spin or DefaultSettings.Spin
+SpinSpeed = Settings.SpinSpeed or DefaultSettings.SpinSpeed
+StayInTheSky = Settings.StayInTheSky or DefaultSettings.StayInTheSky
+SkyHeight = Settings.SkyHeight or DefaultSettings.SkyHeight
+FollowBall = Settings.FollowBall or DefaultSettings.FollowBall
+FollowPlayer = Settings.FollowPlayer or DefaultSettings.FollowPlayer
+FollowTarget = Settings.FollowTarget or DefaultSettings.FollowTarget
+FollowDistance = Settings.FollowDistance or DefaultSettings.FollowDistance
+SelectedPlayer = Settings.SelectedPlayer or DefaultSettings.SelectedPlayer
+RandomWalk = Settings.RandomWalk or DefaultSettings.RandomWalk
+
+-- Функция для проверки тренировочного мяча
+local function VerifyTrainingBall(Ball)
+    if typeof(Ball) == "Instance" and Ball:IsA("BasePart") and Ball:IsDescendantOf(Balls) and Ball:GetAttribute("realBall") ~= true then
+        return true
+    end
+end
+
+local function AimDirection(direction)
+    if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    OriginalCFrame = workspace.CurrentCamera.CFrame
+    local playerPosition = Player.Character.HumanoidRootPart.Position
+    local cameraPosition = workspace.CurrentCamera.CFrame.Position
+    local targetPosition
+    
+    if direction == "Random" then
+        local directions = {"Back", "Left", "Right", "Up", "Straight"}
+        direction = directions[math.random(1, #directions)]
+    end
+    
+    if direction == "Back" then
+        targetPosition = playerPosition - Player.Character.HumanoidRootPart.CFrame.LookVector * 90
+    elseif direction == "Left" then
+        targetPosition = playerPosition - Player.Character.HumanoidRootPart.CFrame.RightVector * 90
+    elseif direction == "Right" then
+        targetPosition = playerPosition + Player.Character.HumanoidRootPart.CFrame.RightVector * 90
+    elseif direction == "Up" then
+        targetPosition = playerPosition + Vector3.new(0, 90, 0)
+    elseif direction == "Straight" then
+        targetPosition = playerPosition + Player.Character.HumanoidRootPart.CFrame.LookVector * 90
+    end
+    
+    workspace.CurrentCamera.CFrame = CFrame.lookAt(cameraPosition, targetPosition)
+    debugPrint(`Направление: {direction}`)
+end
+
+local function RestoreCamera()
+    if OriginalCFrame then
+        workspace.CurrentCamera.CFrame = OriginalCFrame
+        OriginalCFrame = nil
+        debugPrint("Камера восстановлена")
+    end
+end
+
+-- Функция для Auto Target
+local function FindTargetPlayer(targetPlayerName)
+    if not targetPlayerName then return nil end
+    
+    -- Поиск по Name
+    local targetPlayer = Players:FindFirstChild(targetPlayerName)
+    if targetPlayer then return targetPlayer end
+    
+    -- Поиск по DisplayName
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.DisplayName == targetPlayerName or player.Name == targetPlayerName then
+            return player
+        end
+    end
+    
+    return nil
+end
+
+local function AimAtPlayer(targetPlayerName)
+    if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then 
+        debugPrint("Нет персонажа для нацеливания")
+        return false
+    end
+    
+    local targetPlayer = FindTargetPlayer(targetPlayerName)
+    if not targetPlayer then
+        debugPrint(`Игрок {targetPlayerName} не найден`)
+        return false
+    end
+    
+    if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        debugPrint(`Персонаж {targetPlayerName} не спавнился`)
+        return false
+    end
+    
+    OriginalCFrame = workspace.CurrentCamera.CFrame
+    local cameraPosition = workspace.CurrentCamera.CFrame.Position
+    local targetPosition = targetPlayer.Character.HumanoidRootPart.Position
+    
+    workspace.CurrentCamera.CFrame = CFrame.lookAt(cameraPosition, targetPosition)
+    debugPrint(`Нацеливание на игрока: {targetPlayerName} успешно`)
+    return true
+end
+
+-- Функции для Parry Zone
+local function CreateParryZone()
+    if ParryZoneSphere then return end
+    
+    ParryZoneSphere = Instance.new("Part")
+    ParryZoneSphere.Name = "ParryZone"
+    ParryZoneSphere.Shape = Enum.PartType.Ball
+    ParryZoneSphere.Material = Enum.Material.ForceField
+    ParryZoneSphere.BrickColor = BrickColor.new("White")
+    ParryZoneSphere.Transparency = 0.8
+    ParryZoneSphere.CanCollide = false
+    ParryZoneSphere.Anchored = true
+    ParryZoneSphere.Size = Vector3.new(ParryDistance * 2, ParryDistance * 2, ParryDistance * 2)
+    ParryZoneSphere.Parent = workspace
+end
+
+local function UpdateParryZone()
+    if ParryZoneSphere and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        ParryZoneSphere.Position = Player.Character.HumanoidRootPart.Position
+        ParryZoneSphere.Size = Vector3.new(ParryDistance * 2, ParryDistance * 2, ParryDistance * 2)
+    end
+end
+
+local function RemoveParryZone()
+    if ParryZoneSphere then
+        ParryZoneSphere:Destroy()
+        ParryZoneSphere = nil
+    end
+end
+
+
+
+-- Функции для Movement
+local function SetPlayerSpeed(enabled)
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        if enabled then
+            Player.Character.Humanoid.WalkSpeed = SpeedValue
+        else
+            Player.Character.Humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+local function SetInfiniteJump(enabled)
+    if enabled then
+        UserInputService.JumpRequest:Connect(function()
+            if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+                Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end
+
+local function StartSpin()
+    if SpinConnection then return end
+    SpinConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            Player.Character.HumanoidRootPart.CFrame = Player.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(SpinSpeed), 0)
+        end
+    end)
+end
+
+local function StopSpin()
+    if SpinConnection then
+        SpinConnection:Disconnect()
+        SpinConnection = nil
+    end
+end
+
+local function StartStayInTheSky()
+    if SkyConnection then return end
+    
+    SkyConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not Player.Character then return end
+        
+        -- Проверяем находится ли персонаж в папке Alive
+        local aliveFolder = workspace:FindFirstChild("Alive")
+        if not aliveFolder or not aliveFolder:FindFirstChild(Player.Name) then return end
+        
+        local rootPart = Player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = Player.Character:FindFirstChild("Humanoid")
+        if not rootPart or not humanoid then return end
+        
+        if rootPart.Position.Y < SkyHeight then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
+local function StopStayInTheSky()
+    if SkyConnection then
+        SkyConnection:Disconnect()
+        SkyConnection = nil
+    end
+end
+
+-- Функции для Follow системы
+local function GetAlivePlayers()
+    local playersList = {}
+    local aliveFolder = workspace:FindFirstChild("Alive")
+    
+    if aliveFolder then
+        -- Берем только игроков из папки Alive
+        for _, character in pairs(aliveFolder:GetChildren()) do
+            local player = Players:FindFirstChild(character.Name)
+            if player and player ~= Player then
+                table.insert(playersList, player.Name)
+            end
+        end
+    else
+        -- Если папки Alive нет, берем всех игроков кроме мертвых
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Player then
+                local deadFolder = workspace:FindFirstChild("Dead")
+                local isDead = deadFolder and deadFolder:FindFirstChild(player.Name)
+                if not isDead then
+                    table.insert(playersList, player.Name)
+                end
+            end
+        end
+    end
+    
+    return playersList
+end
+
+local function GetPlayersList()
+    return GetAlivePlayers()
+end
+
+-- Функция для обновления dropdown списков
+local function UpdateDropdowns()
+    local alivePlayers = GetAlivePlayers()
+    
+    if TargetPlayerDropdown then
+        -- Проверяем если выбранный игрок больше не в списке живых
+        local targetStillAlive = false
+        if TargetPlayer then
+            for _, playerName in pairs(alivePlayers) do
+                if playerName == TargetPlayer then
+                    targetStillAlive = true
+                    break
+                end
+            end
+            if not targetStillAlive then
+                AutoTarget = false
+                TargetPlayer = nil
+                Settings.AutoTarget = false
+                Settings.TargetPlayer = nil
+                saveSettings()
+                debugPrint(`Target Player мертв - функция отключена`)
+            end
+        end
+        
+        -- Обновляем список и восстанавливаем выбор
+        TargetPlayerDropdown:ClearOptions()
+        TargetPlayerDropdown:InsertOptions(alivePlayers)
+        if TargetPlayer and targetStillAlive then
+            TargetPlayerDropdown:UpdateSelection(TargetPlayer)
+        end
+    end
+    
+    if PlayerDropdown then
+        -- Проверяем если выбранный игрок больше не в списке живых
+        local selectedStillAlive = false
+        if SelectedPlayer then
+            for _, playerName in pairs(alivePlayers) do
+                if playerName == SelectedPlayer then
+                    selectedStillAlive = true
+                    break
+                end
+            end
+            if not selectedStillAlive then
+                FollowPlayer = false
+                SelectedPlayer = nil
+                Settings.FollowPlayer = false
+                Settings.SelectedPlayer = nil
+                saveSettings()
+                debugPrint(`Selected Player мертв - функция отключена`)
+            end
+        end
+        
+        -- Обновляем список и восстанавливаем выбор
+        PlayerDropdown:ClearOptions()
+        PlayerDropdown:InsertOptions(alivePlayers)
+        if SelectedPlayer and selectedStillAlive then
+            PlayerDropdown:UpdateSelection(SelectedPlayer)
+        end
+    end
+end
+
+local function GetBall()
+    for _, ball in pairs(Balls:GetChildren()) do
+        if VerifyBall(ball) then
+            return ball
+        end
+    end
+    return nil
+end
+
+local function GetTargetPlayer()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChild("Highlight") then
+            return player
+        end
+    end
+    return nil
+end
+
+local function IsBallApproaching()
+    local ball = GetBall()
+    if not ball or not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local distance = (ball.Position - Player.Character.HumanoidRootPart.Position).Magnitude
+    return distance <= ParryDistance * 1.5 and IsTarget()
+end
+
+local function MoveToPosition(targetPosition)
+    if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") or not Player.Character:FindFirstChild("Humanoid") then
+        return
+    end
+    
+    local humanoid = Player.Character.Humanoid
+    local rootPart = Player.Character.HumanoidRootPart
+    local currentPosition = rootPart.Position
+    local distance = (targetPosition - currentPosition).Magnitude
+    
+    if distance > FollowDistance then
+        humanoid:MoveTo(targetPosition)
+    elseif distance < FollowDistance * 0.5 then
+        local direction = (currentPosition - targetPosition).Unit
+        local newPosition = targetPosition + direction * FollowDistance
+        humanoid:MoveTo(newPosition)
+    end
+end
+
+local function StartFollow()
+    if FollowConnection then return end
+    
+    FollowConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        -- Не работаем в лобби или если мертвы
+        if IsInLobby() or IsPlayerDead() then return end
+        
+        -- Останавливаемся только если на нас есть highlight
+        if IsTarget() and IsBallApproaching() then
+            if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+                Player.Character.Humanoid:MoveTo(Player.Character.HumanoidRootPart.Position)
+            end
+            return
+        end
+        
+        -- Продолжаем движение если нет highlight
+        if not IsTarget() then
+            if FollowBall then
+                local ball = GetBall()
+                if ball then
+                    MoveToPosition(ball.Position)
+                end
+            elseif FollowPlayer and SelectedPlayer then
+                local targetPlayer = Players:FindFirstChild(SelectedPlayer)
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    MoveToPosition(targetPlayer.Character.HumanoidRootPart.Position)
+                end
+            elseif FollowTarget then
+                local targetPlayer = GetTargetPlayer()
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    MoveToPosition(targetPlayer.Character.HumanoidRootPart.Position)
+                end
+            end
+        end
+    end)
+end
+
+local function StopFollow()
+    if FollowConnection then
+        FollowConnection:Disconnect()
+        FollowConnection = nil
+    end
+end
+
+-- Функции для Random Walk
+local RandomWalkTarget = nil
+local RandomWalkTimer = 0
+
+local function StartRandomWalk()
+    if RandomWalkConnection then return end
+    
+    RandomWalkConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        -- Не работаем если мертвы
+        if IsPlayerDead() then return end
+        
+        if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") or not Player.Character:FindFirstChild("Humanoid") then
+            return
+        end
+        
+        local humanoid = Player.Character.Humanoid
+        local rootPart = Player.Character.HumanoidRootPart
+        
+        -- Останавливаемся только если на нас есть highlight
+        if IsTarget() then
+            humanoid:MoveTo(rootPart.Position)
+            return
+        end
+        
+        RandomWalkTimer = RandomWalkTimer + 1
+        
+        -- Новая цель каждые 60 фреймов (примерно 1 секунда) или если дошли до цели
+        if RandomWalkTimer >= 60 or not RandomWalkTarget or (RandomWalkTarget - rootPart.Position).Magnitude < 5 then
+            local randomX = rootPart.Position.X + math.random(-30, 30)
+            local randomZ = rootPart.Position.Z + math.random(-30, 30)
+            RandomWalkTarget = Vector3.new(randomX, rootPart.Position.Y, randomZ)
+            RandomWalkTimer = 0
+        end
+        
+        -- Непрерывное движение к цели
+        if RandomWalkTarget then
+            humanoid:MoveTo(RandomWalkTarget)
+        end
+    end)
+end
+
+local function StopRandomWalk()
+    if RandomWalkConnection then
+        RandomWalkConnection:Disconnect()
+        RandomWalkConnection = nil
+    end
+    RandomWalkTarget = nil
+    RandomWalkTimer = 0
+end
+
+-- Применение сохраненных настроек при запуске
+local function ApplyStartupSettings()
+    -- Visuals
+    if ParryZone then
+        CreateParryZone()
+    end
+    
+    -- Movement
+    if PlayerSpeed then
+        SetPlayerSpeed(true)
+    end
+    
+    if InfiniteJump then
+        SetInfiniteJump(true)
+    end
+    
+    if Spin then
+        StartSpin()
+    end
+    
+    if StayInTheSky then
+        StartStayInTheSky()
+    end
+    
+    -- Follow
+    if FollowBall or FollowPlayer or FollowTarget then
+        StartFollow()
+    end
+    
+    -- Random Walk
+    if RandomWalk then
+        StartRandomWalk()
+    end
+    
+    -- Запускаем мониторинг highlight
+    StartHighlightMonitoring()
+    
+    -- Запускаем мониторинг Aerodynamic Slash
+    if AerodynamicSlashParry then
+        MonitorAerodynamicSlash()
+    end
+end
+
+-- Перезапуск мониторинга при респавне персонажа
+Player.CharacterAdded:Connect(function()
+    wait(1) -- Ждем полной загрузки персонажа
+    StartHighlightMonitoring()
+    
+    -- Восстанавливаем скорость если она была включена
+    if PlayerSpeed then
+        SetPlayerSpeed(true)
+        debugPrint("Скорость восстановлена после респавна")
+    end
+end)
+
+Player.CharacterRemoving:Connect(function()
+    StopHighlightMonitoring()
+end)
+
+-- Отслеживание тренировочных мячей
+workspace.TrainingBalls.ChildAdded:Connect(function(Ball)
+    if not TrainingBallFocus then return end
+    
+    debugPrint(`Training Ball Spawned: {Ball}`)
+    
+    local OldPosition = Ball.Position
+    local OldTick = tick()
+    local HasTrainingParried = false
+    
+    local function CheckTrainingBall()
+        if TrainingBallFocus and IsTarget() then
+            local Distance = (Ball.Position - workspace.CurrentCamera.Focus.Position).Magnitude
+            local Velocity = (OldPosition - Ball.Position).Magnitude
+            local FlightTime = Distance / Velocity
+            
+            debugPrint(`Training Distance: {Distance}\nTraining Velocity: {Velocity}\nTraining Time: {FlightTime}`)
+            
+            if not HasTrainingParried and not IsSpamming then
+                if FlightTime <= ParryDistance then
+                    Parry()
+                    HasTrainingParried = true
+                    debugPrint("Training ball parry activated!")
+                end
+            end
+        else
+            HasTrainingParried = false
+        end
+        
+        if (tick() - OldTick >= 1/60) then
+            OldTick = tick()
+            OldPosition = Ball.Position
+        end
+    end
+    
+    CheckTrainingBall()
+    
+    Ball:GetPropertyChangedSignal("Position"):Connect(CheckTrainingBall)
+    
+    local TrainingBallConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if Ball.Parent then
+            CheckTrainingBall()
+        else
+            if TrainingBallConnection then
+                TrainingBallConnection:Disconnect()
+            end
+        end
+    end)
+end)
+
+-- Отслеживание мячей
+Balls.ChildAdded:Connect(function(Ball)
+    if not VerifyBall(Ball) then
+        return
+    end
+    
+    debugPrint(`Ball Spawned: {Ball}`)
+    
+    local OldPosition = Ball.Position
+    local OldTick = tick()
+    
+    local function CheckBall()
+        if IsTarget() then
+            local Distance = (Ball.Position - workspace.CurrentCamera.Focus.Position).Magnitude
+            local Velocity = (OldPosition - Ball.Position).Magnitude
+            local FlightTime = Distance / Velocity
+            
+            debugPrint(`Distance: {Distance}\nVelocity: {Velocity}\nTime: {FlightTime}`)
+            
+            -- Обычное автопарри
+            if AutoParry and not HasParried and not IsSpamming then
+                if FlightTime <= ParryDistance then
+                    local aimSuccess = false
+                    
+                    if AutoTarget and TargetPlayer then
+                        -- Проверяем существование цели на сервере
+                        local targetExists = FindTargetPlayer(TargetPlayer) ~= nil
+                        
+                        if not targetExists then
+                            -- Отключаем Target Player если цель не найдена
+                            AutoTarget = false
+                            TargetPlayer = nil
+                            Settings.AutoTarget = false
+                            Settings.TargetPlayer = nil
+                            saveSettings()
+                            debugPrint("Цель не найдена - Target Player отключен")
+                        else
+                            -- Пытаемся нацелиться
+                            aimSuccess = AimAtPlayer(TargetPlayer)
+                        end
+                    elseif AutoCurve then
+                        AimDirection(CurveDirection)
+                        aimSuccess = true
+                    end
+                    
+                    Parry()
+                    HasParried = true
+                    debugPrint("Auto parry activated!")
+                    
+                    if aimSuccess then
+                        game:GetService("RunService").Heartbeat:Wait()
+                        RestoreCamera()
+                    end
+                end
+            end
+        else
+            HasParried = false
+        end
+        
+        if (tick() - OldTick >= 1/60) then
+            OldTick = tick()
+            OldPosition = Ball.Position
+        end
+    end
+    
+    -- Немедленная проверка при спавне
+    CheckBall()
+    
+    Ball:GetPropertyChangedSignal("Position"):Connect(CheckBall)
+    
+    -- Дополнительный цикл проверок
+    local BallConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if Ball.Parent then
+            CheckBall()
+        else
+            if BallConnection then
+                BallConnection:Disconnect()
+            end
+        end
+    end)
+end)
+
+-- Отслеживание исчезновения мячей (отключено для стабильности)
+-- Balls.ChildRemoved:Connect(function(Ball)
+--     debugPrint(`Мяч удален: {Ball.Name}`)
+-- end)
+
+-- Остановка спама по таймеру (если спам работает слишком долго)
+local function MonitorSpamDuration()
+    game:GetService("RunService").Heartbeat:Connect(function()
+        if IsSpamming and (tick() - SpamStartTime) >= 10 then -- 10 секунд максимум
+            StopSpam("Таймер 10 секунд")
+        end
+    end)
+end
 
 -- Создаем главное окно с увеличенным размером
 local Window = MacLib:Window({
     Title = "Blade Ball",
     Subtitle = "Free V1",
-    Size = UDim2.fromOffset(800, 550), -- Увеличили размер окна
+    Size = UDim2.fromOffset(900, 600),
     DragStyle = 1,
     DisabledWindowControls = {},
     ShowUserInfo = true,
@@ -29,23 +1019,30 @@ local VisualsTab = TabGroup:Tab({
     Image = "rbxassetid://6034818398"
 })
 
-local SettingsTab = TabGroup:Tab({
-    Name = "Settings",
-    Image = "rbxassetid://6034818378"
+local MovementTab = TabGroup:Tab({
+    Name = "Movement",
+    Image = "rbxassetid://6034287594"
 })
 
--- Создаем секции для вкладки Combat
+local SettingsTab = TabGroup:Tab({
+    Name = "Settings",
+    Image = "rbxassetid://6031280882"
+})
+
+-- Создаем секции для вкладки Combat с увеличенной шириной
 local CombatSection = CombatTab:Section({
-    Side = "Left"
+    Side = "Left",
+    Size = UDim2.new(1, 0, 0, 0)
 })
 
 -- Добавляем элементы в секцию Combat
-local AutoParry = false
 local AutoParryToggle = CombatSection:Toggle({
     Name = "Auto Parry",
-    Default = false,
+    Default = Settings.AutoParry,
     Callback = function(Value)
         AutoParry = Value
+        Settings.AutoParry = Value
+        saveSettings()
         if Value then
             Window:Notify({
                 Title = "Auto Parry",
@@ -62,49 +1059,241 @@ local AutoParryToggle = CombatSection:Toggle({
     end
 })
 
-local PredictionEnabled = false
-local PredictionToggle = CombatSection:Toggle({
-    Name = "Ball Prediction",
-    Default = false,
+local ParryDistanceSlider = CombatSection:Slider({
+    Name = "Parry Distance",
+    Default = Settings.ParryDistance,
+    Minimum = 1,
+    Maximum = 30,
+    Precision = 0,
     Callback = function(Value)
-        PredictionEnabled = Value
+        ParryDistance = Value
+        Settings.ParryDistance = Value
+        saveSettings()
+        if ParryZone then
+            UpdateParryZone()
+        end
+    end
+})
+
+local AntiSpamToggle = CombatSection:Toggle({
+    Name = "Anti Spam",
+    Default = Settings.AntiSpamEnabled,
+    Callback = function(Value)
+        AntiSpamEnabled = Value
+        Settings.AntiSpamEnabled = Value
+        saveSettings()
+        if not Value then
+            StopSpam()
+        end
         if Value then
             Window:Notify({
-                Title = "Ball Prediction",
-                Description = "Предсказание траектории включено",
+                Title = "Anti Spam",
+                Description = "Антиспам включен",
                 Style = "Confirm"
             })
         else
             Window:Notify({
-                Title = "Ball Prediction", 
-                Description = "Предсказание траектории выключено",
+                Title = "Anti Spam", 
+                Description = "Антиспам выключен",
                 Style = "Cancel"
             })
         end
     end
 })
 
--- Слайдер для настройки силы предсказания
-local PredictionStrength = 50
-local PredictionSlider = CombatSection:Slider({
-    Name = "Prediction Strength",
-    Default = 50,
-    Minimum = 0,
-    Maximum = 100,
-    Precision = 0,
+local HighlightTimeSlider = CombatSection:Slider({
+    Name = "Max Highlight Time",
+    Default = Settings.NormalHighlightTime,
+    Minimum = 0.1,
+    Maximum = 2,
+    Precision = 1,
     Callback = function(Value)
-        PredictionStrength = Value
+        NormalHighlightTime = Value
+        Settings.NormalHighlightTime = Value
+        saveSettings()
     end
 })
 
--- Улучшаем внешний вид слайдера
-task.spawn(function()
-    wait(0.5) -- Даем время для инициализации
-    if PredictionSlider then
-        -- Увеличиваем ширину слайдера через изменение его свойств
-        PredictionSlider:SetStyle({
-            Size = UDim2.new(0.9, 0, 0, 30) -- Ширина 90% от родителя, высота 30px
+local AerodynamicSlashParryToggle = CombatSection:Toggle({
+    Name = "Aerodynamic Slash Parry",
+    Default = Settings.AerodynamicSlashParry,
+    Callback = function(Value)
+        AerodynamicSlashParry = Value
+        Settings.AerodynamicSlashParry = Value
+        saveSettings()
+        if Value then
+            MonitorAerodynamicSlash()
+            Window:Notify({
+                Title = "Aerodynamic Slash Parry",
+                Description = "Защита от Aerodynamic Slash включена",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Aerodynamic Slash Parry",
+                Description = "Защита от Aerodynamic Slash выключена",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local AutoCurveToggle = CombatSection:Toggle({
+    Name = "Auto Curve",
+    Default = Settings.AutoCurve,
+    Callback = function(Value)
+        AutoCurve = Value
+        Settings.AutoCurve = Value
+        saveSettings()
+        if Value then
+            Window:Notify({
+                Title = "Auto Curve",
+                Description = "Автонацеливание включено",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Auto Curve", 
+                Description = "Автонацеливание выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local CurveDirectionDropdown = CombatSection:Dropdown({
+    Name = "Curve Direction",
+    Options = {"Random", "Back", "Left", "Right", "Up", "Straight"},
+    Default = Settings.CurveDirection,
+    Callback = function(Value)
+        CurveDirection = Value
+        Settings.CurveDirection = Value
+        saveSettings()
+        debugPrint(`Направление изменено на: {Value}`)
+   
+        Window:Notify({
+            Title = "Curve Direction", 
+            Description = `Направление изменено на: {Value}`,
+            Style = "Confirm"
         })
+    end
+})
+
+-- Создаем новую секцию для Training
+local TrainingSection = CombatTab:Section({
+    Side = "Right"
+})
+
+local TrainingBallFocusToggle = TrainingSection:Toggle({
+    Name = "Training Ball Parry",
+    Default = Settings.TrainingBallFocus,
+    Callback = function(Value)
+        TrainingBallFocus = Value
+        Settings.TrainingBallFocus = Value
+        saveSettings()
+        if Value then
+            Window:Notify({
+                Title = "Training Ball Parry",
+                Description = "Фокус на тренировочном мяче включен",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Training Ball Parry", 
+                Description = "Фокус на тренировочном мяче выключен",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local AutoTargetToggle = TrainingSection:Toggle({
+    Name = "Target Player",
+    Default = Settings.AutoTarget,
+    Callback = function(Value)
+        AutoTarget = Value
+        Settings.AutoTarget = Value
+        saveSettings()
+        if Value then
+            Window:Notify({
+                Title = "Target Player",
+                Description = "Нацеливание на игрока включено",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Target Player",
+                Description = "Нацеливание на игрока выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+TargetPlayerDropdown = TrainingSection:Dropdown({
+    Name = "Target Player",
+    Options = GetPlayersList(),
+    Default = Settings.TargetPlayer,
+    Callback = function(Value)
+        TargetPlayer = Value
+        Settings.TargetPlayer = Value
+        saveSettings()
+    end
+})
+
+-- Мониторинг изменений в папках Alive/Dead
+local function MonitorPlayerStatus()
+    -- Отслеживаем изменения в папке Alive
+    local aliveFolder = workspace:FindFirstChild("Alive")
+    if aliveFolder then
+        aliveFolder.ChildAdded:Connect(UpdateDropdowns)
+        aliveFolder.ChildRemoved:Connect(UpdateDropdowns)
+    end
+    
+    -- Отслеживаем изменения в папке Dead
+    local deadFolder = workspace:FindFirstChild("Dead")
+    if deadFolder then
+        deadFolder.ChildAdded:Connect(UpdateDropdowns)
+        deadFolder.ChildRemoved:Connect(UpdateDropdowns)
+    end
+    
+    -- Отслеживаем создание папок
+    workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Alive" then
+            child.ChildAdded:Connect(UpdateDropdowns)
+            child.ChildRemoved:Connect(UpdateDropdowns)
+        elseif child.Name == "Dead" then
+            child.ChildAdded:Connect(UpdateDropdowns)
+            child.ChildRemoved:Connect(UpdateDropdowns)
+        end
+    end)
+end
+
+-- Отключаем Target Player если выбранный игрок вышел
+Players.PlayerAdded:Connect(UpdateDropdowns)
+Players.PlayerRemoving:Connect(function(player)
+    UpdateDropdowns()
+    
+    if TargetPlayer == player.Name then
+        AutoTarget = false
+        TargetPlayer = nil
+        Settings.AutoTarget = false
+        Settings.TargetPlayer = nil
+        saveSettings()
+        
+        Window:Notify({
+            Title = "Target Player",
+            Description = `Игрок {player.Name} покинул сервер - функция отключена`,
+            Style = "Cancel"
+        })
+    end
+    
+    if SelectedPlayer == player.Name then
+        FollowPlayer = false
+        SelectedPlayer = nil
+        Settings.FollowPlayer = false
+        Settings.SelectedPlayer = nil
+        saveSettings()
     end
 end)
 
@@ -113,45 +1302,354 @@ local VisualsSection = VisualsTab:Section({
     Side = "Left"
 })
 
-local BallESPToggle = VisualsSection:Toggle({
-    Name = "Ball ESP",
-    Default = false,
+local ParryZoneToggle = VisualsSection:Toggle({
+    Name = "Parry Zone",
+    Default = Settings.ParryZone,
     Callback = function(Value)
+        ParryZone = Value
+        Settings.ParryZone = Value
+        saveSettings()
+        
         if Value then
+            CreateParryZone()
             Window:Notify({
-                Title = "Ball ESP",
-                Description = "ESP мяча включено",
+                Title = "Parry Zone",
+                Description = "Зона парирования включена",
                 Style = "Confirm"
             })
         else
+            RemoveParryZone()
             Window:Notify({
-                Title = "Ball ESP", 
-                Description = "ESP мяча выключено",
+                Title = "Parry Zone", 
+                Description = "Зона парирования выключена",
                 Style = "Cancel"
             })
         end
     end
 })
 
-local PlayerESPToggle = VisualsSection:Toggle({
-    Name = "Player ESP",
-    Default = false,
+-- Создаем секции для вкладки Movement
+local MovementSection = MovementTab:Section({
+    Side = "Left"
+})
+
+local PlayerSpeedToggle = MovementSection:Toggle({
+    Name = "Player Speed",
+    Default = Settings.PlayerSpeed,
     Callback = function(Value)
+        PlayerSpeed = Value
+        Settings.PlayerSpeed = Value
+        saveSettings()
+        SetPlayerSpeed(Value)
         if Value then
             Window:Notify({
-                Title = "Player ESP",
-                Description = "ESP игроков включено",
+                Title = "Player Speed",
+                Description = "Увеличенная скорость включена",
                 Style = "Confirm"
             })
         else
             Window:Notify({
-                Title = "Player ESP", 
-                Description = "ESP игроков выключено",
+                Title = "Player Speed",
+                Description = "Обычная скорость восстановлена",
                 Style = "Cancel"
             })
         end
     end
 })
+
+local SpeedValueSlider = MovementSection:Slider({
+    Name = "Speed Value",
+    Default = Settings.SpeedValue,
+    Minimum = 16,
+    Maximum = 300,
+    Precision = 0,
+    Callback = function(Value)
+        SpeedValue = Value
+        Settings.SpeedValue = Value
+        saveSettings()
+        if PlayerSpeed then
+            SetPlayerSpeed(true)
+        end
+    end
+})
+
+local InfiniteJumpToggle = MovementSection:Toggle({
+    Name = "Infinite Jump",
+    Default = Settings.InfiniteJump,
+    Callback = function(Value)
+        InfiniteJump = Value
+        Settings.InfiniteJump = Value
+        saveSettings()
+        if Value then
+            SetInfiniteJump(true)
+            Window:Notify({
+                Title = "Infinite Jump",
+                Description = "Бесконечные прыжки включены",
+                Style = "Confirm"
+            })
+        else
+            Window:Notify({
+                Title = "Infinite Jump",
+                Description = "Обычные прыжки восстановлены",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local SpinToggle = MovementSection:Toggle({
+    Name = "Spin",
+    Default = Settings.Spin,
+    Callback = function(Value)
+        Spin = Value
+        Settings.Spin = Value
+        saveSettings()
+        if Value then
+            StartSpin()
+            Window:Notify({
+                Title = "Spin",
+                Description = "Вращение включено",
+                Style = "Confirm"
+            })
+        else
+            StopSpin()
+            Window:Notify({
+                Title = "Spin",
+                Description = "Вращение выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local SpinSpeedSlider = MovementSection:Slider({
+    Name = "Spin Speed",
+    Default = Settings.SpinSpeed,
+    Minimum = 1,
+    Maximum = 200,
+    Precision = 0,
+    Callback = function(Value)
+        SpinSpeed = Value
+        Settings.SpinSpeed = Value
+        saveSettings()
+    end
+})
+
+local StayInTheSkyToggle = MovementSection:Toggle({
+    Name = "Stay in the Sky",
+    Default = Settings.StayInTheSky,
+    Callback = function(Value)
+        StayInTheSky = Value
+        Settings.StayInTheSky = Value
+        saveSettings()
+        if Value then
+            StartStayInTheSky()
+            Window:Notify({
+                Title = "Stay in the Sky",
+                Description = "Полет в небе включен",
+                Style = "Confirm"
+            })
+        else
+            StopStayInTheSky()
+            Window:Notify({
+                Title = "Stay in the Sky",
+                Description = "Полет в небе выключен",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local SkyHeightSlider = MovementSection:Slider({
+    Name = "Sky Height",
+    Default = Settings.SkyHeight,
+    Minimum = 20,
+    Maximum = 200,
+    Precision = 0,
+    Callback = function(Value)
+        SkyHeight = Value
+        Settings.SkyHeight = Value
+        saveSettings()
+    end
+})
+
+-- Создаем вторую секцию для Follow функций
+local FollowSection = MovementTab:Section({
+    Side = "Right"
+})
+
+-- Объявляем переменные для Toggle элементов
+local FollowBallToggle, FollowPlayerToggle, FollowTargetToggle
+
+FollowBallToggle = FollowSection:Toggle({
+    Name = "Follow Ball",
+    Default = Settings.FollowBall,
+    Callback = function(Value)
+        FollowBall = Value
+        Settings.FollowBall = Value
+        saveSettings()
+        
+        if Value then
+            FollowPlayer = false
+            FollowTarget = false
+            RandomWalk = false
+            Settings.FollowPlayer = false
+            Settings.FollowTarget = false
+            Settings.RandomWalk = false
+            StopRandomWalk()
+            StartFollow()
+            Window:Notify({
+                Title = "Follow Ball",
+                Description = "Преследование мяча включено",
+                Style = "Confirm"
+            })
+        else
+            StopFollow()
+            Window:Notify({
+                Title = "Follow Ball",
+                Description = "Преследование мяча выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+FollowPlayerToggle = FollowSection:Toggle({
+    Name = "Follow Player",
+    Default = Settings.FollowPlayer,
+    Callback = function(Value)
+        FollowPlayer = Value
+        Settings.FollowPlayer = Value
+        saveSettings()
+        
+        if Value then
+            FollowBall = false
+            FollowTarget = false
+            RandomWalk = false
+            Settings.FollowBall = false
+            Settings.FollowTarget = false
+            Settings.RandomWalk = false
+            StopRandomWalk()
+            if SelectedPlayer then
+                StartFollow()
+            end
+            Window:Notify({
+                Title = "Follow Player",
+                Description = "Преследование игрока включено",
+                Style = "Confirm"
+            })
+        else
+            StopFollow()
+            Window:Notify({
+                Title = "Follow Player",
+                Description = "Преследование игрока выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+PlayerDropdown = FollowSection:Dropdown({
+    Name = "Select Player",
+    Options = GetPlayersList(),
+    Default = Settings.SelectedPlayer,
+    Callback = function(Value)
+        SelectedPlayer = Value
+        Settings.SelectedPlayer = Value
+        saveSettings()
+        
+        if FollowPlayer then
+            StartFollow()
+        end
+        
+        Window:Notify({
+            Title = "Player Selected",
+            Description = `Выбран игрок: {Value}`,
+            Style = "Confirm"
+        })
+    end
+})
+
+FollowTargetToggle = FollowSection:Toggle({
+    Name = "Follow Target",
+    Default = Settings.FollowTarget,
+    Callback = function(Value)
+        FollowTarget = Value
+        Settings.FollowTarget = Value
+        saveSettings()
+        
+        if Value then
+            FollowBall = false
+            FollowPlayer = false
+            RandomWalk = false
+            Settings.FollowBall = false
+            Settings.FollowPlayer = false
+            Settings.RandomWalk = false
+            StopRandomWalk()
+            StartFollow()
+            Window:Notify({
+                Title = "Follow Target",
+                Description = "Преследование цели включено",
+                Style = "Confirm"
+            })
+        else
+            StopFollow()
+            Window:Notify({
+                Title = "Follow Target",
+                Description = "Преследование цели выключено",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+local FollowDistanceSlider = FollowSection:Slider({
+    Name = "Follow Distance",
+    Default = Settings.FollowDistance,
+    Minimum = 5,
+    Maximum = 200,
+    Precision = 0,
+    Callback = function(Value)
+        FollowDistance = Value
+        Settings.FollowDistance = Value
+        saveSettings()
+    end
+})
+
+local RandomWalkToggle = FollowSection:Toggle({
+    Name = "Random Walk",
+    Default = Settings.RandomWalk,
+    Callback = function(Value)
+        RandomWalk = Value
+        Settings.RandomWalk = Value
+        saveSettings()
+        
+        if Value then
+            FollowBall = false
+            FollowPlayer = false
+            FollowTarget = false
+            Settings.FollowBall = false
+            Settings.FollowPlayer = false
+            Settings.FollowTarget = false
+            StopFollow()
+            StartRandomWalk()
+            Window:Notify({
+                Title = "Random Walk",
+                Description = "Рандомная ходьба включена",
+                Style = "Confirm"
+            })
+        else
+            StopRandomWalk()
+            Window:Notify({
+                Title = "Random Walk",
+                Description = "Рандомная ходьба выключена",
+                Style = "Cancel"
+            })
+        end
+    end
+})
+
+
 
 -- Создаем секции для вкладки Settings
 local SettingsSection = SettingsTab:Section({
@@ -160,88 +1658,104 @@ local SettingsSection = SettingsTab:Section({
 
 local KeybindButton = SettingsSection:Keybind({
     Name = "Toggle UI Keybind",
-    Default = Enum.KeyCode.RightShift,
+    Default = Enum.KeyCode.RightControl,
     Callback = function(Key)
         Window:SetKeybind(Key)
-    end
-})
-
-local DestroyButton = SettingsSection:Button({
-    Name = "Destroy UI",
-    Callback = function()
-        Window:Destroy()
     end
 })
 
 local RejoinButton = SettingsSection:Button({
     Name = "Rejoin Server",
     Callback = function()
-        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+        RejoinCurrentServer()
     end
 })
 
--- Функция для поиска мяча
-local function findBall()
-    for _, obj in pairs(workspace:GetChildren()) do
-        if obj.Name:find("Ball") or obj.Name:find("Sphere") then
-            return obj
-        end
+local ServerHopButton = SettingsSection:Button({
+    Name = "Server Hop",
+    Callback = function()
+        ServerHop()
     end
-    return nil
-end
+})
 
--- Функция для предсказания движения мяча
-local function predictBallMovement(ball, strength)
-    if not ball or not ball:FindFirstChild("Velocity") then
-        return nil
+-- Мониторинг папки Dead для остановки движения
+local function MonitorDeadFolder()
+    local deadFolder = workspace:FindFirstChild("Dead")
+    if deadFolder then
+        deadFolder.ChildAdded:Connect(function(child)
+            if child.Name == Player.Name then
+                debugPrint("Персонаж обнаружен в папке Dead - останавливаем движение")
+                StopPlayerMovement()
+            end
+        end)
     end
     
-    -- Простое предсказание на основе текущей скорости
-    -- Сила предсказания (strength) влияет на "агрессивность" предсказания
-    local predictionFactor = strength / 100 -- Преобразуем 0-100 в 0.0-1.0
-    
-    -- Возвращаем предсказанную позицию
-    if ball.Velocity.Magnitude > 0 then
-        local direction = ball.Velocity.Unit
-        local speed = ball.Velocity.Magnitude
-        local prediction = ball.Position + (direction * speed * predictionFactor * 0.5)
-        return prediction
-    end
-    
-    return ball.Position
-end
-
--- Основной цикл для авто-блокировки
-task.spawn(function()
-    while task.wait(0.1) do
-        if AutoParry then
-            pcall(function()
-                local ball = findBall()
-                local character = game.Players.LocalPlayer.Character
-                
-                if ball and character and character:FindFirstChild("HumanoidRootPart") then
-                    -- Используем предсказание, если включено
-                    local targetPosition = ball.Position
-                    if PredictionEnabled then
-                        targetPosition = predictBallMovement(ball, PredictionStrength) or ball.Position
-                    end
-                    
-                    local distance = (targetPosition - character.HumanoidRootPart.Position).Magnitude
-                    
-                    if distance < 25 then -- Настройка дистанции срабатывания
-                        -- Код для блокировки
-                        keypress(0x45) -- E key
-                        task.wait(0.2) -- Фиксированное время блокировки
-                        keyrelease(0x45)
-                    end
+    -- Также отслеживаем создание папки Dead
+    workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Dead" then
+            child.ChildAdded:Connect(function(deadChild)
+                if deadChild.Name == Player.Name then
+                    debugPrint("Персонаж обнаружен в папке Dead - останавливаем движение")
+                    StopPlayerMovement()
                 end
             end)
         end
+    end)
+end
+
+-- Мониторинг папки Balls для остановки спама при смене мяча
+local CurrentBall = nil
+local function MonitorBallsFolder()
+    local function CheckBallChange()
+        local ballsFolder = workspace:FindFirstChild("Balls")
+        if ballsFolder then
+            local newBall = nil
+            for _, child in pairs(ballsFolder:GetChildren()) do
+                if child:IsA("BasePart") and child:GetAttribute("realBall") == true then
+                    newBall = child
+                    break
+                end
+            end
+            
+            if newBall ~= CurrentBall then
+                if IsSpamming then
+                    StopSpam("смена мяча")
+                    debugPrint("Мяч сменился - останавливаем спам")
+                end
+                CurrentBall = newBall
+            end
+        else
+            if IsSpamming then
+                StopSpam("папка Balls исчезла")
+                debugPrint("Папка Balls исчезла - останавливаем спам")
+            end
+            CurrentBall = nil
+        end
+    end
+    
+    -- Проверяем каждые 0.1 секунды
+    game:GetService("RunService").Heartbeat:Connect(CheckBallChange)
+end
+
+-- Запускаем мониторинг
+MonitorDeadFolder()
+MonitorBallsFolder()
+MonitorPlayerStatus()
+MonitorSpamDuration()
+
+-- Обновление Parry Zone и Float
+game:GetService("RunService").Heartbeat:Connect(function()
+    if ParryZone then
+        UpdateParryZone()
+    end
+    if StayInTheSky then
+        -- Обновление не требуется для StayInTheSky
     end
 end)
 
-Window:Notify({
-    Title = "Blade Ball Utilities",
-    Description = "Меню загружено успешно!",
-    Style = "Confirm"
-})
+-- Применяем сохраненные настройки при запуске
+ApplyStartupSettings()
+
+-- Обновляем dropdown списки после создания UI
+wait(1)
+UpdateDropdowns()
